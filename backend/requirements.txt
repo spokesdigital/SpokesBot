@@ -1,0 +1,38 @@
+# Core framework
+fastapi==0.135.2
+uvicorn==0.42.0
+python-multipart==0.0.22
+
+# Database & auth
+supabase==2.28.3
+
+# Data processing
+pandas==3.0.2
+pyarrow==23.0.1
+
+# Config & validation
+pydantic==2.12.5
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+
+# AI agent
+langgraph==0.5.1
+langchain-core==0.3.58
+langchain-openai==0.3.14
+
+# Install new packages with:
+# source venv/bin/activate && pip install pydantic-settings python-dotenv langgraph langchain-core langchain-openai
+
+# Logging
+structlog==24.4.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Observability
+prometheus-client==0.21.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+httpx==0.28.1

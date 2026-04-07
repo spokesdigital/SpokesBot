@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+# Cancel in-progress runs on the same branch when a new commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Backend — lint, type-check, tests
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (Python)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Lint (ruff)
+        run: ruff check app/ tests/
+
+      - name: Format check (ruff)
+        run: ruff format --check app/ tests/
+
+      - name: Run tests
+        env:
+          # Tests use mocks — real credentials are not needed.
+          # Pydantic Settings requires all fields to be present, so we supply dummies.
+          SUPABASE_URL: https://dummy.supabase.co
+          SUPABASE_ANON_KEY: dummy-anon-key
+          SUPABASE_SERVICE_KEY: dummy-service-key
+          OPENAI_API_KEY: dummy-openai-key
+          ENVIRONMENT: development
+        run: pytest tests/ -v --tb=short
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Frontend — lint, type-check, build
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        env:
+          # Dummy values — env.ts validates these at runtime, not build time.
+          NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-anon-key
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+        run: npm run build
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Docker — build both images to verify Dockerfiles are valid
+  # ─────────────────────────────────────────────────────────────────────────
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    # Only run on main/develop pushes to avoid burning minutes on every PR
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=https://dummy.supabase.co
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=dummy-anon-key
+            NEXT_PUBLIC_API_URL=http://localhost:8000
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

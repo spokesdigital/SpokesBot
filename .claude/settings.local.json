@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(pip show:*)",
+      "Bash(npm install:*)",
+      "Bash(grep:*)",
+      "Bash(python3:*)",
+      "Bash(python3.12 --version)",
+      "Bash(python3.13 --version)",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/usr/local/bin/python3.12-intel64:*)",
+      "Bash(/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12:*)",
+      "Read(//Library/Frameworks/Python.framework/Versions/**)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(python3.12 -m venv venv)",
+      "Bash(venv/bin/python --version)",
+      "Bash(echo \"venv created with $\\(venv/bin/python --version\\)\")",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

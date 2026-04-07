@@ -1,0 +1,20 @@
+# Ruff configuration — consistent with CI linting step
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "B008",  # do not perform function calls in default arguments (FastAPI pattern)
+    "E501",  # line too long — handled by formatter
+]
+
+[lint.isort]
+known-first-party = ["app"]

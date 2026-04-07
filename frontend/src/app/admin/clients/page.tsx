@@ -1,0 +1,98 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
+import { api } from '@/lib/api'
+import type { Dataset, Organization } from '@/types'
+import { Users, ChevronRight, Database } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+
+export default function ClientsPage() {
+  const { session } = useAuth()
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [datasets, setDatasets] = useState<Dataset[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!session) return
+    Promise.all([
+      api.organizations.list(session.access_token),
+      api.datasets.list(session.access_token, undefined, true),
+    ])
+      .then(([orgs, datasets]) => { setOrgs(orgs); setDatasets(datasets) })
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load.'))
+      .finally(() => setLoading(false))
+  }, [session])
+
+  const datasetCountByOrg = datasets.reduce<Record<string, number>>((acc, d) => {
+    acc[d.organization_id] = (acc[d.organization_id] ?? 0) + 1
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-3xl font-bold text-slate-800">Clients Console</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {orgs.length} organization{orgs.length !== 1 ? 's' : ''} on the platform
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500 backdrop-blur-xl">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass-panel h-20 rounded-[1.5rem] animate-pulse" />
+          ))}
+        </div>
+      ) : orgs.length === 0 ? (
+        <div className="glass-panel flex flex-col items-center justify-center space-y-3 rounded-[2rem] py-24 text-slate-500">
+          <Users className="w-12 h-12 opacity-30" />
+          <p className="text-lg font-medium">No clients yet</p>
+          <p className="text-sm">Create an organization in Supabase to get started.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orgs.map((org) => {
+            const count = datasetCountByOrg[org.id] ?? 0
+            return (
+              <Link
+                key={org.id}
+                href={`/admin/clients/${org.id}`}
+                className="glass-panel flex items-center justify-between rounded-[1.5rem] p-5 transition-all hover:border-cyan-200 hover:shadow-[0_18px_50px_rgba(45,212,191,0.12)]"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-cyan-50 to-emerald-50">
+                    <Users className="h-5 w-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800">{org.name}</p>
+                    <p className="text-sm text-slate-500">
+                      <span className="inline-flex items-center gap-1">
+                        <Database className="w-3 h-3" />
+                        {count} dataset{count !== 1 ? 's' : ''}
+                      </span>
+                      {' · '}
+                      Created {formatDistanceToNow(new Date(org.created_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-slate-400">
+                  <span className="text-sm">Manage</span>
+                  <ChevronRight className="w-4 h-4" />
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
