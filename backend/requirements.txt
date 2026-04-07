@@ -13,7 +13,7 @@ pyarrow==23.0.1
 # Config & validation
 pydantic==2.12.5
 pydantic-settings==2.9.1
-python-dotenv==1.1.0
+python-dotenv==1.2.2
 
 # AI agent
 langgraph==0.5.1
