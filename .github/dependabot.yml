@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Python backend
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      fastapi:
+        patterns: ["fastapi*", "uvicorn*", "starlette*"]
+      ai:
+        patterns: ["langgraph*", "langchain*", "openai*"]
+
+  # Node.js frontend
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns: ["next", "react", "react-dom"]
+      supabase:
+        patterns: ["@supabase/*"]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

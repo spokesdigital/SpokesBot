@@ -1,0 +1,6 @@
+id,name,department,sales,region
+1,Alice,Sales,1500,North
+2,Bob,Engineering,0,South
+3,Charlie,Sales,2300,East
+4,Diana,Marketing,100,West
+5,Eve,Sales,3100,North

@@ -1,0 +1,58 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SpokesBot — local development orchestration
+#
+# Usage:
+#   docker compose up --build          # first run
+#   docker compose up                  # subsequent runs (uses cached images)
+#   docker compose down                # stop and remove containers
+#
+# Prerequisites:
+#   • Copy backend/.env.example  → backend/.env  and fill in real values
+#   • Copy frontend/.env.local.example → frontend/.env.local and fill in values
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── FastAPI backend ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spokesbot_backend
+    env_file:
+      - ./backend/.env
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Next.js frontend ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # These are baked into the JS bundle at build time — change them and
+        # rebuild if you need different values in production.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: http://backend:8000
+    container_name: spokesbot_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

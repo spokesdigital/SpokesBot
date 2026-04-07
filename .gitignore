@@ -1,0 +1,28 @@
+# OS/editor noise
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local environments and secrets
+backend/.env
+frontend/.env.local
+.env
+.env.local
+.env.*
+!.env.example
+!.env.local.example
+
+# Virtual environments
+backend/venv/
+.venv/
+venv/
+
+# Frontend build artifacts and dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
