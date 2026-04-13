@@ -107,7 +107,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health", tags=["system"], summary="Health check")
 def health():
     """Returns service status and version. Used by load balancers and uptime monitors."""
-    return {"status": "ok", "version": app.version, "environment": settings.ENVIRONMENT}
+    return {"status": "ok", "version": app.version, "environment": settings.ENVIRONMENT, "frontend_url": settings.FRONTEND_URL}
 
 
 @app.get(
