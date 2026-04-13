@@ -41,11 +41,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("SUPABASE_URL")
+    @field_validator("SUPABASE_URL", "FRONTEND_URL")
     @classmethod
-    def supabase_url_must_be_valid(cls, v: str) -> str:
+    def url_must_be_valid(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):
-            raise ValueError("SUPABASE_URL must start with http:// or https://")
+            raise ValueError("URLs must start with http:// or https://")
         return v.rstrip("/")
 
     @field_validator("ENVIRONMENT")

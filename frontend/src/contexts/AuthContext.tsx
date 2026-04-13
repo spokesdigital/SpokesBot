@@ -77,9 +77,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setOrganizations([])
       setSession(null)
+      
+      // If we are in the middle of a login attempt, we DON'T want to call signOut() 
+      // immediately because it might clear our error state and redirect us too early.
+      // Instead, we just clear the state and let the caller handle the error.
       const supabase = createClient()
-      await supabase.auth.signOut()
+      await supabase.auth.signOut().catch(() => {}) 
       resetDashboard()
+      
+      // Re-throw so the Login page can catch the specific error (e.g. CORS or 404)
+      throw err
     }
   }, [loadOrganizations, resetDashboard])
 

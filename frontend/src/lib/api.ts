@@ -11,7 +11,7 @@ import type {
 } from '@/types'
 import { createClient } from '@/lib/supabase'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '')
 const DEFAULT_API_TIMEOUT_MS = 15_000
 
 export class ApiError extends Error {
