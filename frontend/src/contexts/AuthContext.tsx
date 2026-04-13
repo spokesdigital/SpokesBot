@@ -33,6 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const loadGenRef = useRef(0) // increments on each loadProfile call; stale calls bail out
+  // Set to true while signIn() is running its own loadProfile call so that
+  // the concurrent SIGNED_IN event from onAuthStateChange doesn't trigger a
+  // duplicate — and potentially superseding — call that could silently fail
+  // and call signOut() after the explicit load already succeeded.
+  const signInInProgressRef = useRef(false)
   const setOrganization = useDashboardStore((state) => state.setOrganization)
   const resetDashboard = useDashboardStore((state) => state.reset)
 
@@ -103,6 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Deduplicate: ignore INITIAL_SESSION on mount since getSession() handles it
         if (event === 'INITIAL_SESSION' && !initialHydrationDone) return
 
+        // signIn() calls loadProfile directly with the fresh token AND
+        // triggers this SIGNED_IN event — skip here to avoid a race where
+        // the event's loadProfile supersedes and silently discards the
+        // explicit one, then fails and calls signOut().
+        if (event === 'SIGNED_IN' && signInInProgressRef.current) return
+
         setSession(session)
         if (session) {
           await loadProfile(session.access_token)
@@ -141,20 +152,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('[AuthContext] Attempting signIn for:', email)
     const supabase = createClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    
+
     if (error) {
       console.error('[AuthContext] Supabase signIn error:', error)
       throw error
     }
-    
+
     if (!data.session) {
       console.error('[AuthContext] Sign-in successful but no session returned')
       throw new Error('No session returned after sign-in. Please verify your email.')
     }
-    
+
     console.log('[AuthContext] Supabase sign-in successful, hydrating session')
-    setSession(data.session)
-    await loadProfile(data.session.access_token)
+    // Flag before setSession so the concurrent SIGNED_IN event is suppressed
+    signInInProgressRef.current = true
+    try {
+      setSession(data.session)
+      await loadProfile(data.session.access_token)
+    } finally {
+      signInInProgressRef.current = false
+    }
   }, [loadProfile])
 
   const signOut = useCallback(async () => {

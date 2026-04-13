@@ -85,7 +85,7 @@ export interface UserProfile {
   id: string
   email: string
   organization: Organization | null
-  role: 'admin' | 'user'
+  role: 'admin' | 'user' | null
 }
 
 export interface UploadStatus {

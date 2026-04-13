@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.dependencies import (
-    get_current_org_id,
-    get_current_role,
     get_current_user_id,
+    get_optional_org_id,
+    get_optional_role,
     get_service_client,
     get_supabase_client,
     security,
@@ -20,8 +20,8 @@ def get_me(
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
     user_id: str = Depends(get_current_user_id),
-    org_id: str = Depends(get_current_org_id),
-    role: str = Depends(get_current_role),
+    org_id: str | None = Depends(get_optional_org_id),
+    role: str | None = Depends(get_optional_role),
 ):
     try:
         user_response = supabase.auth.get_user(credentials.credentials)

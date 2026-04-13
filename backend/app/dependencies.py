@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -112,6 +114,32 @@ def get_current_role(supabase: Client = Depends(get_supabase_client)) -> str:
             detail="User has no role in any organization.",
         )
     return role
+
+
+# ── Optional auth helpers (for /auth/me — do not raise on missing org/role) ──
+
+def get_optional_org_id(supabase: Client = Depends(get_supabase_client)) -> Optional[str]:
+    """
+    Like get_current_org_id but returns None instead of raising 403.
+    Safe to use on bootstrap endpoints where the user may not yet be assigned
+    to an organisation (e.g. /auth/me called immediately after first sign-up).
+    """
+    try:
+        resp = supabase.rpc("get_my_org_id").execute()
+        return resp.data or None
+    except Exception:
+        return None
+
+
+def get_optional_role(supabase: Client = Depends(get_supabase_client)) -> Optional[str]:
+    """
+    Like get_current_role but returns None instead of raising 403.
+    """
+    try:
+        resp = supabase.rpc("get_my_role").execute()
+        return resp.data or None
+    except Exception:
+        return None
 
 
 # ── Role enforcement guards ──────────────────────────────────────────────────
