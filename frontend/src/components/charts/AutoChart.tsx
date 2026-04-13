@@ -104,6 +104,11 @@ export function AutoChart({ type, title, data }: AutoChartProps) {
               tickLine={false}
               axisLine={false}
               interval="preserveStartEnd"
+              tickFormatter={(v: string) =>
+                /^\d{4}-\d{2}-\d{2}$/.test(v)
+                  ? new Date(v + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  : v
+              }
             />
             <YAxis
               tick={{ fill: '#64748b', fontSize: 11 }}

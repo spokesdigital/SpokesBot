@@ -35,11 +35,15 @@ type MetricCardDefinition = {
   patterns: RegExp[]
 }
 
+// Metrics where a positive delta is BAD (higher cost / higher CPC = worse performance)
+const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
+
 type MetricCardData = {
   key: string
   label: string
   value: string
   delta: number | null
+  trendDirection: 'positive' | 'negative' | 'neutral'
 }
 
 type TrendPoint = {
@@ -209,7 +213,7 @@ function buildDashboardRequestKey(params: {
 
 function MetricCard({ card }: { card: MetricCardData }) {
   const deltaText = formatDelta(card.delta)
-  const isPositive = (card.delta ?? 0) >= 0
+  const isPositive = card.trendDirection === 'positive'
 
   return (
     <div className="rounded-[1.45rem] border border-[#e8e1d7] bg-white px-4 py-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -221,7 +225,7 @@ function MetricCard({ card }: { card: MetricCardData }) {
       {deltaText ? (
         <p
           className={`mt-3 flex items-center gap-1.5 text-[0.92rem] ${
-            isPositive ? 'text-[#24a261]' : 'text-[#ef4444]'
+            card.trendDirection === 'neutral' ? 'text-[#98a1b2]' : isPositive ? 'text-[#24a261]' : 'text-[#ef4444]'
           }`}
         >
           {isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
@@ -777,11 +781,19 @@ export default function DashboardPage() {
         }
       }
 
+      const trendDirection: MetricCardData['trendDirection'] =
+        delta == null || Math.abs(delta) < 0.05
+          ? 'neutral'
+          : INVERTED_TREND_KEYS.has(definition.key)
+            ? delta > 0 ? 'negative' : 'positive'
+            : delta > 0 ? 'positive' : 'negative'
+
       return {
         key: definition.key,
         label: definition.label,
         value: formatMetricValue(definition.kind, value),
         delta,
+        trendDirection,
       }
     })
 

@@ -29,11 +29,15 @@ type MetricCardDefinition = {
   tooltip: string
 }
 
+// Metrics where a positive delta is BAD (higher cost / higher CPC = worse performance)
+const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
+
 type MetricCardData = {
   key: string
   label: string
   value: string
   delta: number | null
+  trendDirection: 'positive' | 'negative' | 'neutral'
   tooltip: string
 }
 
@@ -564,7 +568,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         }
       }
 
-      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, tooltip: def.tooltip }
+      const trendDirection: MetricCardData['trendDirection'] =
+        delta == null || Math.abs(delta) < 0.05
+          ? 'neutral'
+          : INVERTED_TREND_KEYS.has(def.key)
+            ? delta > 0 ? 'negative' : 'positive'
+            : delta > 0 ? 'positive' : 'negative'
+
+      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, tooltip: def.tooltip }
     })
 
     // Resolve time-series data
@@ -909,6 +920,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   title={card.label}
                   value={card.value}
                   trendValue={card.delta}
+                  trendDirection={card.trendDirection}
                   tooltip={card.tooltip}
                 />
               ))}
@@ -1157,7 +1169,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtN(row.conversions)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
-                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : ''
+                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
                             {fmtX(row.roas)}
                           </td>
@@ -1214,7 +1226,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtN(row.conversions)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
-                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : ''
+                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
                             {fmtX(row.roas)}
                           </td>
