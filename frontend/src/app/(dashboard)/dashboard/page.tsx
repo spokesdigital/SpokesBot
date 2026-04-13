@@ -234,14 +234,51 @@ function MetricCard({ card }: { card: MetricCardData }) {
   )
 }
 
+const ZOOM_STEPS = [14, 30, 60, 90, 180, 365]
+
 function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
+  const [zoomIndex, setZoomIndex] = useState(2) // default: last 60 data points
+
+  const visibleData = useMemo(() => {
+    if (data.length === 0) return data
+    const limit = ZOOM_STEPS[zoomIndex]
+    return data.slice(-limit)
+  }, [data, zoomIndex])
+
   return (
     <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-      <h3 className="text-[1.05rem] font-semibold text-[#687285]">Revenue vs Cost Trend</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-[1.05rem] font-semibold text-[#687285]">Revenue vs Cost Trend</h3>
+        {data.length > 0 && (
+          <div className="flex items-center gap-1 rounded-xl border border-[#e8e1d7] bg-[#fafaf8] p-1">
+            <button
+              id="overview-chart-zoom-out"
+              onClick={() => setZoomIndex((z) => Math.min(z + 1, ZOOM_STEPS.length - 1))}
+              disabled={zoomIndex === ZOOM_STEPS.length - 1}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-[#6b7585] transition hover:bg-white hover:text-[#252b36] disabled:opacity-30"
+              title="Zoom out"
+            >
+              <span className="text-base font-bold leading-none">−</span>
+            </button>
+            <span className="min-w-[46px] text-center text-[0.8rem] font-medium text-[#8a93a5]">
+              {ZOOM_STEPS[zoomIndex]}d
+            </span>
+            <button
+              id="overview-chart-zoom-in"
+              onClick={() => setZoomIndex((z) => Math.max(z - 1, 0))}
+              disabled={zoomIndex === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-[#6b7585] transition hover:bg-white hover:text-[#252b36] disabled:opacity-30"
+              title="Zoom in"
+            >
+              <span className="text-base font-bold leading-none">+</span>
+            </button>
+          </div>
+        )}
+      </div>
       {data.length > 0 ? (
         <div className="mt-5 h-[420px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
+            <AreaChart data={visibleData} margin={{ top: 10, right: 12, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0%" stopColor="#f5b800" stopOpacity={0.28} />
@@ -308,7 +345,7 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
           <div>
             <p className="text-[1rem] font-medium text-[#5d6678]">Trend data not available yet</p>
             <p className="mt-2 max-w-xs text-sm leading-6">
-              We need dated revenue and cost columns in the dataset to draw this chart exactly like the reference.
+              We need dated revenue and cost columns in the dataset to draw this chart.
             </p>
           </div>
         </div>
@@ -318,66 +355,58 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
 }
 
 function RevenueSplitPanel({ slices }: { slices: SplitSlice[] }) {
+  // Hide panel entirely when no breakdown data — lets RevenueCostPanel take full width
+  if (slices.length === 0) return null
+
   return (
     <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-      <h3 className="text-[1.05rem] font-semibold text-[#687285]">Revenue Split</h3>
-      {slices.length > 0 ? (
-        <div className="mt-10 flex flex-col items-center">
-          <div className="h-[280px] w-full max-w-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={slices}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={72}
-                  outerRadius={118}
-                  paddingAngle={4}
-                  startAngle={180}
-                  endAngle={-180}
-                >
-                  {slices.map((slice, index) => (
-                    <Cell key={slice.name} fill={splitColors[index % splitColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number | string | Array<number | string>) => {
-                    if (typeof value === 'number') return formatCurrency(value)
-                    return value
-                  }}
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid #e8e1d7',
-                    borderRadius: '18px',
-                    boxShadow: '0 18px 44px rgba(15, 23, 42, 0.12)',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+      <h3 className="text-[1.05rem] font-semibold text-[#687285]">Revenue Distribution</h3>
+      <div className="mt-10 flex flex-col items-center">
+        <div className="h-[280px] w-full max-w-[320px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={slices}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={72}
+                outerRadius={118}
+                paddingAngle={4}
+                startAngle={180}
+                endAngle={-180}
+              >
+                {slices.map((slice, index) => (
+                  <Cell key={slice.name} fill={splitColors[index % splitColors.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number | string | Array<number | string>) => {
+                  if (typeof value === 'number') return formatCurrency(value)
+                  return value
+                }}
+                contentStyle={{
+                  background: '#ffffff',
+                  border: '1px solid #e8e1d7',
+                  borderRadius: '18px',
+                  boxShadow: '0 18px 44px rgba(15, 23, 42, 0.12)',
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
-            {slices.map((slice, index) => (
-              <div key={slice.name} className="flex items-center gap-2 text-[0.95rem] text-[#657082]">
-                <span
-                  className="h-4 w-4 rounded-sm"
-                  style={{ backgroundColor: splitColors[index % splitColors.length] }}
-                />
-                <span>{slice.name}</span>
-              </div>
-            ))}
-          </div>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+          {slices.map((slice, index) => (
+            <div key={slice.name} className="flex items-center gap-2 text-[0.95rem] text-[#657082]">
+              <span
+                className="h-4 w-4 rounded-sm"
+                style={{ backgroundColor: splitColors[index % splitColors.length] }}
+              />
+              <span>{slice.name}</span>
+            </div>
+          ))}
         </div>
-      ) : (
-        <div className="mt-5 flex h-[420px] items-center justify-center rounded-[1.3rem] border border-dashed border-[#e5ddd1] bg-[#fdfbf7] text-center text-[#8b94a5]">
-          <div>
-            <p className="text-[1rem] font-medium text-[#5d6678]">Revenue split is not available yet</p>
-            <p className="mt-2 max-w-xs text-sm leading-6">
-              We need a revenue metric plus a fulfillment or channel dimension such as In-Store and Delivery to populate this chart.
-            </p>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -919,7 +948,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.95fr)]">
+            <div className={`grid gap-6 ${viewModel.revenueSplit.length > 0 ? 'xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.95fr)]' : 'xl:grid-cols-1'}`}>
               {loadingAnalytics ? (
                 <>
                   <div className="rounded-[1.7rem] border border-[#ebe4da] bg-white p-6">

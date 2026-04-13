@@ -25,7 +25,11 @@
       "Bash(venv/bin/python:*)",
       "Bash(npx playwright:*)",
       "Bash(npx jest:*)",
-      "Bash(gh repo:*)"
+      "Bash(gh repo:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'fix: hardcode Vercel origin in CORS allow_origins to unblock production login:*)",
+      "Bash(git push:*)"
     ]
   }
 }
