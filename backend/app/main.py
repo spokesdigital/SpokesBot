@@ -68,7 +68,8 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        settings.FRONTEND_URL,
+        "https://spokesbot.vercel.app",  # production — always allowed regardless of env var
+        settings.FRONTEND_URL,           # picks up any override set in Render dashboard
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
