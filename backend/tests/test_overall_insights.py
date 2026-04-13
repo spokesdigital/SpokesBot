@@ -20,7 +20,6 @@ from app.dependencies import (
 )
 from app.main import app
 
-
 STRUCTURED_RESPONSE = """
 [
   {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 4.2x."},

@@ -1,21 +1,23 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import {
   Users,
   Database,
+  Headphones,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Bot,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/admin/clients', icon: Users, label: 'Clients Console' },
   { href: '/admin/datasets', icon: Database, label: 'Global Datasets' },
+  { href: '/admin/support', icon: Headphones, label: 'Support Inbox' },
 ]
 
 export function AdminSidebar() {
@@ -37,8 +39,14 @@ export function AdminSidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 border-b border-white/50 px-4 py-5">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 via-sky-200 to-emerald-200 shadow-[0_12px_30px_rgba(56,189,248,0.25)]">
-          <Bot className="h-5 w-5 text-slate-700" />
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#ffe48a] via-[#f9c51b] to-[#ecab00] shadow-[0_12px_30px_rgba(240,165,0,0.25)]">
+          <Image
+            src="/spokes-digital-logo.png"
+            alt="Spokes Digital"
+            width={22}
+            height={22}
+            className="h-[22px] w-[22px] object-contain"
+          />
         </div>
         {!sidebarCollapsed && (
           <span className="text-sm font-bold tracking-wide text-slate-800">SpokesBot</span>
@@ -56,7 +64,7 @@ export function AdminSidebar() {
               title={sidebarCollapsed ? label : undefined}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
                 isActive
-                  ? 'border border-white/70 bg-white/75 text-emerald-600 shadow-[0_10px_24px_rgba(45,212,191,0.12)]'
+                  ? 'border border-white/70 bg-white/75 text-[#d99600] shadow-[0_10px_24px_rgba(240,165,0,0.15)]'
                   : 'text-slate-500 hover:bg-white/55 hover:text-slate-800'
               }`}
             >

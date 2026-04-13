@@ -32,7 +32,7 @@ export default function ClientsPage() {
   }, {})
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 px-8 py-8">
       <div>
         <h1 className="text-3xl font-bold text-slate-800">Clients Console</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -49,7 +49,16 @@ export default function ClientsPage() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="glass-panel h-20 rounded-[1.5rem] animate-pulse" />
+            <div key={i} className="glass-panel flex items-center justify-between rounded-[1.5rem] p-5">
+              <div className="flex items-center gap-4">
+                <div className="shimmer-cool h-11 w-11 flex-shrink-0 rounded-2xl" />
+                <div className="space-y-2">
+                  <div className="shimmer-cool h-4 w-36 rounded" />
+                  <div className="shimmer-cool h-3 w-48 rounded" />
+                </div>
+              </div>
+              <div className="shimmer-cool h-4 w-16 rounded" />
+            </div>
           ))}
         </div>
       ) : orgs.length === 0 ? (
@@ -66,11 +75,11 @@ export default function ClientsPage() {
               <Link
                 key={org.id}
                 href={`/admin/clients/${org.id}`}
-                className="glass-panel flex items-center justify-between rounded-[1.5rem] p-5 transition-all hover:border-cyan-200 hover:shadow-[0_18px_50px_rgba(45,212,191,0.12)]"
+                className="glass-panel flex items-center justify-between rounded-[1.5rem] p-5 transition-all hover:border-[#f0a500]/40 hover:shadow-[0_18px_50px_rgba(240,165,0,0.12)]"
               >
                 <div className="flex items-center gap-4">
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-cyan-50 to-emerald-50">
-                    <Users className="h-5 w-5 text-emerald-500" />
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-[#ffe48a]/30 to-[#ecab00]/20">
+                    <Users className="h-5 w-5 text-[#d99600]" />
                   </div>
                   <div>
                     <p className="font-semibold text-slate-800">{org.name}</p>

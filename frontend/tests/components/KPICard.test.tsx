@@ -1,50 +1,45 @@
 import { render, screen } from "@testing-library/react";
 import { KPICard } from "@/components/dashboard/KPICard";
 
-const MockIcon = () => <svg data-testid="icon" />;
-
 describe("KPICard", () => {
-  it("renders the label and value", () => {
-    render(<KPICard label="Total Rows" value={1234} icon={<MockIcon />} />);
-
-    expect(screen.getByText("Total Rows")).toBeInTheDocument();
-    expect(screen.getByText("1234")).toBeInTheDocument();
+  it("renders title and value", () => {
+    render(<KPICard title="Impressions" value="1,234,567" />);
+    expect(screen.getByText("Impressions")).toBeInTheDocument();
+    expect(screen.getByText("1,234,567")).toBeInTheDocument();
   });
 
-  it("renders the icon", () => {
-    render(<KPICard label="Datasets" value={5} icon={<MockIcon />} />);
-    expect(screen.getByTestId("icon")).toBeInTheDocument();
+  it("shows 'No prior comparison' when trendValue is null", () => {
+    render(<KPICard title="CTR" value="4.2%" trendValue={null} />);
+    expect(screen.getByText("No prior comparison")).toBeInTheDocument();
   });
 
-  it("renders the optional subtitle when provided", () => {
+  it("shows positive trend label with TrendingUp icon class", () => {
+    render(<KPICard title="ROAS" value="3.5x" trendValue={12.4} />);
+    expect(screen.getByText("12.4% vs prior")).toBeInTheDocument();
+  });
+
+  it("shows negative trend label for negative trendValue", () => {
+    render(<KPICard title="Cost" value="$8,000" trendValue={-5.3} />);
+    expect(screen.getByText("5.3% vs prior")).toBeInTheDocument();
+    // Red colour class applied
+    const trend = screen.getByText("5.3% vs prior").closest("div");
+    expect(trend).toHaveClass("text-red-500");
+  });
+
+  it("respects explicit trendDirection override", () => {
+    // trendValue positive but direction forced to negative
     render(
-      <KPICard
-        label="Sessions"
-        value={99}
-        icon={<MockIcon />}
-        subtitle="last 7 days"
-      />
+      <KPICard title="CPC" value="$1.20" trendValue={8} trendDirection="negative" />
     );
-    expect(screen.getByText("last 7 days")).toBeInTheDocument();
+    const trend = screen.getByText("8.0% vs prior").closest("div");
+    expect(trend).toHaveClass("text-red-500");
   });
 
-  it("omits the subtitle when not provided", () => {
-    render(<KPICard label="Sessions" value={0} icon={<MockIcon />} />);
-    expect(screen.queryByText("last 7 days")).not.toBeInTheDocument();
-  });
-
-  it("defaults to the emerald color scheme", () => {
-    const { container } = render(
-      <KPICard label="x" value="y" icon={<MockIcon />} />
-    );
-    // The root panel should carry the emerald background class
-    expect(container.firstChild).toHaveClass("bg-emerald-100/70");
-  });
-
-  it("applies the correct color classes for the amber variant", () => {
-    const { container } = render(
-      <KPICard label="x" value="y" icon={<MockIcon />} color="amber" />
-    );
-    expect(container.firstChild).toHaveClass("bg-amber-100/75");
+  it("renders the loading skeleton when loading=true", () => {
+    const { container } = render(<KPICard title="Revenue" value="$0" loading />);
+    // No title text rendered during loading
+    expect(screen.queryByText("Revenue")).not.toBeInTheDocument();
+    // Shimmer divs present
+    expect(container.querySelector(".shimmer-warm")).toBeTruthy();
   });
 });

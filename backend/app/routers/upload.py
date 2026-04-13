@@ -104,6 +104,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     org_id: UUID = Form(...),
     report_name: str | None = Form(None),
+    report_type: str = Form('overview'),
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
     _admin: None = Depends(require_admin),
@@ -122,6 +123,14 @@ async def upload_csv(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only .csv files are accepted.",
+        )
+
+    # ── Validate report_type ────────────────────────────────────────────────
+    valid_report_types = {'overview', 'google_ads', 'meta_ads'}
+    if report_type not in valid_report_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid report_type '{report_type}'. Must be one of: {', '.join(sorted(valid_report_types))}.",
         )
 
     # ── Read + validate file size ────────────────────────────────────────────
@@ -162,6 +171,7 @@ async def upload_csv(
         "id":                   dataset_id,
         "organization_id":      org_id_str,
         "report_name":          normalized_report_name,
+        "report_type":          report_type,
         "file_name":            file.filename,
         "file_size":            len(content),
         "status":               "queued",

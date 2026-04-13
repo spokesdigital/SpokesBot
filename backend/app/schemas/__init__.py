@@ -12,7 +12,14 @@ from .organization import (
     OrganizationMembershipResponse,
     OrganizationResponse,
 )
-from .thread import ChatRequest, MessageResponse, ProactiveInsightResponse, ThreadCreate, ThreadResponse
+from .support import SupportMessageCreate, SupportMessageResponse
+from .thread import (
+    ChatRequest,
+    MessageResponse,
+    ProactiveInsightResponse,
+    ThreadCreate,
+    ThreadResponse,
+)
 
 __all__ = [
     "DatasetResponse",
@@ -30,4 +37,6 @@ __all__ = [
     "OrganizationResponse",
     "OrganizationCreate",
     "OrganizationMembershipResponse",
+    "SupportMessageCreate",
+    "SupportMessageResponse",
 ]

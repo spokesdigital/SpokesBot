@@ -8,6 +8,7 @@ export interface Dataset {
   id: string
   organization_id: string
   report_name: string | null
+  report_type: 'overview' | 'google_ads' | 'meta_ads'
   detected_date_column: string | null
   metric_mappings: Record<string, string | null>
   schema_profile: Record<string, unknown>
@@ -91,4 +92,14 @@ export interface UploadStatus {
   status: 'uploading' | 'processing' | 'done' | 'error'
   dataset_id?: string
   message?: string
+}
+
+export interface SupportMessage {
+  id: string
+  user_id: string
+  organization_id: string
+  email: string
+  message: string
+  status: 'open' | 'resolved'
+  created_at: string
 }

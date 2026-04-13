@@ -213,11 +213,15 @@ def _metric_priority(col: str) -> tuple[int, str]:
         ("spend", 4),
         ("revenue", 5),
         ("sales", 5),
-        ("roas", 6),
-        ("amount", 7),
-        ("value", 8),
-        ("total", 9),
-        ("count", 10),
+        ("conversion", 6),
+        ("transaction", 6),
+        ("purchase", 6),
+        ("order", 6),
+        ("roas", 7),
+        ("amount", 8),
+        ("value", 9),
+        ("total", 10),
+        ("count", 11),
     ]
     for token, priority in priorities:
         if token in name:
@@ -225,7 +229,7 @@ def _metric_priority(col: str) -> tuple[int, str]:
     return 99, name
 
 
-def _pick_metric_columns(df: pd.DataFrame, limit: int = 6) -> list[str]:
+def _pick_metric_columns(df: pd.DataFrame, limit: int = 20) -> list[str]:
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     return sorted(numeric_cols, key=_metric_priority)[:limit]
 

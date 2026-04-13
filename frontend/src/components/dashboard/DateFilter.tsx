@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDashboardStore } from '@/store/dashboard'
 import { format, subDays, startOfMonth, startOfYear, startOfDay, endOfDay } from 'date-fns'
 import { Calendar, ChevronDown } from 'lucide-react'
@@ -47,129 +47,162 @@ const presets: Preset[] = [
   },
 ]
 
+const DEFAULT_PRESET_KEY = 'last_30_days'
+
 export function DateFilter() {
   const { datePreset, dateRange, setDateRange } = useDashboardStore()
   const [open, setOpen] = useState(false)
-  
-  // Memoize default preset
-  const defaultPreset = useMemo(
-    () => presets.find((preset) => preset.key === 'last_30_days') ?? presets[3],
-    [],
-  )
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Sync with external store on mount/datePreset change
+  // Seed store with default preset on first mount
   useEffect(() => {
     if (datePreset) return
-    const { start, end } = defaultPreset.getValue()
-    setDateRange(start, end, defaultPreset.key)
-  }, [datePreset, defaultPreset, setDateRange])
+    const preset = presets.find((p) => p.key === DEFAULT_PRESET_KEY)!
+    const { start, end } = preset.getValue()
+    setDateRange(start, end, preset.key)
+  }, [datePreset, setDateRange])
 
-  // Calculate custom field values (derived state)
-  const initialCustomStart = datePreset === 'custom' && dateRange.start 
-    ? format(dateRange.start, 'yyyy-MM-dd') 
-    : ''
-  const initialCustomEnd = datePreset === 'custom' && dateRange.end 
-    ? format(dateRange.end, 'yyyy-MM-dd') 
-    : ''
-    
-  const [customStart, setCustomStart] = useState(initialCustomStart)
-  const [customEnd, setCustomEnd] = useState(initialCustomEnd)
+  // Controlled values for the two date inputs
+  const [customStart, setCustomStart] = useState(
+    datePreset === 'custom' && dateRange.start ? format(dateRange.start, 'yyyy-MM-dd') : '',
+  )
+  const [customEnd, setCustomEnd] = useState(
+    datePreset === 'custom' && dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : '',
+  )
 
-
-  // Update dateRange when custom fields change
+  // Close panel when user clicks outside the container
   useEffect(() => {
-    if (datePreset !== 'custom') return
-    if (!customStart || !customEnd) return
-    
-    const start = startOfDay(new Date(customStart))
-    const end = endOfDay(new Date(customEnd))
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return
-    
-    setDateRange(start, end, 'custom')
-  }, [customStart, customEnd, setDateRange, datePreset])
+    if (!open) return
+    function handlePointerDown(e: PointerEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [open])
 
-  const activeLabel = datePreset === 'custom'
-    ? 'Custom Range'
-    : presets.find((preset) => preset.key === datePreset)?.label ?? defaultPreset.label
+  const activeLabel =
+    datePreset === 'custom'
+      ? customStart && customEnd
+        ? `${customStart} → ${customEnd}`
+        : 'Custom Range'
+      : presets.find((p) => p.key === datePreset)?.label ??
+        presets.find((p) => p.key === DEFAULT_PRESET_KEY)!.label
 
   function applyPreset(preset: Preset) {
     const { start, end } = preset.getValue()
     setDateRange(start, end, preset.key)
+    // Reset custom inputs so they don't linger when user switches back
+    setCustomStart('')
+    setCustomEnd('')
     setOpen(false)
   }
 
-  function applyCustomRange() {
-    if (!customStart || !customEnd) return
+  function handleStartChange(value: string) {
+    setCustomStart(value)
+    // If end is already set, try to apply immediately
+    if (value && customEnd) {
+      tryApplyCustom(value, customEnd)
+    }
+  }
 
-    const start = startOfDay(new Date(customStart))
-    const end = endOfDay(new Date(customEnd))
+  function handleEndChange(value: string) {
+    setCustomEnd(value)
+    // Both dates now filled — apply and close automatically
+    if (customStart && value) {
+      tryApplyCustom(customStart, value)
+    }
+  }
+
+  function tryApplyCustom(startStr: string, endStr: string) {
+    const start = startOfDay(new Date(startStr))
+    const end = endOfDay(new Date(endStr))
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return
-
     setDateRange(start, end, 'custom')
-    setOpen(false)
+    setOpen(false) // ← auto-close as soon as both dates are valid
   }
 
   return (
-    <div className="relative">
+    // Use a ref instead of a fixed overlay for outside-click detection —
+    // this keeps the full button area fully interactive at all times.
+    <div ref={containerRef} className="relative">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-3 rounded-[1rem] border border-[#e5dfd6] bg-white px-4 py-3 text-[0.98rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:bg-[#fffdfa]"
+        className="flex cursor-pointer items-center gap-2.5 rounded-[1rem] border border-[#e5dfd6] bg-white px-4 py-2.5 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:bg-[#fffdfa] hover:border-[#f0a500]/40"
       >
-        <Calendar className="h-5 w-5 text-[#7c8493]" />
-        <span>{activeLabel}</span>
-        <ChevronDown className="h-4 w-4 text-[#7c8493]" />
+        <Calendar className="h-4 w-4 flex-shrink-0 text-[#7c8493]" />
+        <span className="whitespace-nowrap">{activeLabel}</span>
+        <ChevronDown
+          className={`h-4 w-4 flex-shrink-0 text-[#7c8493] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-[1.2rem] border border-[#e5dfd6] bg-white py-2 shadow-[0_22px_60px_rgba(15,23,42,0.12)]">
-            {presets.map((preset) => (
-              <button
-                key={preset.label}
-                onClick={() => applyPreset(preset)}
-                className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#faf6eb] ${
-                  activeLabel === preset.label ? 'font-medium text-[#c48d00]' : 'text-[#4b5563]'
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <div className="mx-3 my-2 border-t border-[#eee7dd]" />
-            <div className="px-4 pb-3 pt-1">
-              <p className={`text-sm ${datePreset === 'custom' ? 'font-medium text-[#c48d00]' : 'text-[#4b5563]'}`}>
-                Custom Range
-              </p>
-              <div className="mt-3 grid gap-3">
-                <label className="text-xs font-medium text-[#7c8493]">
-                  Start date
-                  <input
-                    type="date"
-                    value={customStart}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-[#e5dfd6] px-3 py-2 text-sm text-[#374151] outline-none transition focus:border-[#f5b800]"
-                  />
-                </label>
-                <label className="text-xs font-medium text-[#7c8493]">
+        <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-[1.2rem] border border-[#e5dfd6] bg-white py-2 shadow-[0_22px_60px_rgba(15,23,42,0.12)]">
+
+          {/* Preset options */}
+          {presets.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => applyPreset(preset)}
+              className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#faf6eb] ${
+                datePreset === preset.key ? 'font-semibold text-[#c48d00]' : 'text-[#4b5563]'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+
+          {/* Custom range section */}
+          <div className="mx-3 my-2 border-t border-[#eee7dd]" />
+          <div className="px-4 pb-3.5 pt-1">
+            <p className={`mb-3 text-sm font-medium ${datePreset === 'custom' ? 'text-[#c48d00]' : 'text-[#4b5563]'}`}>
+              Custom Range
+            </p>
+            <div className="space-y-2.5">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-[#7c8493]">Start date</span>
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => handleStartChange(e.target.value)}
+                  className="w-full rounded-xl border border-[#e5dfd6] px-3 py-2 text-sm text-[#374151] outline-none transition focus:border-[#f5b800] focus:ring-2 focus:ring-[#f9c51b]/25"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-[#7c8493]">
                   End date
-                  <input
-                    type="date"
-                    value={customEnd}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className="mt-1.5 w-full rounded-xl border border-[#e5dfd6] px-3 py-2 text-sm text-[#374151] outline-none transition focus:border-[#f5b800]"
-                  />
-                </label>
+                  {customStart && !customEnd && (
+                    <span className="ml-1.5 text-[#f0a500]">← pick to apply</span>
+                  )}
+                </span>
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => handleEndChange(e.target.value)}
+                  className="w-full rounded-xl border border-[#e5dfd6] px-3 py-2 text-sm text-[#374151] outline-none transition focus:border-[#f5b800] focus:ring-2 focus:ring-[#f9c51b]/25"
+                />
+              </label>
+
+              {/* Only show manual apply if dates are set but not yet applied
+                  (edge case: user manually clears end date after auto-apply) */}
+              {customStart && customEnd && datePreset !== 'custom' && (
                 <button
-                  onClick={applyCustomRange}
-                  disabled={!customStart || !customEnd}
-                  className="rounded-xl bg-[#f5b800] px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                  type="button"
+                  onClick={() => tryApplyCustom(customStart, customEnd)}
+                  className="w-full rounded-xl bg-[#f5b800] px-4 py-2 text-sm font-medium text-white transition hover:brightness-105"
                 >
-                  Apply Custom
+                  Apply
                 </button>
-              </div>
+              )}
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )

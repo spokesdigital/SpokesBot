@@ -62,7 +62,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile = await api.auth.me(token)
       if (gen !== loadGenRef.current) return // a newer call superseded us — discard
       setUser(profile)
-      await loadOrganizations(token, profile)
+      // Fire org loading without awaiting so the loading gate (loading=false)
+      // resolves right after the profile fetch, not after the org list fetch.
+      // Pages render immediately; the org switcher/name populates ~150ms later.
+      void loadOrganizations(token, profile)
     } catch {
       if (gen !== loadGenRef.current) return
       setUser(null)

@@ -19,7 +19,10 @@ def list_organizations(
     role: str = Depends(get_current_role),
 ):
     query = service_client.table("organizations").select("*").order("name")
-    if role != ROLE_ADMIN:
+    if role == ROLE_ADMIN:
+        # Admins manage client orgs — exclude their own platform org from the list.
+        query = query.neq("id", caller_org_id)
+    else:
         query = query.eq("id", caller_org_id)
     return query.execute().data
 

@@ -1,17 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function LoginPage() {
-  const { signIn } = useAuth()
+  const { signIn, session, loading: authLoading } = useAuth()
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+
+  // Redirect already-authenticated users without showing a flash of the form.
+  useEffect(() => {
+    if (!authLoading && session) {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, session, router])
+
+  // While we're checking the session, show a shimmer that matches the page layout
+  // so there's no jarring flash of the login form before a redirect.
+  if (authLoading || session) {
+    return (
+      <main className="min-h-screen bg-[#f7f7f5]">
+        <div className="grid min-h-screen lg:grid-cols-[0.95fr_1fr]">
+          <div className="bg-[#16233b]" />
+          <div className="flex items-center justify-center px-6 py-10">
+            <div className="w-full max-w-[29rem] space-y-6">
+              <div className="shimmer-warm h-10 w-40 rounded-xl" />
+              <div className="shimmer-warm h-5 w-56 rounded-lg" />
+              <div className="space-y-4 pt-4">
+                <div className="shimmer-warm h-14 rounded-[1rem]" />
+                <div className="shimmer-warm h-14 rounded-[1rem]" />
+                <div className="shimmer-warm h-14 rounded-[1rem] opacity-70" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

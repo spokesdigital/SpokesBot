@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { api, streamChat } from '@/lib/api'
@@ -32,6 +33,10 @@ import {
   Send,
   Sparkles,
   Square,
+  Search,
+  ChevronDown,
+  ChevronRight,
+  HelpCircle,
 } from 'lucide-react'
 
 type ChartSeries = {
@@ -57,6 +62,21 @@ type AssistantSegment =
 interface ChatWidgetProps {
   open: boolean
   onClose: () => void
+}
+
+type HelpArticle = {
+  id: string
+  question: string
+  answer: string
+}
+
+// ── Route → page context string passed to the AI agent ───────────────────────
+
+function getPageContext(pathname: string): string | undefined {
+  if (pathname.startsWith('/google-ads')) return 'Google Ads Dashboard'
+  if (pathname.startsWith('/meta-ads')) return 'Meta Ads Dashboard'
+  if (pathname.startsWith('/dashboard')) return 'Overview Dashboard'
+  return undefined
 }
 
 const CHART_TAG_REGEX = /<chart>([\s\S]*?)<\/chart>/gi
@@ -169,32 +189,6 @@ function parseAssistantContent(content: string, streaming = false): AssistantSeg
   return segments
 }
 
-function buildSuggestedFollowUps(question: string, answer: string) {
-  const source = `${question} ${answer}`.toLowerCase()
-  const suggestions: string[] = []
-
-  const push = (value: string) => {
-    if (!suggestions.includes(value)) suggestions.push(value)
-  }
-
-  if (source.includes('compare') || source.includes('vs') || source.includes('<chart>')) {
-    push('Break this down by campaign.')
-    push('Show me the 30-day trend.')
-  }
-  if (source.includes('delivery') || source.includes('in-store') || source.includes('store')) {
-    push('Which channel has the stronger ROAS?')
-  }
-  if (source.includes('|') || source.includes('table')) {
-    push('Summarize the table in plain English.')
-  }
-  if (source.includes('revenue') || source.includes('sales')) {
-    push('What should I optimize first?')
-  }
-
-  push('Give me three recommended actions.')
-
-  return suggestions.slice(0, 3)
-}
 
 function InlineChart({ chart }: { chart: ChatChartPayload }) {
   const xAxisKey = chart.xKey ?? 'label'
@@ -335,11 +329,66 @@ function TypingDots() {
   )
 }
 
+const PLACEHOLDER_PROMPTS = [
+  "Last month's revenue...",
+  "Show total revenue...",
+  "Top performing campaign...",
+  "Show me trends..."
+]
+
+const HELP_ARTICLES: HelpArticle[] = [
+  {
+    id: 'roas',
+    question: 'What is ROAS and why does it matter?',
+    answer:
+      'ROAS stands for return on ad spend. It shows how much revenue you generate for every dollar spent on advertising, which makes it one of the clearest ways to judge whether campaigns are profitable.',
+  },
+  {
+    id: 'effective-transactions',
+    question: 'How are "Effective Transactions" tracked?',
+    answer:
+      'Effective Transactions represent completed purchases or qualified conversions attributed to your campaigns after platform and attribution rules are applied. They are meant to reflect actions that materially contribute to revenue, not just clicks or visits.',
+  },
+  {
+    id: 'cpc',
+    question: 'Why does my CPC fluctuate?',
+    answer:
+      'CPC is influenced by competitor bidding activity, seasonal demand, ad quality scores, and platform-specific auction dynamics.',
+  },
+  {
+    id: 'revenue-split',
+    question: "What's the difference between In-Store and Delivery Revenue?",
+    answer:
+      'In-Store Revenue captures purchases completed in physical locations, while Delivery Revenue reflects orders fulfilled through delivery channels. Comparing both helps you understand where growth is coming from and which channel mix is changing over time.',
+  },
+  {
+    id: 'refresh-rate',
+    question: 'How often is the data updated?',
+    answer:
+      'Most dashboards refresh on the reporting cadence configured for your connected data sources. In practice, that is usually daily, though some integrations can lag depending on source availability and processing windows.',
+  },
+  {
+    id: 'optimizable-factors',
+    question: 'What are "optimizable" vs "market-driven" factors?',
+    answer:
+      'Optimizable factors are things your team can directly improve, like targeting, creative, budget allocation, and bidding strategy. Market-driven factors come from outside conditions such as competition, seasonality, consumer demand, and channel pricing pressure.',
+  },
+  {
+    id: 'trend-indicators',
+    question: 'How do I read the trend indicators on KPI cards?',
+    answer:
+      'Trend indicators compare current performance against a previous period. Positive movement usually means the metric improved relative to the comparison window, while negative movement highlights a decline that may need investigation.',
+  },
+]
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const { session, user } = useAuth()
   const { organizationId, activeDatasetId, setActiveDataset } = useDashboardStore()
+  const pathname = usePathname()
+  const pageContext = getPageContext(pathname)
+  const [promptIndex, setPromptIndex] = useState(0)
 
   const [isRendered, setIsRendered] = useState(open)
   const [tab, setTab] = useState<'messages' | 'articles'>('messages')
@@ -350,12 +399,19 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
-  const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([])
+
   const [minimized, setMinimized] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [articleQuery, setArticleQuery] = useState('')
+  const [expandedArticleId, setExpandedArticleId] = useState('cpc')
 
-  // Proactive insight state
-  const [insightLoading, setInsightLoading] = useState(false)
+  // Support form state
+  const [showSupportForm, setShowSupportForm] = useState(false)
+  const [supportEmail, setSupportEmail] = useState('')
+  const [supportMessage, setSupportMessage] = useState('')
+  const [supportSending, setSupportSending] = useState(false)
+  const [supportSent, setSupportSent] = useState(false)
+  const [supportError, setSupportError] = useState<string | null>(null)
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -399,42 +455,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     container.scrollTo({ top: container.scrollHeight, behavior })
   }
 
-  /* ── Manually triggered insight ── */
-  async function handleProactiveInsight() {
-    if (!session || !activeDatasetId) return
-    setInsightLoading(true)
-    setError(null)
 
-    try {
-      // 1. Create a fresh thread for this insight session
-      const orgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-      const thread = await api.threads.create(
-        { dataset_id: activeDatasetId, title: 'Dashboard Insight' },
-        session.access_token,
-        orgId,
-      )
-      setActiveThread(thread)
-
-      // 2. Ask the backend to run the Reflexion agent and return a validated insight
-      const response = await api.threads.proactiveInsight(thread.id, session.access_token)
-
-      // 3. Inject the insight as the first AI message in the thread
-      setMessages([
-        {
-          id: response.message_id,
-          thread_id: thread.id,
-          role: 'assistant',
-          content: response.insight,
-          created_at: new Date().toISOString(),
-        },
-      ])
-      setSuggestedFollowUps(buildSuggestedFollowUps('proactive insight', response.insight))
-    } catch {
-      setError('Failed to generate insight.')
-    } finally {
-      setInsightLoading(false)
-    }
-  }
 
   /* ── Load messages when thread changes ── */
   useEffect(() => {
@@ -448,7 +469,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   /* ── Scroll to bottom ── */
   useEffect(() => {
     scrollToBottom('smooth')
-  }, [messages.length, insightLoading])
+  }, [messages.length])
 
   useEffect(() => {
     if (!streaming && !streamingContent) return
@@ -456,11 +477,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     return () => window.cancelAnimationFrame(frame)
   }, [streaming, streamingContent])
 
-  useEffect(() => {
-    if (suggestedFollowUps.length === 0) return
-    const frame = window.requestAnimationFrame(() => scrollToBottom('smooth'))
-    return () => window.cancelAnimationFrame(frame)
-  }, [suggestedFollowUps])
+
 
   useEffect(() => {
     if (open) {
@@ -470,6 +487,14 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
     const timeoutId = window.setTimeout(() => setIsRendered(false), 320)
     return () => window.clearTimeout(timeoutId)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const interval = window.setInterval(() => {
+      setPromptIndex((prev) => (prev + 1) % PLACEHOLDER_PROMPTS.length)
+    }, 3000)
+    return () => window.clearInterval(interval)
   }, [open])
 
   /* ── Send message ── */
@@ -507,7 +532,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setInput('')
     setStreaming(true)
     setStreamingContent('')
-    setSuggestedFollowUps([])
+
 
     const optimistic: Message = {
       id: `temp-${Date.now()}`,
@@ -524,7 +549,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
     let accumulated = ''
     try {
-      for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal)) {
+      for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal, pageContext)) {
         if (chunk.error) throw new Error(chunk.error)
         if (chunk.done) break
         if (chunk.token) {
@@ -542,7 +567,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
           created_at: new Date().toISOString(),
         },
       ])
-      setSuggestedFollowUps(buildSuggestedFollowUps(userMessage, accumulated))
+
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
       if (e instanceof Error && e.name !== 'AbortError') {
@@ -571,7 +596,6 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setActiveThread(null)
     setMessages([])
     setStreamingContent('')
-    setSuggestedFollowUps([])
     setError(null)
   }
 
@@ -579,9 +603,17 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   const resolvedDatasetId = resolveDatasetId(datasets, activeDatasetId)
   const hasDataset = Boolean(resolvedDatasetId)
+  const filteredArticles = HELP_ARTICLES.filter((article) => {
+    const query = articleQuery.trim().toLowerCase()
+    if (!query) return true
+    return (
+      article.question.toLowerCase().includes(query) ||
+      article.answer.toLowerCase().includes(query)
+    )
+  })
 
   // Show welcome message only when there are no messages AND we're not fetching an insight
-  const showWelcome = messages.length === 0 && !streaming && !insightLoading
+  const showWelcome = messages.length === 0 && !streaming
 
   return (
     /* Fixed overlay — bottom-right, above the FAB */
@@ -663,43 +695,103 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                 <div
                   ref={messagesContainerRef}
                   data-testid="chat-messages-container"
-                  className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-[#fffdf8]"
+                  className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-[#fffdf8] relative"
                 >
 
-                  {/* Proactive insight loading state */}
-                  {insightLoading && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f2f2f0] px-4 py-3 text-sm text-[#1a1a1a]">
-                        <div className="flex items-center gap-2 mb-2 text-[0.78rem] font-medium text-[#f0a500]">
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Analysing your data…
-                        </div>
-                        <TypingDots />
+                  {/* ── Support form overlay ── */}
+                  {showSupportForm && (
+                    <div className="absolute inset-0 z-20 flex items-start justify-center bg-[#fffdf8]/95 backdrop-blur-sm px-4 pt-6">
+                      <div className="w-full max-w-sm">
+                        {supportSent ? (
+                          <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] border border-[#e8e1d7]">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-50">
+                              <svg className="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                            </div>
+                            <p className="text-sm font-semibold text-[#1a1a1a]">Message sent!</p>
+                            <p className="text-xs text-[#7a7775] text-center">Our team will get back to you soon.</p>
+                            <button
+                              type="button"
+                              onClick={() => { setShowSupportForm(false); setSupportSent(false) }}
+                              className="mt-2 rounded-full bg-[#f0a500] px-5 py-2 text-sm font-medium text-white shadow-[0_6px_16px_rgba(240,165,0,0.35)] transition hover:brightness-105"
+                            >
+                              Back to Chat
+                            </button>
+                          </div>
+                        ) : (
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault()
+                              if (!session || !supportMessage.trim()) return
+                              setSupportSending(true)
+                              setSupportError(null)
+                              try {
+                                await api.support.send(
+                                  { email: supportEmail || user?.email || '', message: supportMessage.trim() },
+                                  session.access_token,
+                                )
+                                setSupportSent(true)
+                                setSupportMessage('')
+                              } catch (err: unknown) {
+                                setSupportError(err instanceof Error ? err.message : 'Failed to send message.')
+                              } finally {
+                                setSupportSending(false)
+                              }
+                            }}
+                            className="flex flex-col gap-4 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] border border-[#e8e1d7]"
+                          >
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-bold text-[#1a1a1a]">Contact Support</h3>
+                              <button
+                                type="button"
+                                onClick={() => setShowSupportForm(false)}
+                                aria-label="Close support form"
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-[#7a7775] transition hover:bg-[#f2f2f0] hover:text-[#1a1a1a]"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <input
+                              type="email"
+                              placeholder="Your email address"
+                              value={supportEmail || user?.email || ''}
+                              onChange={(e) => setSupportEmail(e.target.value)}
+                              required
+                              className="rounded-xl border border-[#e0deda] bg-[#faf9f7] px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20"
+                            />
+                            <textarea
+                              placeholder="Describe your question..."
+                              value={supportMessage}
+                              onChange={(e) => setSupportMessage(e.target.value)}
+                              required
+                              maxLength={2000}
+                              rows={4}
+                              className="resize-none rounded-xl border border-[#e0deda] bg-[#faf9f7] px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20"
+                            />
+                            {supportError && (
+                              <p className="text-xs text-red-500">{supportError}</p>
+                            )}
+                            <button
+                              type="submit"
+                              disabled={supportSending || !supportMessage.trim()}
+                              className="w-full rounded-xl bg-gradient-to-r from-[#f9c51b] to-[#e69d00] py-2.5 text-sm font-semibold text-[#1a1a1a] shadow-[0_10px_24px_rgba(240,165,0,0.28)] transition-all hover:brightness-105 disabled:opacity-50"
+                            >
+                              {supportSending ? 'Sending...' : 'Send Message'}
+                            </button>
+                          </form>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {/* Generic welcome message — shown only when no insight is loading/loaded */}
+
+
+                  {/* Generic welcome message */}
                   {showWelcome && (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-4">
                       <div className="rounded-2xl rounded-tl-sm bg-[#f2f2f0] px-5 py-4 text-[0.97rem] leading-relaxed text-[#1a1a1a]">
                         Hi there! 👋 I&apos;m SpokesAI, your account manager assistant.{' '}
-                        I can help you understand your dashboard metrics, explain
-                        performance trends, and answer digital marketing questions.{' '}
-                        What would you like to know?
+                        Ask me anything about your data — revenue, trends, campaigns, and more!
                       </div>
-                      
-                      {hasDataset && (
-                        <div className="flex justify-start">
-                          <button
-                            onClick={handleProactiveInsight}
-                            className="flex items-center gap-2 rounded-full border border-[#f0a500] px-4 py-2 text-[0.85rem] font-medium text-[#f0a500] hover:bg-[#f0a500]/10 transition-colors"
-                          >
-                            <Sparkles className="h-4 w-4" />
-                            Suggest an Insight
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -748,29 +840,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     </div>
                   )}
 
-                  {!streaming && suggestedFollowUps.length > 0 && (
-                    <div className="flex justify-start">
-                      <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-[#fff6df] px-4 py-3">
-                        <p className="text-[0.72rem] font-semibold tracking-[0.12em] text-[#b68000]">
-                          SUGGESTED FOLLOW-UPS
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {suggestedFollowUps.map((suggestion) => (
-                            <button
-                              key={suggestion}
-                              type="button"
-                              data-testid="chat-follow-up-chip"
-                              onClick={() => void submitMessage(suggestion)}
-                              disabled={insightLoading}
-                              className="rounded-full border border-[#f0d395] bg-white px-3 py-1.5 text-left text-[0.8rem] font-medium text-[#7a5a00] transition hover:border-[#f0a500] hover:text-[#5e4500] disabled:opacity-60"
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+
 
                   {error && (
                     <p className="text-xs text-center text-red-500">{error}</p>
@@ -785,26 +855,54 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     <button
                       type="button"
                       aria-label="Support"
-                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-[#e0deda] bg-white text-[#7a7775] transition hover:border-[#f0a500] hover:text-[#f0a500]"
+                      onClick={() => { setShowSupportForm((v) => !v); setSupportSent(false); setSupportError(null) }}
+                      className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border transition ${
+                        showSupportForm
+                          ? 'border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500]'
+                          : 'border-[#e0deda] bg-white text-[#7a7775] hover:border-[#f0a500] hover:text-[#f0a500]'
+                      }`}
                     >
                       <Headphones className="h-4 w-4" />
                     </button>
-                    <input
-                      data-testid="chat-input"
-                      type="text"
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      disabled={streaming || insightLoading || (datasetsLoading && !hasDataset)}
-                      maxLength={500}
-                      placeholder={
-                        insightLoading
-                          ? 'Generating insight…'
-                          : datasetsLoading && !hasDataset
+                    <div className="relative flex-1 rounded-full bg-white shadow-[0_10px_24px_rgba(240,165,0,0.08)]">
+                      <input
+                        data-testid="chat-input"
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        disabled={streaming || (datasetsLoading && !hasDataset)}
+                        maxLength={500}
+                        placeholder={
+                          datasetsLoading && !hasDataset
                             ? 'Loading reports…'
-                            : 'Ask a question…'
-                      }
-                      className="flex-1 rounded-full border border-[#e0deda] bg-white px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
-                    />
+                            : ''
+                        }
+                        className="relative z-10 w-full rounded-full border border-[#e0deda] bg-transparent px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
+                      />
+                      {!input && hasDataset && !datasetsLoading && !streaming && (
+                        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+                          <div className="absolute inset-[3px] rounded-full bg-[linear-gradient(90deg,rgba(255,246,221,0.95),rgba(255,255,255,0.7),rgba(255,240,201,0.95))]" />
+                          <div className="absolute left-3 top-1/2 h-7 w-24 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(240,165,0,0.24),rgba(240,165,0,0))] blur-md" />
+                          <div className="relative flex h-full items-center px-4">
+                            {PLACEHOLDER_PROMPTS.map((prompt, i) => (
+                              <span
+                                key={prompt}
+                                className={`absolute inset-y-0 left-4 right-4 flex items-center gap-2 text-sm font-medium tracking-[0.01em] transition-all duration-700 ease-out ${
+                                  i === promptIndex
+                                    ? 'translate-y-0 opacity-100 blur-0'
+                                    : 'translate-y-1 opacity-0 blur-[1px]'
+                                }`}
+                              >
+                                <Sparkles className="h-3.5 w-3.5 flex-shrink-0 text-[#f0a500] drop-shadow-[0_0_8px_rgba(240,165,0,0.45)]" />
+                                <span className="truncate bg-[linear-gradient(90deg,#9a6500,#f0a500,#b87900)] bg-clip-text text-transparent [text-shadow:0_0_14px_rgba(240,165,0,0.16)]">
+                                  Try asking: &quot;{prompt}&quot;
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     {streaming ? (
                       <button
                         type="button"
@@ -817,7 +915,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     ) : (
                       <button
                         type="submit"
-                        disabled={!input.trim() || insightLoading || (datasetsLoading && !hasDataset)}
+                        disabled={!input.trim() || (datasetsLoading && !hasDataset)}
                         aria-label="Send message"
                         className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#f0a500] text-white shadow-[0_6px_16px_rgba(240,165,0,0.35)] transition hover:brightness-105 disabled:opacity-40"
                       >
@@ -829,12 +927,76 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
               </>
             ) : (
               /* ── Articles tab ── */
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center text-[#a09e99]">
-                <BookOpen className="h-10 w-10 opacity-40" />
-                <p className="font-medium text-[#4a4845]">No articles yet</p>
-                <p className="text-sm leading-relaxed">
-                  Help articles and guides will appear here once added.
-                </p>
+              <div className="flex flex-1 flex-col overflow-hidden bg-[#fffdf8]">
+                <div className="border-b border-[#efe7db] bg-[#fff9ef] px-4 py-4">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8f98a8]" />
+                    <input
+                      type="text"
+                      value={articleQuery}
+                      onChange={(e) => setArticleQuery(e.target.value)}
+                      placeholder="Search help center..."
+                      className="w-full rounded-2xl border border-[#e7dfd3] bg-white py-2.5 pl-11 pr-4 text-sm text-[#1a1a1a] placeholder:text-[#8f98a8] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/15"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <div className="mb-3 flex items-center gap-2 text-[0.92rem] font-semibold uppercase tracking-[0.06em] text-[#7d7a75]">
+                    <HelpCircle className="h-4 w-4 text-[#e1af28]" />
+                    FAQs
+                  </div>
+
+                  <div className="overflow-hidden rounded-[1.4rem] border border-[#ece4d8] bg-white shadow-[0_18px_40px_rgba(234,201,135,0.12)]">
+                    {filteredArticles.length === 0 ? (
+                      <div className="px-5 py-8 text-center">
+                        <p className="text-sm font-medium text-[#4a4845]">No matching FAQs</p>
+                        <p className="mt-2 text-sm leading-relaxed text-[#8b8882]">
+                          Try searching for a metric like ROAS, CPC, revenue, or trends.
+                        </p>
+                      </div>
+                    ) : (
+                      filteredArticles.map((article, index) => {
+                        const isExpanded = expandedArticleId === article.id
+
+                        return (
+                          <div
+                            key={article.id}
+                            className={`${index !== 0 ? 'border-t border-[#efe7db]' : ''} ${
+                              isExpanded ? 'bg-[#fffefe]' : 'bg-white'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setExpandedArticleId(isExpanded ? '' : article.id)}
+                              className={`flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition ${
+                                isExpanded ? 'bg-[#fffaf0] shadow-[inset_0_0_0_1.5px_#efc14d]' : 'hover:bg-[#fffaf2]'
+                              }`}
+                              aria-expanded={isExpanded}
+                            >
+                              <span className="pr-2 text-[0.98rem] font-medium leading-snug text-[#242220]">
+                                {article.question}
+                              </span>
+                              {isExpanded ? (
+                                <ChevronDown className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#6d7482]" />
+                              ) : (
+                                <ChevronRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#6d7482]" />
+                              )}
+                            </button>
+
+                            {isExpanded && (
+                              <div className="border-t border-[#f5e4b7] bg-[#fffdf7] px-4 pb-4 pt-2 shadow-[inset_0_0_0_1.5px_#efc14d]">
+                                <p className="max-w-[95%] text-[0.95rem] leading-7 text-[#7a8393]">
+                                  {article.answer}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -29,6 +29,7 @@ class MessageResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    page_context: str | None = None
 
 
 class ProactiveInsightResponse(BaseModel):

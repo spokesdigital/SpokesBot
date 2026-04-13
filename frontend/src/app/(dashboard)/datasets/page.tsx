@@ -11,7 +11,7 @@ import { formatDistanceToNow } from 'date-fns'
 
 export default function DatasetsPage() {
   const router = useRouter()
-  const { session, organizations, user } = useAuth()
+  const { session, organizations, user, loading } = useAuth()
   const { organizationId, activeDatasetId, setActiveDataset } = useDashboardStore()
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -43,7 +43,7 @@ export default function DatasetsPage() {
     return (
       <div className="p-6 space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="glass-panel h-20 rounded-[1.5rem] animate-pulse" />
+          <div key={i} className="shimmer-warm h-20 rounded-[1.5rem] border border-[#e8e1d7]" />
         ))}
       </div>
     )
@@ -61,7 +61,7 @@ export default function DatasetsPage() {
         </div>
         <a
           href="/datasets/upload"
-          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-[0_14px_30px_rgba(45,212,191,0.28)] transition-all hover:brightness-105"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#f9c51b] to-[#e69d00] px-4 py-2 text-sm font-medium text-[#1a1a1a] shadow-[0_14px_30px_rgba(240,165,0,0.28)] transition-all hover:brightness-105"
         >
           <UploadCloud className="w-4 h-4" />
           Upload CSV
@@ -78,7 +78,7 @@ export default function DatasetsPage() {
         <div className="glass-panel flex flex-col items-center justify-center space-y-3 rounded-[2rem] py-24 text-slate-500">
           <Database className="w-12 h-12 opacity-30" />
           <p className="text-lg font-medium">No datasets yet</p>
-          <a href="/datasets/upload" className="text-sm text-emerald-500 hover:underline">
+          <a href="/datasets/upload" className="text-sm text-[#d99600] hover:underline">
             Upload your first CSV →
           </a>
         </div>

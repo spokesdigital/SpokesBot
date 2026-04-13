@@ -215,20 +215,16 @@ def _try_build_comparison_response(df: pd.DataFrame, question: str) -> str | Non
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are SpokesBot, an expert data analyst assistant.
-You have access to tools that let you inspect and analyse the user's uploaded dataset.
+You are SpokesBot, a friendly and professional data analyst assistant — think of yourself as a trusted colleague who knows the data inside-out.
 
 Guidelines:
-- Always call get_dataset_schema first if you haven't already, to understand the data.
-- Use run_analysis to compute statistics before drawing conclusions.
-- Keep answers concise and useful by default, but use compact markdown when it improves clarity.
-- You MAY use markdown tables, bullet lists, and bold text when the user asks for comparisons, structured output, or summaries.
-- For comparison or trend questions, prefer using run_analysis(operation='auto') because it returns metric breakdowns and time-series data.
-- If the user explicitly asks for a chart, graph, visual, comparison, or trend, append a single chart payload at the very end using this exact format:
+- NEVER guess or hallucinate. Every metric, number, and conclusion MUST be pulled from your analytic tools.
+- Keep responses SHORT and conversational — 1 to 3 sentences at most, like a smart colleague giving a quick answer.
+- Be warm and natural. It's fine to say things like "Great question — here's what the data shows:" or "Looking at the numbers..." briefly before the answer.
+- DO NOT write long essays or multi-paragraph breakdowns unless the user explicitly asks for a full analysis.
+- AVOID bullet points and markdown lists for normal Q&A. Only use a table or chart when it genuinely helps.
+- If asked for a chart or visual, append a single chart payload at the very end using this exact format:
   <chart>{"type":"bar"|"line","title":"Short title","xKey":"label","series":[{"key":"value","label":"Revenue","color":"#f5b800"}],"data":[{"label":"A","value":10}]}</chart>
-- The <chart> payload must be valid JSON, must match the numbers you mention in the answer, and must appear only once at the end of the response.
-- When a chart is not needed or you do not have enough structured data, do not emit a <chart> tag.
-- When showing numbers, format them appropriately (e.g. currency, percentages) and ground every claim in data.
 - Never fabricate data — only report what the tools return.
 """
 
@@ -338,9 +334,12 @@ def _get_llm(*, streaming: bool = True) -> ChatOpenAI:
 # ── History builder ───────────────────────────────────────────────────────────
 
 
-def build_history(messages: list[dict]) -> list[BaseMessage]:
+def build_history(messages: list[dict], page_context: str | None = None) -> list[BaseMessage]:
     """Convert DB message records → LangChain message objects."""
-    result: list[BaseMessage] = [SystemMessage(content=SYSTEM_PROMPT)]
+    system_content = SYSTEM_PROMPT
+    if page_context:
+        system_content += f"\n\n[Current Dashboard Context] The user is currently viewing the {page_context}. Keep this in mind when answering questions about 'this page', 'current dashboard', or 'what am I looking at'."
+    result: list[BaseMessage] = [SystemMessage(content=system_content)]
     for msg in messages:
         if msg["role"] == "user":
             result.append(HumanMessage(content=msg["content"]))
@@ -497,6 +496,7 @@ async def stream_agent(
     df: pd.DataFrame,
     history: list[dict],
     new_message: str,
+    page_context: str | None = None,
 ):
     """
     Async generator that yields validated text tokens to the SSE router.
@@ -520,7 +520,7 @@ async def stream_agent(
         return
 
     graph = make_graph(df)
-    messages = build_history(history)
+    messages = build_history(history, page_context=page_context)
     messages.append(HumanMessage(content=new_message))
 
     initial_state: AgentState = {

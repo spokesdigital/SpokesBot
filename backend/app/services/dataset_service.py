@@ -1,4 +1,7 @@
 import io
+from collections import OrderedDict
+from threading import Lock
+from time import monotonic
 
 import pandas as pd
 from fastapi import HTTPException, status
@@ -6,6 +9,48 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 BUCKET = "datasets"
+_DATAFRAME_CACHE_TTL_SECONDS = 300
+_DATAFRAME_CACHE_MAX_ITEMS = 4
+_dataframe_cache: OrderedDict[str, tuple[float, pd.DataFrame]] = OrderedDict()
+_dataframe_cache_lock = Lock()
+
+
+def _evict_expired_entries(now: float) -> None:
+    expired_keys = [
+        storage_path
+        for storage_path, (loaded_at, _) in _dataframe_cache.items()
+        if now - loaded_at > _DATAFRAME_CACHE_TTL_SECONDS
+    ]
+    for storage_path in expired_keys:
+        _dataframe_cache.pop(storage_path, None)
+
+
+def _get_cached_dataframe(storage_path: str) -> pd.DataFrame | None:
+    now = monotonic()
+    with _dataframe_cache_lock:
+        _evict_expired_entries(now)
+        cached_entry = _dataframe_cache.get(storage_path)
+        if cached_entry is None:
+            return None
+
+        _dataframe_cache.move_to_end(storage_path)
+        return cached_entry[1]
+
+
+def _store_cached_dataframe(storage_path: str, df: pd.DataFrame) -> None:
+    now = monotonic()
+    with _dataframe_cache_lock:
+        _evict_expired_entries(now)
+        _dataframe_cache[storage_path] = (now, df)
+        _dataframe_cache.move_to_end(storage_path)
+
+        while len(_dataframe_cache) > _DATAFRAME_CACHE_MAX_ITEMS:
+            _dataframe_cache.popitem(last=False)
+
+
+def clear_dataframe_cache() -> None:
+    with _dataframe_cache_lock:
+        _dataframe_cache.clear()
 
 
 def list_datasets(supabase: Client) -> list[dict]:
@@ -47,5 +92,11 @@ def delete_dataset(dataset_id: str, supabase: Client, service_client: Client) ->
 
 def load_dataframe(storage_path: str, service_client: Client) -> pd.DataFrame:
     """Download parquet from Supabase Storage and return as DataFrame."""
+    cached_df = _get_cached_dataframe(storage_path)
+    if cached_df is not None:
+        return cached_df
+
     file_bytes: bytes = service_client.storage.from_(BUCKET).download(storage_path)
-    return pd.read_parquet(io.BytesIO(file_bytes))
+    df = pd.read_parquet(io.BytesIO(file_bytes))
+    _store_cached_dataframe(storage_path, df)
+    return df

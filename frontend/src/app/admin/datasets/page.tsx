@@ -29,7 +29,7 @@ export default function GlobalDatasetsPage() {
   const orgNameById = Object.fromEntries(orgs.map((o) => [o.id, o.name]))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 px-8 py-8">
       <div>
         <h1 className="text-3xl font-bold text-slate-800">Global Datasets</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -46,7 +46,16 @@ export default function GlobalDatasetsPage() {
       {loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="glass-panel h-20 rounded-[1.5rem] animate-pulse" />
+            <div key={i} className="glass-panel flex items-center justify-between rounded-[1.5rem] p-4">
+              <div className="flex items-center gap-4">
+                <div className="shimmer-cool h-10 w-10 flex-shrink-0 rounded-2xl" />
+                <div className="space-y-2">
+                  <div className="shimmer-cool h-4 w-48 rounded" />
+                  <div className="shimmer-cool h-3 w-32 rounded" />
+                </div>
+              </div>
+              <div className="shimmer-cool h-5 w-20 rounded-full" />
+            </div>
           ))}
         </div>
       ) : datasets.length === 0 ? (
@@ -63,8 +72,8 @@ export default function GlobalDatasetsPage() {
               className="glass-panel flex items-center justify-between rounded-[1.5rem] p-4"
             >
               <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white/70">
-                  <Database className="h-5 w-5 text-emerald-500" />
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-[#ffe48a]/30 to-[#ecab00]/20">
+                  <Database className="h-5 w-5 text-[#d99600]" />
                 </div>
                 <div>
                   <p className="font-medium text-slate-800">{dataset.report_name || dataset.file_name}</p>
@@ -72,7 +81,7 @@ export default function GlobalDatasetsPage() {
                     {dataset.report_name && dataset.report_name !== dataset.file_name ? `${dataset.file_name} · ` : ''}
                     <Link
                       href={`/admin/clients/${dataset.organization_id}`}
-                      className="text-emerald-600 hover:underline"
+                      className="text-[#d99600] hover:underline"
                     >
                       {orgNameById[dataset.organization_id] ?? dataset.organization_id}
                     </Link>

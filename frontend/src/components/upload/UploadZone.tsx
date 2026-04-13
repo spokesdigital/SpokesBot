@@ -4,8 +4,10 @@ import { useRef, useState } from 'react'
 import type { UploadStatus } from '@/types'
 import { UploadCloud, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
+export type ValidReportType = 'overview' | 'google_ads' | 'meta_ads'
+
 interface UploadZoneProps {
-  onFileSelected: (file: File) => void
+  onFileSelected: (file: File, reportType: ValidReportType) => void
   onRetry?: () => void
   disabled?: boolean
   status?: UploadStatus
@@ -14,13 +16,14 @@ interface UploadZoneProps {
 export function UploadZone({ onFileSelected, onRetry, disabled, status }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [reportType, setReportType] = useState<ValidReportType>('overview')
 
   function handleFile(file: File) {
     if (!file.name.endsWith('.csv')) {
       alert('Only .csv files are accepted.')
       return
     }
-    onFileSelected(file)
+    onFileSelected(file, reportType)
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -44,6 +47,27 @@ export function UploadZone({ onFileSelected, onRetry, disabled, status }: Upload
 
   return (
     <div className="space-y-4">
+      {/* Report Type Selector */}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="report-type-select" className="text-sm font-medium text-slate-700">
+          Select Report Type
+        </label>
+        <select
+          id="report-type-select"
+          value={reportType}
+          onChange={(e) => setReportType(e.target.value as ValidReportType)}
+          disabled={disabled || isProcessing || isDone}
+          className="w-full rounded-xl border border-white/70 bg-white/80 px-4 py-3 text-sm text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] outline-none transition focus:border-[#f0a500] focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
+        >
+          <option value="overview">Overview</option>
+          <option value="google_ads">Google Ads</option>
+          <option value="meta_ads">Meta Ads</option>
+        </select>
+        <p className="text-xs text-slate-500">
+          This categorizes the dataset in the dashboard.
+        </p>
+      </div>
+
       <div
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -67,7 +91,7 @@ export function UploadZone({ onFileSelected, onRetry, disabled, status }: Upload
         />
 
         {isProcessing && (
-          <Loader2 className="w-12 h-12 text-emerald-400 animate-spin" />
+          <Loader2 className="w-12 h-12 text-[#f0a500] animate-spin" />
         )}
         {isDone && (
           <CheckCircle className="w-12 h-12 text-emerald-400" />
@@ -114,7 +138,7 @@ export function UploadZone({ onFileSelected, onRetry, disabled, status }: Upload
       {isError && (
         <button
           onClick={onRetry ?? (() => inputRef.current?.click())}
-          className="w-full rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 py-2.5 text-sm font-medium text-white shadow-[0_14px_30px_rgba(45,212,191,0.28)] transition-all hover:brightness-105"
+          className="w-full rounded-xl bg-gradient-to-r from-[#f9c51b] to-[#e69d00] py-2.5 text-sm font-medium text-[#1a1a1a] shadow-[0_14px_30px_rgba(240,165,0,0.28)] transition-all hover:brightness-105"
         >
           Try Again
         </button>

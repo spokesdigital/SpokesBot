@@ -1,86 +1,74 @@
 'use client'
 
-import { CheckCircle2, Lightbulb, TrendingUp, TriangleAlert, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Lightbulb, TrendingUp, Zap } from 'lucide-react'
 import type { AIInsight } from '@/types'
 
 interface OverallInsightsProps {
   insights: AIInsight[]
   loading?: boolean
   error?: string | null
+  title?: string
+  subtitle?: string | null
 }
 
-const insightStyles: Record<AIInsight['type'], { icon: typeof CheckCircle2; iconClassName: string }> = {
-  success: {
-    icon: CheckCircle2,
-    iconClassName: 'text-[#22c55e]',
-  },
-  trend: {
-    icon: TrendingUp,
-    iconClassName: 'text-[#3b82f6]',
-  },
-  warning: {
-    icon: Zap,
-    iconClassName: 'text-[#eab308]',
-  },
-  alert: {
-    icon: TriangleAlert,
-    iconClassName: 'text-[#f97316]',
-  },
+const insightConfig: Record<AIInsight['type'], { icon: typeof CheckCircle; color: string; bg: string }> = {
+  success: { icon: CheckCircle,   color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  trend:   { icon: TrendingUp,    color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
+  warning: { icon: Zap,           color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
+  alert:   { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
 }
 
-export function OverallInsights({ insights, loading = false, error = null }: OverallInsightsProps) {
+export function OverallInsights({
+  insights,
+  loading = false,
+  error = null,
+  title = 'AI Insights',
+  subtitle,
+}: OverallInsightsProps) {
   return (
-    <section className="rounded-[1.7rem] border border-white/70 bg-white/85 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-md">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#fff6d7] text-[#d29b00]">
-            <Lightbulb className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-[1.05rem] font-semibold text-[#252b36]">Overall AI Insights</h3>
-            <p className="mt-1 text-sm text-[#7a8292]">Structured highlights generated from the active dataset.</p>
-          </div>
+    <div className="bg-gradient-to-br from-card to-muted/30 rounded-xl p-5 card-shadow border border-border">
+      {/* Header row */}
+      <div className="flex items-center gap-2 mb-5">
+        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+          <Lightbulb className="w-4 h-4 text-amber-500" />
         </div>
-
-        <span className="rounded-full bg-[#d7a11e] px-3 py-1 text-[0.68rem] font-semibold tracking-[0.14em] text-[#fff7df]">
-          AI-POWERED
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-sm">{title}</h3>
+          {subtitle ? <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p> : null}
+        </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full shrink-0">
+          AI-Powered
         </span>
       </div>
 
-      <div className="mt-6 space-y-3">
+      {/* Insight items */}
+      <div className="space-y-3">
         {loading ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-[68px] animate-pulse rounded-[1.1rem] border border-[#ece7de] bg-[#f7f7f4]"
-            />
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="shimmer-warm h-14 rounded-lg" />
           ))
         ) : error ? (
-          <div className="rounded-[1.1rem] border border-[#f4d7d2] bg-[#fff7f5] px-4 py-4 text-sm text-[#c2410c]">
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
             {error}
           </div>
         ) : insights.length > 0 ? (
-          insights.map((insight, index) => {
-            const { icon: Icon, iconClassName } = insightStyles[insight.type]
-
+          insights.map((insight, i) => {
+            const { icon: Icon, color, bg } = insightConfig[insight.type]
             return (
-              <div
-                key={`${insight.type}-${index}`}
-                className="flex w-full items-center gap-3 rounded-[1.1rem] border border-[#ece7de] bg-[#f7f7f4] px-4 py-4"
-              >
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white">
-                  <Icon className={`h-[18px] w-[18px] ${iconClassName}`} />
+              <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background/60 border border-border/50">
+                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${bg}`}>
+                  <Icon className={`w-3.5 h-3.5 ${color}`} />
                 </div>
-                <p className="flex-1 text-sm leading-6 text-[#4a5261]">{insight.text}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{insight.text}</p>
               </div>
             )
           })
         ) : (
-          <div className="rounded-[1.1rem] border border-[#ece7de] bg-[#f7f7f4] px-4 py-4 text-sm text-[#7a8292]">
+          <div className="p-3 rounded-lg bg-background/60 border border-border/50 text-sm text-muted-foreground">
             Insights will appear once the active dataset is ready for AI analysis.
           </div>
         )}
       </div>
-    </section>
+    </div>
   )
 }

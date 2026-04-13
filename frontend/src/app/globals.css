@@ -185,6 +185,81 @@
   .glass-button {
     @apply border border-white/60 bg-white/60 text-slate-700 shadow-[0_10px_28px_rgba(148,163,184,0.12)] backdrop-blur-xl;
   }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px 0 hsl(220 20% 15% / 0.04), 0 4px 16px -2px hsl(220 20% 15% / 0.06);
+  }
+
+  .card-shadow-hover {
+    box-shadow: 0 4px 12px -2px hsl(220 20% 15% / 0.08), 0 8px 24px -4px hsl(220 20% 15% / 0.1);
+  }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Staggered children animation */
+.stagger-children > * {
+  opacity: 0;
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 55ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 110ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 165ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 220ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 275ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 330ms; }
+
+@keyframes shimmer-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Shimmer skeleton utilities ───────────────────────────────────────────── */
+
+/* Client dashboard — warm cream tones */
+.shimmer-warm {
+  background: linear-gradient(
+    90deg,
+    #f0e6d3 0%,
+    #f0e6d3 40%,
+    #fdf9f2 50%,
+    #f0e6d3 60%,
+    #f0e6d3 100%
+  );
+  background-size: 300% 100%;
+  animation: shimmer-sweep 2.8s ease-in-out infinite;
+}
+
+/* Admin panel — cool slate tones */
+.shimmer-cool {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 0%,
+    #e2e8f0 40%,
+    #f8fafc 50%,
+    #e2e8f0 60%,
+    #e2e8f0 100%
+  );
+  background-size: 300% 100%;
+  animation: shimmer-sweep 2.8s ease-in-out infinite;
+}
+
+/* Dark sidebar skeleton elements */
+.shimmer-dark {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.06) 0%,
+    rgba(255,255,255,0.06) 40%,
+    rgba(255,255,255,0.18) 50%,
+    rgba(255,255,255,0.06) 60%,
+    rgba(255,255,255,0.06) 100%
+  );
+  background-size: 300% 100%;
+  animation: shimmer-sweep 2.8s ease-in-out infinite;
 }
 
 @keyframes chat-launcher-idle {

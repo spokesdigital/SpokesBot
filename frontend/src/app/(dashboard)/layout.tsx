@@ -23,21 +23,50 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, session, user, router])
 
-  if (loading || !session) {
+  if (loading || !session || !user || user.role === 'admin') {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="glass-panel-strong flex size-16 items-center justify-center rounded-full">
-          <div className="h-7 w-7 rounded-full border-[3px] border-emerald-400 border-t-transparent animate-spin" />
+      <div className="flex h-screen overflow-hidden bg-[#fcfaf7]">
+        {/* Sidebar skeleton */}
+        <div className="flex w-64 flex-shrink-0 flex-col bg-[#1d2129]">
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-5 py-5">
+            <div className="shimmer-dark h-[42px] w-[42px] flex-shrink-0 rounded-xl" />
+            <div className="shimmer-dark h-5 flex-1 rounded-lg" />
+            <div className="shimmer-dark h-10 w-10 rounded-xl" />
+          </div>
+          <nav className="flex-1 space-y-2 px-3 py-6">
+            <div className="shimmer-dark h-14 rounded-[1.15rem]" />
+            <div className="shimmer-dark h-14 rounded-[1.15rem] opacity-70" />
+          </nav>
+          <div className="border-t border-white/8 px-6 py-7">
+            <div className="shimmer-dark mb-2 h-3 w-12 rounded" />
+            <div className="shimmer-dark h-5 w-36 rounded" />
+            <div className="shimmer-dark mt-10 h-10 rounded-xl opacity-60" />
+          </div>
         </div>
-      </div>
-    )
-  }
-
-  if (!user || user.role === 'admin') {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="glass-panel-strong flex size-16 items-center justify-center rounded-full">
-          <div className="h-7 w-7 rounded-full border-[3px] border-emerald-400 border-t-transparent animate-spin" />
+        {/* Main content skeleton */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#e7e1d6] bg-white px-8 py-6">
+            <div className="shimmer-warm h-9 w-52 rounded-xl" />
+            <div className="shimmer-warm h-9 w-36 rounded-xl" />
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-8 px-8 py-8">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-3">
+                <div className="shimmer-warm h-10 w-40 rounded-xl" />
+                <div className="shimmer-warm h-5 w-64 rounded-lg" />
+              </div>
+              <div className="shimmer-warm h-[72px] w-[260px] rounded-[1.35rem] border border-[#e8e1d7]" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="shimmer-warm h-[170px] rounded-[1.45rem] border border-[#ebe4da]" />
+              ))}
+            </div>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.95fr)]">
+              <div className="shimmer-warm h-[500px] rounded-[1.7rem] border border-[#ebe4da]" />
+              <div className="shimmer-warm h-[500px] rounded-[1.7rem] border border-[#ebe4da]" />
+            </div>
+          </div>
         </div>
       </div>
     )

@@ -18,7 +18,14 @@
       "Bash(python3.12 -m venv venv)",
       "Bash(venv/bin/python --version)",
       "Bash(echo \"venv created with $\\(venv/bin/python --version\\)\")",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(pkill -f \"uvicorn app.main:app\")",
+      "Bash(python -c \"from app.schemas.thread import ChatRequest; r = ChatRequest\\(message='hi', page_context='Meta Ads Dashboard'\\); print\\(r\\)\")",
+      "Bash(venv/bin/python:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npx jest:*)",
+      "Bash(gh repo:*)"
     ]
   }
 }

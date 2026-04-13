@@ -26,6 +26,7 @@ from app.routers import (  # noqa: E402
     datasets,
     events,
     organizations,
+    support,
     threads,
     upload,
 )
@@ -85,6 +86,7 @@ app.include_router(datasets.router)
 app.include_router(threads.router)
 app.include_router(analytics.router)
 app.include_router(events.router)
+app.include_router(support.router)
 
 # ── Global exception handler ─────────────────────────────────────────────────
 @app.exception_handler(Exception)

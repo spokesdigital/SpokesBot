@@ -20,7 +20,7 @@ import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
-import type { AIInsight, Dataset, AnalyticsResult } from '@/types'
+import type { AIInsight, Dataset, AnalyticsResult, InsightsResult } from '@/types'
 
 type NumericSummary = Record<string, Record<string, number>>
 type NumericTotals = Record<string, number>
@@ -99,11 +99,27 @@ const metricDefinitions: MetricCardDefinition[] = [
 ]
 
 const splitColors = ['#f5b800', '#22c55e', '#f97316', '#64748b']
+const DASHBOARD_CACHE_LIMIT = 24
+const analyticsResponseCache = new Map<string, AnalyticsResult>()
+const insightsResponseCache = new Map<string, InsightsResult>()
+
+function rememberDashboardCache<T>(cache: Map<string, T>, key: string, value: T) {
+  cache.set(key, value)
+  if (cache.size <= DASHBOARD_CACHE_LIMIT) return
+
+  const oldestKey = cache.keys().next().value
+  if (oldestKey) {
+    cache.delete(oldestKey)
+  }
+}
+
+const DATE_COLUMN_EXACT_OV = new Set(['date', 'day', 'timestamp', 'time'])
 
 function isLikelyDateColumn(name: string) {
-  const normalized = name.toLowerCase()
+  const normalized = name.toLowerCase().trim()
+  if (DATE_COLUMN_EXACT_OV.has(normalized)) return true
   return (
-    /(^|[_\W])(date|time|day|month|year)([_\W]|$)/i.test(normalized) ||
+    /(^|[_\W])(date|time|day|timestamp|month|year)([_\W]|$)/i.test(normalized) ||
     normalized.endsWith('_date') ||
     normalized.endsWith('_time') ||
     normalized.endsWith('_at') ||
@@ -164,6 +180,31 @@ function renderXAxisLabel(value: string) {
   } catch {
     return value
   }
+}
+
+function getDashboardDateColumn(dataset: Dataset | null) {
+  if (!dataset) return null
+  return dataset.detected_date_column ?? dataset.column_headers.find(isLikelyDateColumn) ?? null
+}
+
+function buildDashboardRequestKey(params: {
+  datasetId: string
+  organizationScope: string
+  datasetUpdatedAt: string
+  dateColumn: string | null
+  datePreset: string | null
+  startDate: string | null
+  endDate: string | null
+}) {
+  return [
+    params.datasetId,
+    params.organizationScope,
+    params.datasetUpdatedAt,
+    params.dateColumn ?? 'no-date-column',
+    params.datePreset ?? 'all-time',
+    params.startDate ?? 'no-start',
+    params.endDate ?? 'no-end',
+  ].join('::')
 }
 
 function MetricCard({ card }: { card: MetricCardData }) {
@@ -241,6 +282,7 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
               />
               <Area
                 type="monotone"
+                connectNulls={true}
                 dataKey="revenue"
                 stroke="#f5b800"
                 fill="url(#revenueFill)"
@@ -250,6 +292,7 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
               />
               <Area
                 type="monotone"
+                connectNulls={true}
                 dataKey="cost"
                 stroke="#ff6a00"
                 fill="url(#costFill)"
@@ -339,6 +382,8 @@ function RevenueSplitPanel({ slices }: { slices: SplitSlice[] }) {
   )
 }
 
+const LIVE_REFRESH_MS = 30_000
+
 export default function DashboardPage() {
   const { session, organizations, user } = useAuth()
   const { organizationId, activeDatasetId, setActiveDataset, datePreset, dateRange } = useDashboardStore()
@@ -351,12 +396,46 @@ export default function DashboardPage() {
   const [loadingInsights, setLoadingInsights] = useState(false)
   const [insightsError, setInsightsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const isInitialOrOrgLoadRef = useRef<string | null>(null)
 
-  const completedDatasets = datasets.filter((dataset) => dataset.status === 'completed')
-  const activeDataset = completedDatasets.find((dataset) => dataset.id === activeDatasetId)
-    ?? datasets.find((dataset) => dataset.id === activeDatasetId)
+  // 30-second live refresh
+  useEffect(() => {
+    const id = setInterval(() => setRefreshTick((t) => t + 1), LIVE_REFRESH_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  const completedDatasets = useMemo(() => datasets.filter((dataset) => dataset.status === 'completed'), [datasets])
+  const activeDataset = useMemo(() => 
+    completedDatasets.find((dataset) => dataset.id === activeDatasetId)
+    ?? datasets.find((dataset) => dataset.id === activeDatasetId), 
+  [completedDatasets, datasets, activeDatasetId])
+  const activeDateColumn = useMemo(() => getDashboardDateColumn(activeDataset ?? null), [activeDataset])
+  const startDateValue = useMemo(
+    () => (datePreset === 'custom' && dateRange.start ? format(dateRange.start, 'yyyy-MM-dd') : null),
+    [datePreset, dateRange.start],
+  )
+  const endDateValue = useMemo(
+    () => (datePreset === 'custom' && dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
+    [datePreset, dateRange.end],
+  )
+  const organizationScope = user?.role === 'admin'
+    ? organizationId ?? 'admin-default'
+    : user?.organization?.id ?? 'client-org'
+  const analyticsRequestKey = activeDatasetId
+    ? buildDashboardRequestKey({
+        datasetId: activeDatasetId,
+        organizationScope,
+        datasetUpdatedAt: activeDataset?.updated_at ?? 'unknown-update',
+        dateColumn: activeDateColumn,
+        datePreset: datePreset ?? null,
+        startDate: startDateValue,
+        endDate: endDateValue,
+      })
+    : null
+  const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
 
   useEffect(() => {
     if (!session) return
@@ -388,7 +467,8 @@ export default function DashboardPage() {
             setActiveDataset(null)
           }
         } else {
-          if (availableDatasets.length > 0 && !availableDatasets.some((dataset) => dataset.id === activeDatasetId)) {
+          const currentActiveId = useDashboardStore.getState().activeDatasetId
+          if (availableDatasets.length > 0 && !availableDatasets.some((dataset) => dataset.id === currentActiveId)) {
             setActiveDataset(availableDatasets[0].id)
           } else if (availableDatasets.length === 0) {
             setActiveDataset(null)
@@ -408,7 +488,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [session, activeDatasetId, organizationId, setActiveDataset, user?.role])
+  }, [session, organizationId, setActiveDataset, user?.role, refreshTick])
 
   useEffect(() => {
     if (!session || !activeDatasetId) {
@@ -421,24 +501,32 @@ export default function DashboardPage() {
     async function loadAnalytics() {
       const token = session?.access_token
       const datasetId = activeDatasetId
-      if (!token || !datasetId) return
+      if (!token || !datasetId || !analyticsRequestKey) return
+
+      const cached = analyticsResponseCache.get(analyticsRequestKey)
+      if (cached) {
+        setAnalytics(cached)
+        setLastUpdated(new Date())
+        setLoadingAnalytics(false)
+        setError(null)
+        return
+      }
+
       setError(null)
       setLoadingAnalytics(true)
       try {
-        const dateColumn = activeDataset?.detected_date_column
-          ?? activeDataset?.column_headers?.find(isLikelyDateColumn)
         const body: Parameters<typeof api.analytics.compute>[0] = {
           dataset_id: datasetId,
           operation: 'auto',
-          ...(dateColumn
+          ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? {
-                  start_date: format(dateRange.start, 'yyyy-MM-dd'),
-                  end_date: format(dateRange.end, 'yyyy-MM-dd'),
-                  date_column: dateColumn,
+                  start_date: startDateValue!,
+                  end_date: endDateValue!,
+                  date_column: activeDateColumn,
                 }
               : datePreset
-                ? { date_preset: datePreset, date_column: dateColumn }
+                ? { date_preset: datePreset, date_column: activeDateColumn }
                 : {}
             : {}),
         }
@@ -446,10 +534,17 @@ export default function DashboardPage() {
         const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
         const result = await api.analytics.compute(body, token, targetOrgId)
 
-        if (!cancelled) setAnalytics(result)
+        rememberDashboardCache(analyticsResponseCache, analyticsRequestKey, result)
+
+        if (!cancelled) { setAnalytics(result); setLastUpdated(new Date()) }
       } catch (requestError) {
         if (!cancelled) {
-          setError(requestError instanceof Error ? requestError.message : 'Failed to load analytics')
+          const message = requestError instanceof Error && requestError.name === 'AbortError'
+            ? 'Analytics are taking longer than expected. Please try again or narrow the date range.'
+            : requestError instanceof Error
+              ? requestError.message
+              : 'Failed to load analytics'
+          setError(message)
         }
       } finally {
         if (!cancelled) setLoadingAnalytics(false)
@@ -461,7 +556,19 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [session, activeDatasetId, datePreset, dateRange.start, dateRange.end, activeDataset, organizationId, user?.role])
+  }, [
+    session,
+    activeDatasetId,
+    analyticsRequestKey,
+    datePreset,
+    dateRange.start,
+    dateRange.end,
+    startDateValue,
+    endDateValue,
+    activeDateColumn,
+    organizationId,
+    user?.role,
+  ])
 
   useEffect(() => {
     if (!session || !activeDatasetId) {
@@ -471,30 +578,43 @@ export default function DashboardPage() {
       return
     }
 
+    if (loadingAnalytics) {
+      setOverallInsights([])
+      setInsightsError(null)
+      setLoadingInsights(false)
+      return
+    }
+
     let cancelled = false
 
     async function loadOverallInsights() {
       const token = session?.access_token
       const datasetId = activeDatasetId
-      if (!token || !datasetId) return
+      if (!token || !datasetId || !insightsRequestKey) return
+
+      const cached = insightsResponseCache.get(insightsRequestKey)
+      if (cached) {
+        setOverallInsights(cached.insights)
+        setLoadingInsights(false)
+        setInsightsError(null)
+        return
+      }
 
       setLoadingInsights(true)
       setInsightsError(null)
 
       try {
-        const dateColumn = activeDataset?.detected_date_column
-          ?? activeDataset?.column_headers?.find(isLikelyDateColumn)
         const body: Parameters<typeof api.analytics.getInsights>[0] = {
           dataset_id: datasetId,
-          ...(dateColumn
+          ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? {
-                  start_date: format(dateRange.start, 'yyyy-MM-dd'),
-                  end_date: format(dateRange.end, 'yyyy-MM-dd'),
-                  date_column: dateColumn,
+                  start_date: startDateValue!,
+                  end_date: endDateValue!,
+                  date_column: activeDateColumn,
                 }
               : datePreset
-                ? { date_preset: datePreset, date_column: dateColumn }
+                ? { date_preset: datePreset, date_column: activeDateColumn }
                 : {}
             : {}),
         }
@@ -502,23 +622,49 @@ export default function DashboardPage() {
         const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
         const result = await api.analytics.getInsights(body, token, targetOrgId)
 
+        rememberDashboardCache(insightsResponseCache, insightsRequestKey, result)
+
         if (!cancelled) setOverallInsights(result.insights)
       } catch (requestError) {
         if (!cancelled) {
           setOverallInsights([])
-          setInsightsError(requestError instanceof Error ? requestError.message : 'Failed to load AI insights')
+          const message = requestError instanceof Error && requestError.name === 'AbortError'
+            ? 'AI insights are taking longer than expected. The rest of the dashboard is ready.'
+            : requestError instanceof Error
+              ? requestError.message
+              : 'Failed to load AI insights'
+          setInsightsError(message)
         }
       } finally {
         if (!cancelled) setLoadingInsights(false)
       }
     }
 
-    void loadOverallInsights()
+    setOverallInsights([])
+    setInsightsError(null)
+
+    const timeoutId = window.setTimeout(() => {
+      void loadOverallInsights()
+    }, 350)
 
     return () => {
       cancelled = true
+      window.clearTimeout(timeoutId)
     }
-  }, [session, activeDatasetId, datePreset, dateRange.start, dateRange.end, activeDataset, organizationId, user?.role])
+  }, [
+    session,
+    activeDatasetId,
+    insightsRequestKey,
+    loadingAnalytics,
+    datePreset,
+    dateRange.start,
+    dateRange.end,
+    startDateValue,
+    endDateValue,
+    activeDateColumn,
+    organizationId,
+    user?.role,
+  ])
 
   const activeOrganizationName = organizations.find((org) => org.id === organizationId)?.name
     ?? user?.organization?.name
@@ -667,52 +813,63 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-full bg-[#fcfaf7]">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e7e1d6] bg-white px-8 py-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">
-          {activeOrganizationName}
-        </h1>
-        <DateFilter />
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-8 py-6">
+        <div>
+          <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
+            {activeOrganizationName}
+          </p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">Overview</h1>
+            <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              Live
+            </span>
+          </div>
+          {lastUpdated && (
+            <p className="mt-1 text-sm text-[#b0b7c5]">
+              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {loadingDatasets ? (
+            <div className="shimmer-warm h-[42px] w-[200px] rounded-[1rem] border border-[#e5dfd6]" />
+          ) : (
+            <select
+              id="report-selector"
+              value={activeDatasetId ?? ''}
+              onChange={(e) => setActiveDataset(e.target.value || null)}
+              disabled={completedDatasets.length === 0}
+              className="h-[42px] w-[220px] appearance-none rounded-[1rem] border border-[#e5dfd6] bg-white px-4 pr-10 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#f0a500]/50 focus:border-[#f0a500]/50"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c8493'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.8rem center',
+                backgroundSize: '1.2rem',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {completedDatasets.length === 0 ? (
+                <option value="">No reports available</option>
+              ) : (
+                completedDatasets.map((dataset) => (
+                  <option key={dataset.id} value={dataset.id}>
+                    {dataset.report_name || dataset.file_name}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
+
+          <DateFilter />
+        </div>
       </header>
 
       <div className="space-y-8 px-8 py-8">
-        <div>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-4xl font-semibold tracking-tight text-[#252b36]">Overview</h2>
-              <p className="mt-2 text-base text-[#727b8d]">
-                Performance for the selected uploaded report
-              </p>
-            </div>
-
-            <div className="min-w-[260px] rounded-[1.35rem] border border-[#e8e1d7] bg-white px-4 py-3 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
-              <label htmlFor="report-selector" className="text-xs font-semibold tracking-[0.12em] text-[#8a93a5]">
-                REPORT
-              </label>
-              <select
-                id="report-selector"
-                value={activeDatasetId ?? ''}
-                onChange={(e) => setActiveDataset(e.target.value || null)}
-                disabled={loadingDatasets || completedDatasets.length === 0}
-                className="mt-2 w-full bg-transparent text-sm font-medium text-[#252b36] outline-none"
-              >
-                {completedDatasets.length === 0 ? (
-                  <option value="">No reports available</option>
-                ) : (
-                  completedDatasets.map((dataset) => (
-                    <option key={dataset.id} value={dataset.id}>
-                      {dataset.report_name || dataset.file_name}
-                    </option>
-                  ))
-                )}
-              </select>
-              {activeDataset && (
-                <p className="mt-2 text-xs text-[#8d95a5]">
-                  Uploaded {format(parseISO(activeDataset.uploaded_at), 'MMM d, yyyy')}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
 
         {error && (
           <div className="flex items-start gap-3 rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -743,8 +900,15 @@ export default function DashboardPage() {
                 {Array.from({ length: 7 }).map((_, index) => (
                   <div
                     key={index}
-                    className="h-[170px] animate-pulse rounded-[1.45rem] border border-[#ebe4da] bg-white"
-                  />
+                    className="rounded-[1.45rem] border border-[#ebe4da] bg-white px-4 py-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="shimmer-warm h-3 w-20 rounded" />
+                      <div className="shimmer-warm h-4 w-4 rounded" />
+                    </div>
+                    <div className="shimmer-warm mt-5 h-6 w-24 rounded" />
+                    <div className="shimmer-warm mt-4 h-4 w-28 rounded" />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -758,8 +922,17 @@ export default function DashboardPage() {
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.95fr)]">
               {loadingAnalytics ? (
                 <>
-                  <div className="h-[500px] animate-pulse rounded-[1.7rem] border border-[#ebe4da] bg-white" />
-                  <div className="h-[500px] animate-pulse rounded-[1.7rem] border border-[#ebe4da] bg-white" />
+                  <div className="rounded-[1.7rem] border border-[#ebe4da] bg-white p-6">
+                    <div className="shimmer-warm h-5 w-48 rounded" />
+                    <div className="shimmer-warm mt-6 h-[420px] rounded-[1.3rem]" />
+                  </div>
+                  <div className="rounded-[1.7rem] border border-[#ebe4da] bg-white p-6">
+                    <div className="shimmer-warm h-5 w-32 rounded" />
+                    <div className="shimmer-warm mt-10 mx-auto h-[280px] w-[280px] rounded-full" />
+                    <div className="mt-6 flex justify-center gap-4">
+                      {[...Array(2)].map((_, i) => <div key={i} className="shimmer-warm h-4 w-20 rounded" />)}
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>

@@ -221,7 +221,7 @@ async def chat(
     async def event_stream():
         accumulated = ""
         try:
-            async for token in stream_agent(df, history, body.message):
+            async for token in stream_agent(df, history, body.message, page_context=body.page_context):
                 accumulated += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
 
