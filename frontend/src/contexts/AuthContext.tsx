@@ -58,16 +58,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = useCallback(async (token: string) => {
     const gen = ++loadGenRef.current
+    console.log('[AuthContext] Loading profile...', { gen })
     try {
       const profile = await api.auth.me(token)
-      if (gen !== loadGenRef.current) return // a newer call superseded us — discard
+      console.log('[AuthContext] Profile loaded successfully', { gen, profile })
+      
+      if (gen !== loadGenRef.current) {
+        console.warn('[AuthContext] superseder call detected, discarding result', { gen })
+        return
+      }
+      
       setUser(profile)
-      // Fire org loading without awaiting so the loading gate (loading=false)
-      // resolves right after the profile fetch, not after the org list fetch.
-      // Pages render immediately; the org switcher/name populates ~150ms later.
       void loadOrganizations(token, profile)
-    } catch {
+    } catch (err) {
+      console.error('[AuthContext] Profile load failed', { gen, error: err })
       if (gen !== loadGenRef.current) return
+      
       setUser(null)
       setOrganizations([])
       setSession(null)
@@ -125,10 +131,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile, resetDashboard])
 
   const signIn = useCallback(async (email: string, password: string) => {
+    console.log('[AuthContext] Attempting signIn for:', email)
     const supabase = createClient()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-    if (!data.session) throw new Error('No session returned after sign-in. Please verify your email.')
+    
+    if (error) {
+      console.error('[AuthContext] Supabase signIn error:', error)
+      throw error
+    }
+    
+    if (!data.session) {
+      console.error('[AuthContext] Sign-in successful but no session returned')
+      throw new Error('No session returned after sign-in. Please verify your email.')
+    }
+    
+    console.log('[AuthContext] Supabase sign-in successful, hydrating session')
     setSession(data.session)
     await loadProfile(data.session.access_token)
   }, [loadProfile])

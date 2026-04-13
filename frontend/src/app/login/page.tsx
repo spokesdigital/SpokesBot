@@ -56,6 +56,7 @@ export default function LoginPage() {
       await signIn(email, password)
       router.push('/dashboard')
     } catch (err: unknown) {
+      console.error('[LoginPage] Sign-in submission failed:', err)
       const msg = err instanceof Error ? err.message : 'Login failed.'
       setError(msg.includes('Invalid login') ? 'Invalid email or password.' : msg)
     } finally {
