@@ -29,7 +29,8 @@
       "Bash(curl:*)",
       "Bash(git add:*)",
       "Bash(git commit -m 'fix: hardcode Vercel origin in CORS allow_origins to unblock production login:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit -m 'fix: correct metric aggregation and prior-period boundary in analytics:*)"
     ]
   }
 }
