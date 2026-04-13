@@ -112,7 +112,7 @@ def compute_analytics(
 
     if body.operation == "auto" and body.date_preset is not None and start and end:
         range_duration = end - start
-        prior_end = start - timedelta(microseconds=1)
+        prior_end = start - timedelta(seconds=1)
         prior_start = prior_end - range_duration
         try:
             previous_df = analytics_service.apply_date_filter(

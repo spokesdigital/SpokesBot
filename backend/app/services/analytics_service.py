@@ -406,8 +406,10 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
 
     # Summary stats for numeric columns → KPI cards
     numeric_summary = _sanitize(df.describe(include="number").to_dict())
+    # Rate/ratio metrics (CTR, ROAS, CPC, etc.) must be averaged, not summed.
+    # Summing them produces nonsense KPI values (e.g. CTR of 12.3 instead of 0.08).
     numeric_totals = _sanitize({
-        col: df[col].sum()
+        col: df[col].mean() if _uses_average_basis(col) else df[col].sum()
         for col in numeric_cols
     })
 
@@ -434,14 +436,16 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
             sorted_df = sorted_df.sort_values(col)
             metric_col = _pick_metric_column(df)
             if metric_col:
-                agg = sorted_df.groupby(sorted_df[col].dt.date)[metric_col].sum()
+                grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
+                agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
                 parsed_dates[col] = [
                     {"date": str(k), "value": _sanitize(v)}
                     for k, v in agg.items()
                 ]
             metric_series_for_col: dict[str, list[dict[str, Any]]] = {}
             for metric_col in selected_metric_columns:
-                agg = sorted_df.groupby(sorted_df[col].dt.date)[metric_col].sum()
+                grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
+                agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
                 metric_series_for_col[metric_col] = [
                     {"date": str(k), "value": _sanitize(v)}
                     for k, v in agg.items()
@@ -462,9 +466,10 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
         if 1 < df[col].nunique() <= 8:
             for metric_col in selected_metric_columns:
                 metric_breakdowns.setdefault(metric_col, {})
+                agg_fn = "mean" if _uses_average_basis(metric_col) else "sum"
                 grouped = (
                     df.groupby(col, dropna=True)[metric_col]
-                    .sum()
+                    .agg(agg_fn)
                     .sort_values(ascending=False)
                     .head(8)
                 )
