@@ -860,28 +860,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {/* Dataset selector */}
-          {loadingDatasets ? (
-            <div className="shimmer-warm h-[42px] w-[200px] rounded-[1rem] border border-[#e5dfd6]" />
-          ) : completedDatasets.length > 0 ? (
-            <select
-              id="report-selector"
-              value={activeDatasetId ?? ''}
-              onChange={(e) => setActiveDatasetId(e.target.value || null)}
-              className="h-[42px] w-[220px] appearance-none rounded-[1rem] border border-[#e5dfd6] bg-white px-4 pr-10 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#f0a500]/50 focus:border-[#f0a500]/50"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c8493'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 0.8rem center',
-                backgroundSize: '1.2rem',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {completedDatasets.map((d) => (
-                <option key={d.id} value={d.id}>{d.report_name || d.file_name}</option>
-              ))}
-            </select>
-          ) : null}
           <DateFilter />
         </div>
       </header>

@@ -1,9 +1,13 @@
 import asyncio
 import json
+import logging
+import traceback
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 from app.agent.graph import generate_insight, stream_agent
 from app.dependencies import (
@@ -261,8 +265,15 @@ async def chat(
             if accumulated:
                 thread_service.save_message(thread_id, "assistant", accumulated, service_client)
 
-        except Exception:
+        except Exception as exc:
             # C5: Never expose raw exception details to the client over SSE
+            # Log the full traceback so it appears in Render/server logs for debugging
+            logger.error(
+                "[chat] stream_agent raised an exception for thread_id=%s: %s",
+                thread_id,
+                exc,
+                exc_info=True,
+            )
             # Save a failure placeholder so the thread isn't left in a broken state
             if not accumulated:
                 thread_service.save_message(thread_id, "assistant", "I encountered an error while processing your request. Please try again.", service_client)
