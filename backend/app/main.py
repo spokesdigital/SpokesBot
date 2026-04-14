@@ -119,9 +119,19 @@ async def global_exception_handler(request: Request, exc: Exception):
         path=request.url.path,
         method=request.method,
     )
+    # Return 500 with CORS headers manually to prevent "Failed to fetch" network drops
+    # when Starlette ServerErrorMiddleware bypasses CORSMiddleware.
+    headers = {}
+    origin = request.headers.get("origin")
+    if origin:
+        # Replicate basic CORS behavior for the error response
+        headers["access-control-allow-origin"] = origin
+        headers["access-control-allow-credentials"] = "true"
+
     return JSONResponse(
         status_code=500,
-        content={"error": "Internal server error"},
+        content={"error": "Internal server error", "detail": f"{type(exc).__name__}: {str(exc)}"},
+        headers=headers,
     )
 
 # ── System endpoints ─────────────────────────────────────────────────────────
