@@ -678,17 +678,17 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     /* Fixed overlay — bottom-right, above the FAB */
     <div
       data-testid="chat-widget"
-      className={`fixed bottom-28 right-7 z-50 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`fixed bottom-28 right-4 z-50 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:right-7 ${
         open
           ? 'translate-y-0 scale-100 opacity-100'
           : 'pointer-events-none translate-y-5 scale-[0.96] opacity-0'
       }`}
-      style={{ width: 380 }}
+      style={{ width: 'min(380px, calc(100vw - 2rem))' }}
     >
       {/* Panel */}
       <div
         className="flex flex-col overflow-hidden rounded-[1.6rem] shadow-[0_32px_80px_rgba(0,0,0,0.18)] transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-        style={{ height: minimized ? 'auto' : 520 }}
+        style={{ height: minimized ? 'auto' : 'min(520px, calc(100dvh - 9rem))' }}
       >
         {/* ── Header ── */}
         <div className="flex items-center justify-between bg-gradient-to-b from-[#f0a500]/95 to-[#e69d00]/90 backdrop-blur-md px-5 py-4">

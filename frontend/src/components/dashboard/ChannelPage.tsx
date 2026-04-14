@@ -836,7 +836,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   return (
     <div className="min-h-full bg-[#fcfaf7]">
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-8 py-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <div>
           <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
             {activeOrganizationName}
@@ -886,7 +886,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         </div>
       </header>
 
-      <div className="space-y-8 px-8 py-8 animate-fade-in">
+      <div className="animate-fade-in space-y-6 px-4 py-5 sm:px-6 sm:py-6 md:space-y-8 md:px-8 md:py-8">
 
       {/* Alerts */}
       {error && (
@@ -1146,7 +1146,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     No campaign dimension found. Add a &quot;Campaign&quot; or &quot;Ad Set&quot; column to enable this breakdown.
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
                         {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS'].map((h) => (
@@ -1197,7 +1197,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     No daily data available. Upload a dataset with a date column to enable this table.
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
                         {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS'].map((h) => (

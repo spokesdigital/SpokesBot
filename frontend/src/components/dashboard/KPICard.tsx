@@ -54,7 +54,7 @@ export function KPICard({ title, value, trendValue, trendDirection, tooltip, loa
     <div className="relative bg-card rounded-xl p-4 sm:p-5 card-shadow border border-border hover:card-shadow-hover transition-shadow duration-200 overflow-visible hover:z-50 focus-within:z-50 has-[[data-state=open]]:z-50">
       {/* Label row */}
       <div className="flex items-start justify-between mb-3">
-        <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight">
+        <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground leading-tight">
           {title}
         </span>
         {tooltip && (

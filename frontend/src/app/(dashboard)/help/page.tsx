@@ -20,11 +20,11 @@ const faqs = [
 export default function HelpPage() {
   return (
     <div className="min-h-full bg-[#fcfaf7]">
-      <div className="border-b border-[#e7e1d6] bg-white px-8 py-6">
+      <div className="border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-[#252b36]">Help / FAQs</h1>
       </div>
 
-      <div className="space-y-6 px-8 py-8">
+      <div className="space-y-6 px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-8">
         <div>
           <h2 className="text-[2.45rem] font-semibold tracking-[-0.05em] text-[#252b36]">
             Need a hand?
@@ -34,7 +34,7 @@ export default function HelpPage() {
           </p>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-3">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {faqs.map((faq) => (
             <article
               key={faq.question}

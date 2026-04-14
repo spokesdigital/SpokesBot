@@ -854,7 +854,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-full bg-[#fcfaf7]">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-8 py-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <div>
           <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
             {activeOrganizationName}
@@ -910,7 +910,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="space-y-8 px-8 py-8">
+      <div className="space-y-6 px-4 py-5 sm:px-6 sm:py-6 md:space-y-8 md:px-8 md:py-8">
 
         {error && (
           <div className="flex items-start gap-3 rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">

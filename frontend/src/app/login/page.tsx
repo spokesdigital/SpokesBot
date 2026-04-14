@@ -67,7 +67,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-[#f7f7f5]">
       <div className="grid min-h-screen lg:grid-cols-[0.95fr_1fr]">
-        <section className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(30,64,175,0.18),_transparent_24%),linear-gradient(180deg,_#16233b_0%,_#1a2437_100%)] px-8 py-10 text-white lg:px-14 lg:py-14">
+        <section className="relative hidden overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(30,64,175,0.18),_transparent_24%),linear-gradient(180deg,_#16233b_0%,_#1a2437_100%)] px-8 py-10 text-white lg:flex lg:px-14 lg:py-14">
           <div className="mx-auto flex h-full max-w-lg flex-col items-center justify-center text-center">
             <div className="mb-9 flex h-28 w-28 items-center justify-center rounded-[1.5rem] border border-white/10 bg-white/9 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_40px_rgba(6,10,18,0.28)] backdrop-blur-sm">
               <Image
@@ -106,7 +106,7 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-6 py-10 sm:px-10 lg:px-14">
+        <section className="col-span-full flex items-center justify-center px-5 py-10 sm:px-10 lg:col-span-1 lg:px-14">
           <div className="w-full max-w-[29rem]">
             <div>
               <h2 className="text-[2.15rem] font-semibold tracking-[-0.04em] text-[#1f2633]">
