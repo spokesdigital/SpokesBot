@@ -107,6 +107,31 @@ def list_threads(
     return thread_service.list_threads(supabase, dataset_id=str(dataset_id) if dataset_id else None)
 
 
+@router.get("/{thread_id}", response_model=ThreadResponse)
+def get_thread(
+    thread_id: str,
+    supabase: Client = Depends(get_supabase_client),
+    service_client: Client = Depends(get_service_client),
+    role: str = Depends(get_current_role),
+):
+    """
+    Returns a single thread by ID. RLS ensures regular users can only
+    fetch their own threads; admins use the service client.
+    """
+    if role == ROLE_ADMIN:
+        result = (
+            service_client.table("threads")
+            .select("*")
+            .eq("id", thread_id)
+            .maybe_single()
+            .execute()
+        )
+        if not result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
+        return result.data
+    return thread_service.get_thread(thread_id, supabase)
+
+
 @router.get("/{thread_id}/messages", response_model=list[MessageResponse])
 def get_messages(
     thread_id: str,

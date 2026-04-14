@@ -40,14 +40,14 @@ def _looks_like_date_column_name(col: str) -> bool:
     """
     Heuristic for likely date columns based on the column name.
 
-    We intentionally avoid loose substring matches like "at" so we do not
-    misclassify fields such as "category" as date-like.
+    Uses word-boundary matching so that "timestamp", "ad_date", and
+    "campaign_time" all match, while "category" or "realtime_bid" do not.
     """
     name = col.lower()
     return bool(
-        re.search(r'(^|[_\W])(date|time|day|month|year)([_\W]|$)', name)
+        re.search(r'\b(date|time|timestamp|day|month|year)\b', name)
         or name.endswith(('_date', '_time', '_at'))
-        or name in {'created_at', 'updated_at'}
+        or name in {'created_at', 'updated_at', 'timestamp', 'date', 'time'}
     )
 
 

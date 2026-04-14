@@ -43,9 +43,12 @@ export const useDashboardStore = create<DashboardState>()(
     }),
     {
       name: 'spokesbot-ui-prefs',
-      // Only persist the sidebar preference — all data state resets on refresh
-      // so stale org/dataset IDs from a previous session don't bleed through.
-      partialize: (state) => ({ sidebarCollapsed: state.sidebarCollapsed }),
+      // Persist sidebar preference and last active thread so the widget can
+      // re-hydrate the previous conversation after a page refresh.
+      partialize: (state) => ({
+        sidebarCollapsed: state.sidebarCollapsed,
+        activeThreadId: state.activeThreadId,
+      }),
     },
   ),
 )

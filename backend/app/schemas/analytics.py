@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class DatePreset(StrEnum):
@@ -75,7 +75,7 @@ class AnalyticsResponse(BaseModel):
 
 class InsightItem(BaseModel):
     type: Literal["success", "trend", "warning", "alert"]
-    text: str
+    text: str = Field(max_length=160)
 
 
 class InsightsResponse(BaseModel):

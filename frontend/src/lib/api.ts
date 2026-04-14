@@ -169,6 +169,9 @@ export const api = {
     list: (token: string, orgId?: string, datasetId?: string) =>
       apiFetch<Thread[]>(withQuery('/threads/', { org_id: orgId, dataset_id: datasetId }), { token, timeoutMs: 10_000 }),
 
+    get: (threadId: string, token: string) =>
+      apiFetch<Thread>(`/threads/${threadId}`, { token, timeoutMs: 10_000 }),
+
     messages: (threadId: string, token: string) =>
       apiFetch<Message[]>(`/threads/${threadId}/messages`, { token, timeoutMs: 10_000 }),
 

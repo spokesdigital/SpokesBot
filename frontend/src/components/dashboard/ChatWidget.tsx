@@ -329,6 +329,39 @@ function TypingDots() {
   )
 }
 
+// ── Follow-up suggestion chips ────────────────────────────────────────────────
+
+const FALLBACK_SUGGESTIONS = [
+  'What is my overall ROAS?',
+  'Show me revenue trends',
+  'Which campaign performs best?',
+]
+
+function getSuggestions(response: string): string[] {
+  const lower = response.toLowerCase()
+  const pool: string[] = []
+
+  if (lower.includes('roas'))
+    pool.push('What is driving this ROAS?', 'How does ROAS compare by channel?')
+  if (lower.includes('revenue') || lower.includes('sales'))
+    pool.push('Show me revenue by channel', 'What is the revenue trend over time?')
+  if (lower.includes('ctr') || lower.includes('click-through'))
+    pool.push('Which campaign has the best CTR?', 'Show me CTR over time')
+  if (lower.includes('click'))
+    pool.push('Show me a trend chart for daily clicks', 'Which campaign drives the most clicks?')
+  if (lower.includes('cost') || lower.includes('spend'))
+    pool.push('Compare my cost vs revenue', 'What is my cost per conversion?')
+  if (lower.includes('impression'))
+    pool.push('What is my overall CTR?', 'Show impressions by campaign')
+  if (lower.includes('campaign'))
+    pool.push('Which campaign has the highest ROAS?', 'Show campaign cost breakdown')
+  if (lower.includes('in-store') || lower.includes('delivery'))
+    pool.push('Compare In-Store vs Delivery revenue', 'Show In-Store vs Delivery trend')
+
+  const unique = [...new Set(pool)]
+  return (unique.length > 0 ? unique : FALLBACK_SUGGESTIONS).slice(0, 3)
+}
+
 const PLACEHOLDER_PROMPTS = [
   "Last month's revenue...",
   "Show total revenue...",
@@ -385,7 +418,7 @@ const HELP_ARTICLES: HelpArticle[] = [
 
 export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const { session, user } = useAuth()
-  const { organizationId, activeDatasetId, setActiveDataset } = useDashboardStore()
+  const { organizationId, activeDatasetId, setActiveDataset, activeThreadId, setActiveThread: persistThread } = useDashboardStore()
   const pathname = usePathname()
   const pageContext = getPageContext(pathname)
   const [promptIndex, setPromptIndex] = useState(0)
@@ -402,6 +435,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   const [minimized, setMinimized] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [articleQuery, setArticleQuery] = useState('')
   const [expandedArticleId, setExpandedArticleId] = useState('cpc')
 
@@ -417,9 +451,27 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   // AbortController for cancelling in-flight streaming requests
   const abortRef = useRef<AbortController | null>(null)
+  // Tracks whether we have already attempted to hydrate this thread ID so we
+  // never fire a second request when unrelated state updates re-run the effect.
+  const hydratedThreadIdRef = useRef<string | null>(null)
+  // Synchronous guard for submitMessage — flips before any await so rapid
+  // double-clicks can't both pass the React-state `streaming` check.
+  const submittingRef = useRef(false)
 
   // Abort any in-flight stream on unmount
   useEffect(() => () => { abortRef.current?.abort() }, [])
+
+  // Re-hydrate the last active thread after a page refresh.
+  // Fetches the single thread by ID rather than listing all threads.
+  // The hydratedThreadIdRef guard ensures exactly one request per thread ID.
+  useEffect(() => {
+    if (!session || !open || !activeThreadId) return
+    if (hydratedThreadIdRef.current === activeThreadId) return
+    hydratedThreadIdRef.current = activeThreadId
+    api.threads.get(activeThreadId, session.access_token)
+      .then(setActiveThread)
+      .catch(() => persistThread(null)) // stale or deleted thread — clear from store
+  }, [session, open, activeThreadId, persistThread])
 
   const loadDatasets = useCallback(async () => {
     if (!session) return [] as Dataset[]
@@ -499,7 +551,8 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   /* ── Send message ── */
   async function submitMessage(rawMessage: string) {
-    if (!session || !rawMessage.trim() || streaming) return
+    if (!session || !rawMessage.trim() || streaming || submittingRef.current) return
+    submittingRef.current = true
 
     const userMessage = rawMessage.trim().slice(0, 500)
     const currentDatasetId = resolveDatasetId(datasets, activeDatasetId)
@@ -523,6 +576,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
           user?.role === 'admin' ? organizationId ?? undefined : undefined,
         )
         setActiveThread(thread)
+        persistThread(thread.id)
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to create conversation.')
         return
@@ -530,6 +584,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
 
     setInput('')
+    setSuggestions([])
     setStreaming(true)
     setStreamingContent('')
 
@@ -567,6 +622,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
           created_at: new Date().toISOString(),
         },
       ])
+      if (accumulated) setSuggestions(getSuggestions(accumulated))
 
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
@@ -576,6 +632,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     } finally {
       setStreamingContent('')
       setStreaming(false)
+      submittingRef.current = false
       abortRef.current = null
     }
   }
@@ -594,8 +651,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   function resetChat() {
     abortRef.current?.abort()
     setActiveThread(null)
+    persistThread(null)
     setMessages([])
     setStreamingContent('')
+    setSuggestions([])
     setError(null)
   }
 
@@ -841,6 +900,22 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                   )}
 
 
+
+                  {/* ── Follow-up suggestion chips ── */}
+                  {suggestions.length > 0 && !streaming && (
+                    <div className="flex flex-wrap gap-2 pt-1 pb-2">
+                      {suggestions.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => { setSuggestions([]); void submitMessage(s) }}
+                          className="rounded-full border border-[#e0deda] bg-white px-3 py-1.5 text-xs text-[#4a4540] shadow-sm transition hover:border-[#f0a500] hover:text-[#f0a500]"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {error && (
                     <p className="text-xs text-center text-red-500">{error}</p>

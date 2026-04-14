@@ -300,7 +300,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   void _accentLight
   void _accentText
   const { session, organizations, user } = useAuth()
-  const { organizationId, datePreset, dateRange } = useDashboardStore()
+  const { organizationId, datePreset, dateRange, setActiveDataset } = useDashboardStore()
 
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null)
@@ -358,6 +358,13 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const activeOrganizationName = organizations.find((org) => org.id === organizationId)?.name
     ?? user?.organization?.name
     ?? 'Client Workspace'
+
+  // Sync channel-scoped dataset selection into the global store so ChatWidget
+  // creates threads against the correct report_type dataset.
+  useEffect(() => {
+    setActiveDataset(activeDatasetId)
+    return () => { setActiveDataset(null) }
+  }, [activeDatasetId, setActiveDataset])
 
   // Load datasets filtered by report_type
   useEffect(() => {

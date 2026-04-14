@@ -1,0 +1,166 @@
+name: Deploy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggered automatically after the CI workflow completes successfully on main.
+# Deploy order: backend first (pushes image to GHCR + triggers Render),
+# then frontend (deploys to Vercel). This ordering matters because the
+# frontend calls the new GET /threads/{thread_id} endpoint added in this
+# session — the backend must be live before the new frontend JS is served.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# Cancel any in-progress deploy on the same branch when a new commit lands.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/backend
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Guard — only proceed if CI passed
+  # ───────────────────────────────────────────────────────────────────────────
+  check-ci:
+    name: CI passed?
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: CI green — proceeding with deploy
+        run: echo "CI passed on ${{ github.event.workflow_run.head_sha }}"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Backend — build Docker image, push to GHCR, trigger Render redeploy
+  # ───────────────────────────────────────────────────────────────────────────
+  deploy-backend:
+    name: Backend → GHCR + Render
+    runs-on: ubuntu-latest
+    needs: check-ci
+
+    permissions:
+      contents: read
+      packages: write   # required to push to ghcr.io
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract lowercase repo name for the image tag (GHCR requires lowercase)
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Render watches the GHCR image and redeploys when a new :latest is pushed.
+      # The deploy hook URL is stored as a GitHub Secret.
+      - name: Trigger Render redeploy
+        run: |
+          curl -fsSL \
+            --request POST \
+            --url "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            --header "Accept: application/json"
+
+      - name: Wait for Render to come up
+        # Poll the /health endpoint until the new build is live (max 5 min).
+        run: |
+          echo "Waiting for backend to become healthy..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.BACKEND_HEALTH_URL }}/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Backend healthy after $((i * 10))s"
+              exit 0
+            fi
+            echo "Attempt $i/30 — HTTP $STATUS — waiting 10s..."
+            sleep 10
+          done
+          echo "Backend did not become healthy within 5 minutes."
+          exit 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Frontend — deploy to Vercel (production)
+  # Runs after backend is confirmed healthy so the new JS is never served
+  # against a stale backend.
+  # ───────────────────────────────────────────────────────────────────────────
+  deploy-frontend:
+    name: Frontend → Vercel
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # Pull Vercel project config (.vercel/project.json) so the CLI knows
+      # which project to deploy to without interactive prompts.
+      - name: Pull Vercel environment
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Build with Vercel's own build system (respects vercel.json overrides).
+      - name: Build for Vercel
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Deploy the pre-built output — no second build, fast deploy.
+      - name: Deploy to Vercel (production)
+        id: deploy
+        run: |
+          URL=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "deployment_url=$URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Print deployment URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.deployment_url }}"
