@@ -1,13 +1,13 @@
 import asyncio
 import json
 import logging
-import traceback
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
+
 
 from app.agent.graph import generate_insight, stream_agent
 from app.dependencies import (

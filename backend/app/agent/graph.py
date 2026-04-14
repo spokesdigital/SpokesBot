@@ -584,7 +584,13 @@ async def stream_agent(
             # Yield empty tokens as keep-alives every 5 s to bypass proxy timeouts
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
         except asyncio.TimeoutError:
+            # Still running — send a heartbeat and loop again
             yield ""
+        except Exception:
+            # Task finished with an exception inside the 5 s window.
+            # Break out of the loop so task.result() re-raises it below,
+            # where the event_stream error handler will log it properly.
+            break
 
     final_state = task.result()
 
@@ -697,6 +703,8 @@ async def generate_insight(
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
         except asyncio.TimeoutError:
             pass  # non-streaming — no yield needed, we just keep the event loop alive
+        except Exception:
+            break
     final_state = task.result()
 
     raw = final_state.get("draft_answer", "").strip()
@@ -748,6 +756,8 @@ async def generate_structured_insights(
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
         except asyncio.TimeoutError:
             pass
+        except Exception:
+            break
     final_state = task.result()
 
     draft_answer = final_state.get("draft_answer", "").strip()
