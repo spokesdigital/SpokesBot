@@ -11,7 +11,19 @@ import type {
 } from '@/types'
 import { createClient } from '@/lib/supabase'
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '')
+const _rawApiUrl = process.env.NEXT_PUBLIC_API_URL
+// Catch misconfigured Vercel/Render deployments early:
+// If this env var is missing in production you'll silently call localhost:8000 from the browser,
+// which will fail with a CORS/network error. Emit a loud console warning.
+if (!_rawApiUrl && typeof window !== 'undefined') {
+  console.warn(
+    '[SpokesBot] NEXT_PUBLIC_API_URL is not set. ' +
+      'All API calls will fall back to http://localhost:8000, ' +
+      'which will fail in production. ' +
+      'Set this variable in your Vercel / Render environment settings.',
+  )
+}
+const API_URL = (_rawApiUrl ?? 'http://localhost:8000').replace(/\/+$/, '')
 const DEFAULT_API_TIMEOUT_MS = 15_000
 
 export class ApiError extends Error {
@@ -187,9 +199,9 @@ export const api = {
         {
           method: 'POST',
           token,
-          timeoutMs: 15_000,
+          timeoutMs: 60_000,
           // AbortSignal.timeout() is supported in all modern browsers (Chrome 103+, FF 100+)
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(60_000),
         },
       ),
   },
@@ -208,7 +220,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
         token,
-        timeoutMs: 12_000,
+        timeoutMs: 60_000,
       }),
   },
 
@@ -292,6 +304,9 @@ export async function* streamChat(
       if (line.startsWith('data: ')) {
         try {
           const parsed = JSON.parse(line.slice(6))
+          // Skip empty keep-alive tokens emitted by the backend every 5s
+          // to prevent deployment proxies (Render/Vercel) from closing the connection
+          if (parsed.token === '') continue
           yield parsed
           if (parsed.done) return
         } catch {

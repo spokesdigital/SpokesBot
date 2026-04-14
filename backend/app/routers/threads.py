@@ -318,7 +318,7 @@ async def proactive_insight(
         408  — insight generation timed out (15 s budget)
         500  — agent produced an empty response or dataset couldn't be loaded
     """
-    _ENDPOINT_TIMEOUT = 14.5  # seconds — leaves buffer under the 15 s client timeout
+    _ENDPOINT_TIMEOUT = 55.0  # seconds — leaves buffer under the 60 s client timeout
 
     # ── 1. Validate thread & dataset access ──────────────────────────────────
     if role == ROLE_ADMIN:

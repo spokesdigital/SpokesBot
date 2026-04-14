@@ -76,45 +76,45 @@ export function Sidebar() {
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } ${sidebarCollapsed ? 'md:w-[88px]' : 'md:w-64'} w-[280px]`}
       >
-      <div
-        className={`flex border-b border-white/8 px-5 py-5 ${
-          sidebarCollapsed
-            ? 'flex-col items-center gap-3'
-            : 'items-center justify-between gap-3'
-        }`}
-      >
-        <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
-          <Image
-            src="/spokes-digital-logo.png"
-            alt="Spokes Digital logo"
-            width={42}
-            height={42}
-            className="h-[42px] w-[42px] object-contain"
-          />
-          {!sidebarCollapsed && (
-            <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-[#f5f1e8] md:block">
-              Spokes Digital
-            </span>
-          )}
-        </div>
-        
-        {/* Desktop Toggle */}
-        <button
-          onClick={toggleSidebar}
-          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="hidden h-10 w-10 items-center justify-center rounded-xl text-[#f5f1e8] transition hover:bg-white/6 hover:text-white md:flex"
+        <div
+          className={`flex border-b border-white/8 px-5 py-5 ${
+            sidebarCollapsed
+              ? 'flex-col items-center gap-3'
+              : 'items-center justify-between gap-3'
+          }`}
         >
-          <Menu className="h-5 w-5" />
-        </button>
+          <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`}>
+            <Image
+              src="/spokes-digital-logo.png"
+              alt="Spokes Digital logo"
+              width={42}
+              height={42}
+              className="h-[42px] w-[42px] object-contain"
+            />
+            {!sidebarCollapsed && (
+              <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-[#f5f1e8]">
+                Spokes Digital
+              </span>
+            )}
+          </div>
 
-        {/* Mobile Close Button */}
-        <button
-          onClick={() => setMobileMenuOpen(false)}
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[#f5f1e8] md:hidden"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+          {/* Desktop Toggle */}
+          <button
+            onClick={toggleSidebar}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="hidden h-10 w-10 items-center justify-center rounded-xl text-[#f5f1e8] transition hover:bg-white/6 hover:text-white md:flex"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          {/* Mobile Close Button */}
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[#f5f1e8] md:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
       <nav className="flex-1 px-3 py-6">
         <div className="space-y-2">

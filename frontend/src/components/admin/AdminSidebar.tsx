@@ -20,7 +20,7 @@ const navItems = [
   { href: '/admin/support', icon: Headphones, label: 'Support Inbox' },
 ]
 
-export function AdminSidebar() {
+export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut } = useAuth()
@@ -62,6 +62,7 @@ export function AdminSidebar() {
               key={href}
               href={href}
               title={sidebarCollapsed ? label : undefined}
+              onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
                 isActive
                   ? 'border border-white/70 bg-white/75 text-[#d99600] shadow-[0_10px_24px_rgba(240,165,0,0.15)]'

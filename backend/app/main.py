@@ -34,6 +34,24 @@ from app.routers import (  # noqa: E402
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # ── Startup: log active configuration to catch deployment misconfiguration ─
+    effective_origins = list({
+        "https://spokesbot.vercel.app",
+        settings.FRONTEND_URL,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    })
+    logger.info(
+        "startup_config",
+        environment=settings.ENVIRONMENT,
+        frontend_url=settings.FRONTEND_URL,
+        allowed_cors_origins=effective_origins,
+        message=(
+            "CORS configured. If 'Failed to fetch' errors appear in production, "
+            "verify FRONTEND_URL matches the deployed frontend domain exactly."
+        ),
+    )
+
     # ── Startup: recover jobs lost to a mid-processing crash ─────────────────
     # Any dataset stuck in "processing" when the server starts will never
     # advance on its own — the background task that was running it is gone.
@@ -65,14 +83,16 @@ app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 # 2. Stricter CORS — explicit methods, no wildcard headers
+_CORS_ORIGINS = list({
+    "https://spokesbot.vercel.app",  # production — always allowed
+    settings.FRONTEND_URL,           # picks up any override set in Render dashboard
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+})
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://spokesbot.vercel.app",  # production — always allowed regardless of env var
-        settings.FRONTEND_URL,           # picks up any override set in Render dashboard
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_CORS_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # support Vercel preview deployments
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
+import { Menu } from 'lucide-react'
+import Image from 'next/image'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { session, loading, user } = useAuth()
   const router = useRouter()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     if (loading) return
@@ -67,9 +70,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fcfaf7]">
-      <AdminSidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+    <div className="flex h-screen flex-col overflow-hidden bg-[#fcfaf7] md:flex-row">
+      {/* Mobile backdrop */}
+      <div
+        onClick={() => setMobileMenuOpen(false)}
+        className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm transition-opacity md:hidden ${
+          mobileMenuOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
+
+      {/* AdminSidebar — pass mobile state via context-style prop */}
+      <div className={`${
+        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      } fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:static md:translate-x-0`}>
+        <AdminSidebar onClose={() => setMobileMenuOpen(false)} />
+      </div>
+
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile header */}
+        <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
+          <div className="flex items-center gap-2.5">
+            <Image src="/spokes-digital-logo.png" alt="Logo" width={28} height={28} className="h-7 w-7 object-contain" />
+            <span className="text-sm font-bold tracking-tight text-slate-800">SpokesBot Admin</span>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-600 hover:bg-slate-100"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </main>
     </div>
   )
 }

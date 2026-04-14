@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from typing import TypedDict
 
 import pandas as pd
@@ -572,10 +573,20 @@ async def stream_agent(
         "retry_count": 0,
     }
 
-    final_state = await asyncio.wait_for(
-        graph.ainvoke(initial_state),
-        timeout=_GRAPH_TIMEOUT,
-    )
+    start_time = time.time()
+    task = asyncio.create_task(graph.ainvoke(initial_state))
+
+    while not task.done():
+        if time.time() - start_time > _GRAPH_TIMEOUT:
+            task.cancel()
+            raise asyncio.TimeoutError("Graph execution exceeded timeout")
+        try:
+            # Yield empty tokens as keep-alives every 5 s to bypass proxy timeouts
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+        except asyncio.TimeoutError:
+            yield ""
+
+    final_state = task.result()
 
     answer = final_state.get("draft_answer", "")
     if not answer:
@@ -592,8 +603,8 @@ async def stream_agent(
 
 #: Default timeout (seconds) for proactive insight generation.
 #: Kept shorter than the chat timeout because insights must return before the
-#: browser's own 15 s client-side abort fires.
-_INSIGHT_TIMEOUT: float = 14.0
+#: browser's own 60 s client-side abort fires.
+_INSIGHT_TIMEOUT: float = 55.0
 _ALLOWED_INSIGHT_TYPES = {"success", "trend", "warning", "alert"}
 
 
@@ -674,10 +685,19 @@ async def generate_insight(
         "retry_count": 0,
     }
 
-    final_state = await asyncio.wait_for(
-        graph.ainvoke(initial_state),
-        timeout=timeout,
-    )
+    # Use polling loop so HTTP proxies (Render, Vercel) never kill the
+    # connection due to inactivity during the Reflexion critic pass.
+    start = time.time()
+    task = asyncio.create_task(graph.ainvoke(initial_state))
+    while not task.done():
+        if time.time() - start > timeout:
+            task.cancel()
+            raise asyncio.TimeoutError("generate_insight exceeded timeout")
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass  # non-streaming — no yield needed, we just keep the event loop alive
+    final_state = task.result()
 
     raw = final_state.get("draft_answer", "").strip()
 
@@ -717,10 +737,18 @@ async def generate_structured_insights(
         "retry_count": 0,
     }
 
-    final_state = await asyncio.wait_for(
-        graph.ainvoke(initial_state),
-        timeout=timeout,
-    )
+    # Polling loop to keep the event loop alive during long Reflexion runs.
+    start = time.time()
+    task = asyncio.create_task(graph.ainvoke(initial_state))
+    while not task.done():
+        if time.time() - start > timeout:
+            task.cancel()
+            raise asyncio.TimeoutError("generate_structured_insights exceeded timeout")
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+        except asyncio.TimeoutError:
+            pass
+    final_state = task.result()
 
     draft_answer = final_state.get("draft_answer", "").strip()
     if not draft_answer:
