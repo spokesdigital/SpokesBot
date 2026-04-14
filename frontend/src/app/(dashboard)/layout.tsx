@@ -5,11 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sidebar } from '@/components/dashboard/Sidebar'
 import { ChatWidget } from '@/components/dashboard/ChatWidget'
-import { MessageCircleMore, X } from 'lucide-react'
+import { MessageCircleMore, X, Menu } from 'lucide-react'
+import { useDashboardStore } from '@/store/dashboard'
+import Image from 'next/image'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { session, loading, user } = useAuth()
   const router = useRouter()
+  const { setMobileMenuOpen } = useDashboardStore()
   const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {
@@ -73,9 +76,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fcfaf7]">
+    <div className="flex h-screen flex-col overflow-hidden bg-[#fcfaf7] md:flex-row">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      <main className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile Header */}
+        <header className="flex h-16 items-center justify-between border-b border-[#e7e1d6] bg-white px-5 md:hidden">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src="/spokes-digital-logo.png"
+              alt="Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain"
+            />
+            <span className="text-[0.95rem] font-bold tracking-tight text-[#1d2129]">
+              Spokes Digital
+            </span>
+          </div>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-600 transition hover:bg-slate-100"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          {children}
+        </div>
+      </main>
 
       {/* Floating chat button */}
       <button

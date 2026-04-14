@@ -10,6 +10,7 @@ import {
   LogOut,
   CircleHelp,
   Menu,
+  X,
 } from 'lucide-react'
 
 // ─── Brand SVG icons ──────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut, organizations } = useAuth()
-  const { sidebarCollapsed, toggleSidebar } = useDashboardStore()
+  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useDashboardStore()
 
   const activeOrganizationName = organizations.find((org) => org.id === user?.organization?.id)?.name
     ?? user?.organization?.name
@@ -61,11 +62,20 @@ export function Sidebar() {
   ]
 
   return (
-    <aside
-      className={`flex flex-col border-r border-white/8 bg-[#1d2129] text-white transition-all duration-300 ease-out ${
-        sidebarCollapsed ? 'w-[88px]' : 'w-64'
-      }`}
-    >
+    <>
+      {/* Mobile Backdrop */}
+      <div
+        onClick={() => setMobileMenuOpen(false)}
+        className={`fixed inset-0 z-40 bg-[#0f172a]/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+          mobileMenuOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/8 bg-[#1d2129] text-white transition-all duration-300 ease-out md:static ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        } ${sidebarCollapsed ? 'md:w-[88px]' : 'md:w-64'} w-[280px]`}
+      >
       <div
         className={`flex border-b border-white/8 px-5 py-5 ${
           sidebarCollapsed
@@ -82,17 +92,27 @@ export function Sidebar() {
             className="h-[42px] w-[42px] object-contain"
           />
           {!sidebarCollapsed && (
-            <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-[#f5f1e8]">
+            <span className="text-[1.05rem] font-semibold tracking-[-0.03em] text-[#f5f1e8] md:block">
               Spokes Digital
             </span>
           )}
         </div>
+        
+        {/* Desktop Toggle */}
         <button
           onClick={toggleSidebar}
           aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-[#f5f1e8] transition hover:bg-white/6 hover:text-white"
+          className="hidden h-10 w-10 items-center justify-center rounded-xl text-[#f5f1e8] transition hover:bg-white/6 hover:text-white md:flex"
         >
           <Menu className="h-5 w-5" />
+        </button>
+
+        {/* Mobile Close Button */}
+        <button
+          onClick={() => setMobileMenuOpen(false)}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-[#f5f1e8] md:hidden"
+        >
+          <X className="h-5 w-5" />
         </button>
       </div>
 
@@ -105,6 +125,7 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 title={sidebarCollapsed ? item.label : undefined}
+                onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center justify-between rounded-[1.15rem] px-5 py-4 text-[1rem] transition ${
                   isActive
                     ? 'bg-[#4a412d] text-[#f5b800]'
@@ -150,5 +171,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

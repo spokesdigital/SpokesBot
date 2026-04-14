@@ -9,6 +9,7 @@ interface DashboardState {
   datePreset: string | null
   activeThreadId: string | null
   sidebarCollapsed: boolean
+  mobileMenuOpen: boolean
 
   setOrganization: (id: string | null) => void
   setActiveDataset: (id: string | null) => void
@@ -16,6 +17,7 @@ interface DashboardState {
   clearDateRange: () => void
   setActiveThread: (id: string | null) => void
   toggleSidebar: () => void
+  setMobileMenuOpen: (open: boolean) => void
   reset: () => void
 }
 
@@ -26,6 +28,7 @@ const initialState = {
   datePreset: null,
   activeThreadId: null,
   sidebarCollapsed: false,
+  mobileMenuOpen: false,
 }
 
 export const useDashboardStore = create<DashboardState>()(
@@ -39,6 +42,7 @@ export const useDashboardStore = create<DashboardState>()(
       clearDateRange: () => set({ dateRange: { start: null, end: null }, datePreset: null }),
       setActiveThread: (id) => set({ activeThreadId: id }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
       reset: () => set(initialState),
     }),
     {

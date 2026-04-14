@@ -1,4 +1,6 @@
 import io
+import os
+import tempfile
 import uuid as uuid_lib
 from pathlib import Path
 from uuid import UUID
@@ -31,7 +33,7 @@ MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard limit
 
 def _process_csv(
     dataset_id: str,
-    file_content: bytes,
+    file_path: str,
     organization_id: str,
 ) -> None:
     """
@@ -57,7 +59,8 @@ def _process_csv(
         _set_status("processing")
 
         # ── Parse CSV ───────────────────────────────────────────────────────
-        df = pd.read_csv(io.BytesIO(file_content))
+        # Using the file path directly is more memory-efficient than io.BytesIO
+        df = pd.read_csv(file_path)
         if df.empty:
             raise ValueError("CSV file contained no rows.")
 
@@ -92,6 +95,10 @@ def _process_csv(
     except Exception as exc:
         # ── Persist failure — UI will show 'failed' instead of hanging ──────
         _set_status("failed", error=str(exc))
+    finally:
+        # ── Housekeeping ────────────────────────────────────────────────────
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 # ── Upload endpoint ─────────────────────────────────────────────────────────
@@ -133,17 +140,41 @@ async def upload_csv(
             detail=f"Invalid report_type '{report_type}'. Must be one of: {', '.join(sorted(valid_report_types))}.",
         )
 
-    # ── Read + validate file size ────────────────────────────────────────────
-    content = await file.read()
-    if len(content) == 0:
+    # ── Stream content to disk + validate size ───────────────────────────────
+    # We use a temp file to avoid OOM for large concurrent uploads.
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    tmp_path = tmp.name
+    total_size = 0
+
+    try:
+        while chunk := await file.read(1024 * 1024):  # 1MB chunks
+            total_size += len(chunk)
+            if total_size > MAX_FILE_SIZE_BYTES:
+                tmp.close()
+                os.remove(tmp_path)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File exceeds the {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB limit.",
+                )
+            tmp.write(chunk)
+        tmp.close()
+    except Exception as e:
+        if not tmp.closed:
+            tmp.close()
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload processing failed: {str(e)}"
+        )
+
+    if total_size == 0:
+        os.remove(tmp_path)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded file is empty.",
-        )
-    if len(content) > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds the {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB limit.",
         )
 
     # ── Confirm target org exists ────────────────────────────────────────────
@@ -173,7 +204,7 @@ async def upload_csv(
         "report_name":          normalized_report_name,
         "report_type":          report_type,
         "file_name":            file.filename,
-        "file_size":            len(content),
+        "file_size":            total_size,
         "status":               "queued",
         "metric_mappings":      {},
         "schema_profile":       {},
@@ -184,7 +215,7 @@ async def upload_csv(
     background_tasks.add_task(
         _process_csv,
         dataset_id,
-        content,
+        tmp_path,
         org_id_str,
     )
 

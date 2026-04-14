@@ -127,7 +127,12 @@ def _detect_date_columns(df: pd.DataFrame) -> list[str]:
             if is_numeric_dtype(series):
                 continue
 
-            parsed = pd.to_datetime(series, errors="coerce", utc=True, format="mixed")
+            # Try standard parsing first (fast)
+            parsed = pd.to_datetime(series, errors="coerce", utc=True)
+            if parsed.isna().sum() > row_count * 0.5:
+                # Fallback to mixed only if the standard parser fails most rows
+                parsed = pd.to_datetime(series, errors="coerce", utc=True, format="mixed")
+
             if _looks_like_date_column_name(col) or parsed.notna().sum() > row_count * 0.5:
                 date_columns.append(col)
         except Exception:
@@ -274,6 +279,10 @@ def build_auto_comparison(
         delta_pct = None
         if previous_value not in (None, 0):
             delta_pct = ((current_value - previous_value) / abs(previous_value)) * 100
+        elif previous_value == 0 and current_value > 0:
+            delta_pct = 100.0  # Treat 0 -> positive as 100% growth for UX
+        elif previous_value == 0 and current_value < 0:
+            delta_pct = -100.0
 
         comparison[col] = {
             "basis": basis,
