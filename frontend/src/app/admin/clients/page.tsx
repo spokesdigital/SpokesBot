@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
@@ -14,25 +14,42 @@ export default function ClientsPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const requestSeqRef = useRef(0)
 
-  const fetchData = useCallback((token: string) => {
+  const fetchData = useCallback(async (token: string) => {
+    const requestId = requestSeqRef.current + 1
+    requestSeqRef.current = requestId
     setLoading(true)
     setError(null)
-    Promise.all([
-      api.organizations.list(token),
-      api.datasets.list(token, undefined, true),
-    ])
-      .then(([orgs, datasets]) => { setOrgs(orgs); setDatasets(datasets) })
-      .catch(e => {
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(msg || 'Failed to load. Please try again.')
-      })
-      .finally(() => setLoading(false))
+    try {
+      const [nextOrgs, nextDatasets] = await Promise.all([
+        api.organizations.list(token),
+        api.datasets.list(token, undefined, true),
+      ])
+      if (requestId !== requestSeqRef.current) return
+      setOrgs(nextOrgs)
+      setDatasets(nextDatasets)
+    } catch (e) {
+      if (requestId !== requestSeqRef.current) return
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg || 'Failed to load. Please try again.')
+    } finally {
+      if (requestId === requestSeqRef.current) {
+        setLoading(false)
+      }
+    }
   }, [])
 
   useEffect(() => {
     if (!session) return
-    fetchData(session.access_token)
+    const timeoutId = window.setTimeout(() => {
+      void fetchData(session.access_token)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      requestSeqRef.current += 1
+    }
   }, [session, fetchData])
 
   const datasetCountByOrg = datasets.reduce<Record<string, number>>((acc, d) => {
