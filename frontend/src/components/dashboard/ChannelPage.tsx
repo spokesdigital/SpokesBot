@@ -345,7 +345,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     : null
   const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
 
-  const activeOrganizationName = organizations.find((org) => org.id === organizationId)?.name
+  // When viewing a client org (admin impersonation), resolve the name from
+  // targetOrgId so we show the client's org name, not the admin's own org.
+  const activeOrganizationName =
+    (targetOrgId
+      ? organizations.find((org) => org.id === targetOrgId)?.name
+      : organizations.find((org) => org.id === organizationId)?.name)
     ?? user?.organization?.name
     ?? 'Client Workspace'
 

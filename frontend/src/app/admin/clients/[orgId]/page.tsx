@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import { UploadZone } from '@/components/upload/UploadZone'
@@ -20,6 +21,7 @@ import {
   Upload,
   BarChart2,
   Share2,
+  UserMinus,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -36,6 +38,7 @@ export default function ClientDetailPage({
 }) {
   const { orgId } = use(params)
   const { session } = useAuth()
+  const router = useRouter()
   const { success: toastSuccess, error: toastError } = useToast()
 
   const [org, setOrg] = useState<Organization | null>(null)
@@ -47,6 +50,8 @@ export default function ClientDetailPage({
   const [reportName, setReportName] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
+  const [removingOrg, setRemovingOrg] = useState(false)
+  const [confirmRemoveOrg, setConfirmRemoveOrg] = useState(false)
   const [mainTab, setMainTab] = useState<MainTab>('data')
   const [clientViewTab, setClientViewTab] = useState<ClientViewTab>('overview')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -167,6 +172,23 @@ export default function ClientDetailPage({
     }
   }
 
+  async function handleRemoveOrg() {
+    if (!session) return
+    setRemovingOrg(true)
+    setConfirmRemoveOrg(false)
+    try {
+      await api.organizations.delete(orgId, session.access_token)
+      toastSuccess(`${org?.name ?? 'Client'} removed.`)
+      router.replace('/admin/clients')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to remove client.'
+      setError(msg)
+      toastError(msg)
+    } finally {
+      setRemovingOrg(false)
+    }
+  }
+
   return (
     <div className="min-h-full bg-[#fcfaf7]">
       {/* Page header */}
@@ -188,9 +210,39 @@ export default function ClientDetailPage({
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Database className="w-4 h-4" />
-          {datasets.length} dataset{datasets.length !== 1 ? 's' : ''}
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-sm text-slate-500">
+            <Database className="w-4 h-4" />
+            {datasets.length} dataset{datasets.length !== 1 ? 's' : ''}
+          </span>
+          {confirmRemoveOrg ? (
+            <div className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 py-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-red-500" />
+              <span className="text-xs font-medium text-red-600">Remove this client?</span>
+              <button
+                onClick={handleRemoveOrg}
+                disabled={removingOrg}
+                className="ml-1 rounded-lg bg-red-500 px-2.5 py-0.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-60"
+              >
+                {removingOrg ? 'Removing…' : 'Yes, remove'}
+              </button>
+              <button
+                onClick={() => setConfirmRemoveOrg(false)}
+                className="rounded-lg p-0.5 text-slate-400 transition hover:text-slate-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmRemoveOrg(true)}
+              title="Remove this client"
+              className="flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-50"
+            >
+              <UserMinus className="h-3.5 w-3.5" />
+              Remove Client
+            </button>
+          )}
         </div>
       </header>
 

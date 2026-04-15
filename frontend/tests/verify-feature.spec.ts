@@ -24,8 +24,8 @@ test.describe('Admin Client View Feature Verification', () => {
     await expect(page).not.toHaveURL(/.*login.*/, { timeout: 10000 });
     console.log('✅ Navigated to /admin/clients successfully');
 
-    // ── 3. Find and click Acme Corp QA ───────────────────────────────────
-    const clientLink = page.getByRole('link', { name: /Acme Corp QA/i }).first();
+    // ── 3. Find and click Greenvalley (first org with existing datasets) ─
+    const clientLink = page.getByRole('link', { name: /Greenvalley/i }).first();
     await expect(clientLink).toBeVisible({ timeout: 15000 });
     await page.screenshot({ path: 'step-clients-list.png' });
     await clientLink.click();

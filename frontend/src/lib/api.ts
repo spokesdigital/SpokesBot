@@ -123,6 +123,9 @@ export const api = {
         token,
         timeoutMs: 10_000,
       }),
+
+    delete: (id: string, token: string) =>
+      apiFetch<void>(`/organizations/${id}`, { method: 'DELETE', token, timeoutMs: 10_000 }),
   },
 
   datasets: {
