@@ -85,18 +85,46 @@ jobs:
       # Render watches the GHCR image and redeploys when a new :latest is pushed.
       # The deploy hook URL is stored as a GitHub Secret.
       - name: Trigger Render redeploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL || vars.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          curl -fsSL \
+          if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL is not configured. Add it under GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            https://*) ;;
+            *)
+              echo "::error::RENDER_DEPLOY_HOOK_URL must be a valid https:// Render deploy hook URL."
+              exit 1
+              ;;
+          esac
+
+          curl -fsSL --retry 3 --retry-all-errors \
             --request POST \
-            --url "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+            --url "$RENDER_DEPLOY_HOOK_URL" \
             --header "Accept: application/json"
 
       - name: Wait for Render to come up
         # Poll the /health endpoint until the new build is live (max 5 min).
+        env:
+          BACKEND_HEALTH_URL: ${{ secrets.BACKEND_HEALTH_URL || vars.BACKEND_HEALTH_URL }}
         run: |
+          if [ -z "${BACKEND_HEALTH_URL:-}" ]; then
+            echo "::error::BACKEND_HEALTH_URL is not configured. Add it under GitHub Actions Secrets or Variables."
+            exit 1
+          fi
+          case "$BACKEND_HEALTH_URL" in
+            https://*) ;;
+            *)
+              echo "::error::BACKEND_HEALTH_URL must be a valid https:// backend origin."
+              exit 1
+              ;;
+          esac
+
           echo "Waiting for backend to become healthy..."
           for i in $(seq 1 30); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.BACKEND_HEALTH_URL }}/health" || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_HEALTH_URL/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Backend healthy after $((i * 10))s"
               exit 0
@@ -144,15 +172,15 @@ jobs:
       - name: Pull Vercel environment
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
 
       # Build with Vercel's own build system (respects vercel.json overrides).
       - name: Build for Vercel
         run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
 
       # Deploy the pre-built output — no second build, fast deploy.
       - name: Deploy to Vercel (production)
@@ -161,8 +189,8 @@ jobs:
           URL=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
           echo "deployment_url=$URL" >> $GITHUB_OUTPUT
         env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
 
       - name: Print deployment URL
         run: echo "Deployed to ${{ steps.deploy.outputs.deployment_url }}"
@@ -214,7 +242,7 @@ jobs:
 
       - name: Verify live backend health JSON
         env:
-          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL }}
+          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL || vars.BACKEND_HEALTH_URL }}
         run: |
           BODY=$(curl -fsSL "$BACKEND_URL/health")
           echo "$BODY"
@@ -225,7 +253,7 @@ jobs:
       - name: Verify backend CORS allows deployed frontend origin
         env:
           FRONTEND_URL: ${{ needs.deploy-frontend.outputs.deployment_url }}
-          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL }}
+          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL || vars.BACKEND_HEALTH_URL }}
         run: |
           curl -sS -D /tmp/backend-headers.txt -o /tmp/backend-health.json \
             -H "Origin: $FRONTEND_URL" \
@@ -238,7 +266,7 @@ jobs:
       - name: Verify backend CORS preflight for frontend API requests
         env:
           FRONTEND_URL: ${{ needs.deploy-frontend.outputs.deployment_url }}
-          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL }}
+          BACKEND_URL: ${{ secrets.BACKEND_HEALTH_URL || vars.BACKEND_HEALTH_URL }}
         run: |
           curl -sS -X OPTIONS -D /tmp/backend-preflight-headers.txt -o /tmp/backend-preflight-body.txt \
             -H "Origin: $FRONTEND_URL" \
