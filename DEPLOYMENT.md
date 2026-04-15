@@ -23,6 +23,7 @@ GitHub (main branch)
 1. Backend image is built, pushed to GHCR, and Render redeploys.
 2. The pipeline polls `/health` until the new backend is live.
 3. Frontend is then deployed to Vercel.
+4. A live smoke test verifies the deployed frontend and backend before the workflow finishes.
 
 This guarantees the new frontend JavaScript (which calls `GET /threads/{id}`) is never served against a stale backend that doesn't have that endpoint.
 
@@ -215,6 +216,7 @@ The pipeline runs automatically:
    - Render picks up the new image and redeploys (~2–4 min)
    - Pipeline polls `/health` until 200 OK
    - Vercel builds and deploys the frontend (~2 min)
+   - Smoke test checks `GET /login` on the deployed frontend and `GET /health` on the backend
 
 Monitor progress in **GitHub → Actions**.
 
@@ -231,6 +233,7 @@ push to main
       → Render redeploys from new image
         → /health returns 200
           → Vercel deploys new frontend
+            → smoke test validates live frontend + backend
 ```
 
 To deploy a hotfix without waiting for CI (not recommended for production):

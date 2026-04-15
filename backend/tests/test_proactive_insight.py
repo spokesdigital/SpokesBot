@@ -95,10 +95,8 @@ class TestGenerateInsight:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             result = await generate_insight(df)
 
@@ -126,10 +124,8 @@ class TestGenerateInsight:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             await generate_insight(df)
 
@@ -156,10 +152,8 @@ class TestGenerateInsight:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             await generate_insight(df)
 
@@ -186,10 +180,8 @@ class TestGenerateInsight:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             await generate_insight(df)
 
@@ -211,10 +203,8 @@ class TestGenerateInsight:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             with pytest.raises(asyncio.TimeoutError):
                 await generate_insight(df, timeout=0.5)

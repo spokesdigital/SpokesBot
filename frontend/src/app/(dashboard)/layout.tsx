@@ -17,6 +17,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (loading) return
+    // session exists but profile hasn't arrived yet — stay on the skeleton,
+    // don't redirect to /login prematurely.
+    if (session && !user) return
     if (!session || !user) {
       router.replace('/login')
       return

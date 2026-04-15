@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 import {
@@ -23,27 +23,32 @@ import {
 // ─── Zoom hook ────────────────────────────────────────────────────────────────
 
 function useZoom(dataLength: number) {
-  const [range, setRange] = useState<[number, number]>([0, Math.max(0, dataLength - 1)])
-  const prevLen = useRef(dataLength)
-
-  useEffect(() => {
-    if (prevLen.current !== dataLength) {
-      prevLen.current = dataLength
-      setRange([0, Math.max(0, dataLength - 1)])
-    }
-  }, [dataLength])
+  const [zoomState, setZoomState] = useState<{ dataLength: number; range: [number, number] | null }>({
+    dataLength,
+    range: null,
+  })
+  const fullRange: [number, number] = [0, Math.max(0, dataLength - 1)]
+  const range = zoomState.dataLength === dataLength && zoomState.range ? zoomState.range : fullRange
 
   const visible = range[1] - range[0] + 1
 
   const zoomIn = () => {
     if (visible <= 4) return
     const step = Math.max(1, Math.floor(visible * 0.25))
-    setRange([Math.min(range[0] + step, range[1] - 3), Math.max(range[1] - step, range[0] + 3)])
+    setZoomState({
+      dataLength,
+      range: [Math.min(range[0] + step, range[1] - 3), Math.max(range[1] - step, range[0] + 3)],
+    })
   }
 
   const zoomOut = () => {
     const step = Math.max(1, Math.floor(visible * 0.25))
-    setRange([Math.max(0, range[0] - step), Math.min(dataLength - 1, range[1] + step)])
+    const nextRange: [number, number] = [Math.max(0, range[0] - step), Math.min(dataLength - 1, range[1] + step)]
+    const isFullRange = nextRange[0] === fullRange[0] && nextRange[1] === fullRange[1]
+    setZoomState({
+      dataLength,
+      range: isFullRange ? null : nextRange,
+    })
   }
 
   return {
@@ -197,6 +202,7 @@ interface DualAxisComboChartProps {
   rightTickFormatter?: (value: number) => string
   /** Called with a numeric value (recharts always emits numbers for our data keys). */
   tooltipFormatter?: (value: number, name: string) => [string, string]
+  connectNulls?: boolean
   height?: number
 }
 
@@ -206,6 +212,7 @@ export function DualAxisComboChart({
   leftTickFormatter,
   rightTickFormatter,
   tooltipFormatter,
+  connectNulls = false,
   height = 280,
 }: DualAxisComboChartProps) {
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
@@ -270,7 +277,7 @@ export function DualAxisComboChart({
             return (
               <Line
                 key={s.dataKey}
-                connectNulls={true}
+                connectNulls={connectNulls}
                 yAxisId={axis}
                 dataKey={s.dataKey}
                 name={s.name}
@@ -314,6 +321,8 @@ interface AreaTrendChartProps {
   series: AreaSeries[]
   tickFormatter?: (value: number) => string
   tooltipFormatter?: (value: number) => string
+  connectNulls?: boolean
+  curveType?: 'basis' | 'basisClosed' | 'basisOpen' | 'bumpX' | 'bumpY' | 'bump' | 'linear' | 'linearClosed' | 'natural' | 'monotoneX' | 'monotoneY' | 'monotone' | 'step' | 'stepBefore' | 'stepAfter'
   height?: number
 }
 
@@ -322,6 +331,8 @@ export function AreaTrendChart({
   series,
   tickFormatter,
   tooltipFormatter,
+  connectNulls = false,
+  curveType = 'linear',
   height = 280,
 }: AreaTrendChartProps) {
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
@@ -366,8 +377,8 @@ export function AreaTrendChart({
           {series.map((s) => (
             <Area
               key={s.dataKey}
-              connectNulls={true}
-              type="monotone"
+              connectNulls={connectNulls}
+              type={curveType}
               dataKey={s.dataKey}
               name={s.name}
               stroke={s.color}

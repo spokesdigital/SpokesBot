@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy manifests only so this layer is cached unless deps change
 COPY package.json package-lock.json* ./
-RUN npm ci --frozen-lockfile
+RUN npm ci
 
 
 # ─────────────────────────────────────────────────────────────────────────────

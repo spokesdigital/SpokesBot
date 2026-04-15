@@ -220,7 +220,7 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
         token,
-        timeoutMs: 60_000,
+        timeoutMs: 95_000,
       }),
   },
 
@@ -272,7 +272,7 @@ export async function* streamChat(
   token: string,
   signal?: AbortSignal,
   pageContext?: string,
-): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
+): AsyncGenerator<{ token?: string; done?: boolean; error?: string; status?: string }> {
   const res = await fetch(`${API_URL}/threads/${threadId}/chat`, {
     method: 'POST',
     headers: {
@@ -304,9 +304,6 @@ export async function* streamChat(
       if (line.startsWith('data: ')) {
         try {
           const parsed = JSON.parse(line.slice(6))
-          // Skip empty keep-alive tokens emitted by the backend every 5s
-          // to prevent deployment proxies (Render/Vercel) from closing the connection
-          if (parsed.token === '') continue
           yield parsed
           if (parsed.done) return
         } catch {

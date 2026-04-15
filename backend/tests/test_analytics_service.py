@@ -123,6 +123,21 @@ class AnalyticsServiceAutoTest(unittest.TestCase):
         self.assertEqual(profile["metric_mappings"]["revenue"], "Revenue")
         self.assertIn("Impressions", profile["schema_profile"]["coerced_numeric_columns"])
 
+    def test_build_dataset_profile_prefers_conversion_counts_over_rates(self):
+        df = pd.DataFrame(
+            {
+                "Day": ["2026-04-01", "2026-04-02"],
+                "Conversion Rate": [0.04, 0.05],
+                "Cost per Conversion": [12.0, 15.0],
+                "Conversions": [4, 5],
+                "Transactions": [3, 4],
+            }
+        )
+
+        _, profile = build_dataset_profile(df)
+
+        self.assertEqual(profile["metric_mappings"]["conversions"], "Conversions")
+
 
 if __name__ == "__main__":
     unittest.main()

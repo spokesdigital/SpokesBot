@@ -71,11 +71,11 @@ export default function GlobalDatasetsPage() {
               key={dataset.id}
               className="glass-panel flex items-center justify-between rounded-[1.5rem] p-4"
             >
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-[#ffe48a]/30 to-[#ecab00]/20">
                   <Database className="h-5 w-5 text-[#d99600]" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="font-medium text-slate-800">{dataset.report_name || dataset.file_name}</p>
                   <p className="text-sm text-slate-500">
                     {dataset.report_name && dataset.report_name !== dataset.file_name ? `${dataset.file_name} · ` : ''}
@@ -90,6 +90,11 @@ export default function GlobalDatasetsPage() {
                     {' · '}
                     {formatDistanceToNow(new Date(dataset.uploaded_at), { addSuffix: true })}
                   </p>
+                  {dataset.status === 'failed' && dataset.error_message && (
+                    <p className="mt-1 text-xs text-red-500 truncate" title={dataset.error_message}>
+                      Error: {dataset.error_message}
+                    </p>
+                  )}
                 </div>
               </div>
               <span

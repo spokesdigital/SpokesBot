@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { Dataset, Organization } from '@/types'
-import { Users, ChevronRight, Database } from 'lucide-react'
+import { Users, ChevronRight, Database, RefreshCw } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 export default function ClientsPage() {
@@ -15,16 +15,25 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!session) return
+  const fetchData = useCallback((token: string) => {
+    setLoading(true)
+    setError(null)
     Promise.all([
-      api.organizations.list(session.access_token),
-      api.datasets.list(session.access_token, undefined, true),
+      api.organizations.list(token),
+      api.datasets.list(token, undefined, true),
     ])
       .then(([orgs, datasets]) => { setOrgs(orgs); setDatasets(datasets) })
-      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load.'))
+      .catch(e => {
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(msg || 'Failed to load. Please try again.')
+      })
       .finally(() => setLoading(false))
-  }, [session])
+  }, [])
+
+  useEffect(() => {
+    if (!session) return
+    fetchData(session.access_token)
+  }, [session, fetchData])
 
   const datasetCountByOrg = datasets.reduce<Record<string, number>>((acc, d) => {
     acc[d.organization_id] = (acc[d.organization_id] ?? 0) + 1
@@ -41,8 +50,17 @@ export default function ClientsPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500 backdrop-blur-xl">
-          {error}
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500 backdrop-blur-xl">
+          <span>{error}</span>
+          {session && (
+            <button
+              onClick={() => fetchData(session.access_token)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-200"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          )}
         </div>
       )}
 

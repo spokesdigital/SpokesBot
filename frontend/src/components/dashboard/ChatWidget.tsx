@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { api, streamChat } from '@/lib/api'
 import type { Thread, Message, Dataset } from '@/types'
+import { mergeServerMessages } from '@/components/dashboard/chatState'
 import {
   Bar,
   BarChart,
@@ -317,14 +318,46 @@ function renderMessageContent(content: string, streaming = false): ReactNode {
   })
 }
 
-// ── Typing dots indicator ─────────────────────────────────────────────────────
+// ── Thinking indicator ────────────────────────────────────────────────────────
 
-function TypingDots() {
+const THINKING_PHASES = [
+  'Analyzing your data…',
+  'Running calculations…',
+  'Checking results…',
+  'Almost ready…',
+]
+
+function ThinkingIndicator() {
+  const [phaseIndex, setPhaseIndex] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setPhaseIndex(i => (i + 1) % THINKING_PHASES.length)
+        setVisible(true)
+      }, 250)
+    }, 2200)
+    return () => clearInterval(id)
+  }, [])
+
   return (
-    <span className="flex gap-1 items-center h-4">
-      <span className="h-2 w-2 animate-bounce rounded-full bg-[#f0a500] [animation-delay:0ms]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-[#f0a500] [animation-delay:150ms]" />
-      <span className="h-2 w-2 animate-bounce rounded-full bg-[#f0a500] [animation-delay:300ms]" />
+    <span className="flex items-center gap-2.5">
+      {/* Pulsing orb */}
+      <span className="relative flex h-3.5 w-3.5 flex-shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#f0a500] opacity-50" />
+        <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-[#f0a500]/30 border border-[#f0a500]/60 items-center justify-center">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#f0a500]" />
+        </span>
+      </span>
+      {/* Fading phase label */}
+      <span
+        className="text-xs text-[#8a8480] transition-opacity duration-250"
+        style={{ opacity: visible ? 1 : 0 }}
+      >
+        {THINKING_PHASES[phaseIndex]}
+      </span>
     </span>
   )
 }
@@ -432,6 +465,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [isThinking, setIsThinking] = useState(false)
 
   const [minimized, setMinimized] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -507,16 +541,23 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     container.scrollTo({ top: container.scrollHeight, behavior })
   }
 
+  const syncMessages = useCallback(async (threadId: string) => {
+    if (!session) return
+    try {
+      const nextMessages = await api.threads.messages(threadId, session.access_token)
+      setMessages((prev) => mergeServerMessages(nextMessages, prev))
+    } catch {
+      // Best-effort sync only.
+    }
+  }, [session])
+
 
 
   /* ── Load messages when thread changes ── */
   useEffect(() => {
     if (!session || !activeThread) return
-    api.threads
-      .messages(activeThread.id, session.access_token)
-      .then(setMessages)
-      .catch(() => {})
-  }, [session, activeThread])
+    void syncMessages(activeThread.id)
+  }, [session, activeThread, syncMessages])
 
   /* ── Scroll to bottom ── */
   useEffect(() => {
@@ -566,6 +607,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       }
       if (!datasetId) {
         setError(datasetsLoading ? 'Loading your reports… please try again in a moment.' : 'Please upload a completed dataset first.')
+        submittingRef.current = false
         return
       }
       setError(null)
@@ -579,14 +621,17 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
         persistThread(thread.id)
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to create conversation.')
+        submittingRef.current = false
         return
       }
     }
 
+    setError(null)
     setInput('')
     setSuggestions([])
     setStreaming(true)
     setStreamingContent('')
+    setIsThinking(true)
 
 
     const optimistic: Message = {
@@ -607,7 +652,9 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal, pageContext)) {
         if (chunk.error) throw new Error(chunk.error)
         if (chunk.done) break
+        if (chunk.status) continue  // thinking heartbeat — indicator handles its own animation
         if (chunk.token) {
+          if (isThinking) setIsThinking(false)  // first real token — exit thinking phase
           accumulated += chunk.token
           setStreamingContent(accumulated)
         }
@@ -623,15 +670,28 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
         },
       ])
       if (accumulated) setSuggestions(getSuggestions(accumulated))
+      await syncMessages(thread.id)
 
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
       if (e instanceof Error && e.name !== 'AbortError') {
         setError(e.message)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            thread_id: thread!.id,
+            role: 'assistant',
+            content: 'I ran into an error while answering that. Please try again.',
+            created_at: new Date().toISOString(),
+          },
+        ])
+        await syncMessages(thread.id)
       }
     } finally {
       setStreamingContent('')
       setStreaming(false)
+      setIsThinking(false)
       submittingRef.current = false
       abortRef.current = null
     }
@@ -886,14 +946,16 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     </div>
                   ))}
 
-                  {/* User-initiated streaming indicator */}
+                  {/* Thinking / streaming bubble */}
                   {streaming && (
                     <div className="flex justify-start">
-                      <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f2f2f0] px-4 py-3 text-sm text-[#1a1a1a]">
+                      <div className={`max-w-[82%] rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-[#1a1a1a] transition-colors duration-300 ${
+                        isThinking ? 'bg-[#fdf8ee] border border-[#f0a500]/20' : 'bg-[#f2f2f0]'
+                      }`}>
                         {streamingContent ? (
                           renderMessageContent(streamingContent, true)
                         ) : (
-                          <TypingDots />
+                          <ThinkingIndicator />
                         )}
                       </div>
                     </div>
@@ -944,7 +1006,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         data-testid="chat-input"
                         type="text"
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => {
+                          setInput(e.target.value)
+                          if (error) setError(null)
+                        }}
                         disabled={streaming || (datasetsLoading && !hasDataset)}
                         maxLength={500}
                         placeholder={

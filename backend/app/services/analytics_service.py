@@ -9,6 +9,7 @@ from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
     "impressions": ("impression", "impr", "view"),
     "clicks": ("click",),
+    "conversions": ("conversion", "transaction", "purchase", "order", "acquisition", "lead"),
     "ctr": ("ctr", "click through rate"),
     "avg_cpc": ("cpc", "cost per click"),
     "cost": ("cost", "spend", "expense"),
@@ -150,12 +151,64 @@ def _pick_metric_mapping(columns: list[str], patterns: tuple[str, ...]) -> str |
     return None
 
 
+def _pick_conversion_metric_mapping(columns: list[str]) -> str | None:
+    candidates: list[str] = []
+    excluded_patterns = (
+        r"\brate\b",
+        r"\bcvr\b",
+        r"\bctr\b",
+        r"\bcpa\b",
+        r"\bcpc\b",
+        r"\bcpm\b",
+        r"\broas\b",
+        r"cost[\s_-]*per",
+        r"value",
+        r"revenue",
+    )
+
+    for col in columns:
+        lowered = col.lower()
+        if not any(token in lowered for token in METRIC_PATTERNS["conversions"]):
+            continue
+        if any(re.search(pattern, lowered) for pattern in excluded_patterns):
+            continue
+        candidates.append(col)
+
+    if not candidates:
+        return None
+
+    def score(col: str) -> tuple[int, str]:
+        lowered = col.strip().lower()
+        priorities = [
+            (r"^conversions?$", 0),
+            (r"^transactions?$", 1),
+            (r"^purchases?$", 2),
+            (r"^orders?$", 3),
+            (r"^acquisitions?$", 4),
+            (r"^leads?$", 5),
+            (r"\bconversions?\b", 10),
+            (r"\btransactions?\b", 11),
+            (r"\bpurchases?\b", 12),
+            (r"\borders?\b", 13),
+            (r"\bacquisitions?\b", 14),
+            (r"\bleads?\b", 15),
+        ]
+        for pattern, priority in priorities:
+            if re.search(pattern, lowered):
+                return priority, lowered
+        return 99, lowered
+
+    return min(candidates, key=score)
+
+
 def infer_metric_mappings(df: pd.DataFrame) -> dict[str, str | None]:
     numeric_columns = df.select_dtypes(include="number").columns.tolist()
-    return {
+    metric_mappings = {
         metric_key: _pick_metric_mapping(numeric_columns, patterns)
         for metric_key, patterns in METRIC_PATTERNS.items()
     }
+    metric_mappings["conversions"] = _pick_conversion_metric_mapping(numeric_columns)
+    return metric_mappings
 
 
 def build_dataset_profile(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:

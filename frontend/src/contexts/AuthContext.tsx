@@ -150,27 +150,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     console.log('[AuthContext] Attempting signIn for:', email)
-    const supabase = createClient()
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) {
-      console.error('[AuthContext] Supabase signIn error:', error)
-      throw error
-    }
-
-    if (!data.session) {
-      console.error('[AuthContext] Sign-in successful but no session returned')
-      throw new Error('No session returned after sign-in. Please verify your email.')
-    }
-
-    console.log('[AuthContext] Supabase sign-in successful, hydrating session')
-    // Flag before setSession so the concurrent SIGNED_IN event is suppressed
+    // Set flag BEFORE signInWithPassword so that when Supabase fires the SIGNED_IN
+    // event (which happens as a microtask during the same Promise resolution), the
+    // onAuthStateChange handler skips it and doesn't launch a racing loadProfile call.
     signInInProgressRef.current = true
     try {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+      if (error) {
+        console.error('[AuthContext] Supabase signIn error:', error)
+        throw error
+      }
+
+      if (!data.session) {
+        console.error('[AuthContext] Sign-in successful but no session returned')
+        throw new Error('No session returned after sign-in. Please verify your email.')
+      }
+
+      console.log('[AuthContext] Supabase sign-in successful, hydrating session')
+      // Hold loading=true while we fetch the profile so layouts that guard on
+      // `loading` don't see a momentary (session=set, user=null) state and
+      // redirect back to /login before the profile arrives.
+      setLoading(true)
       setSession(data.session)
       await loadProfile(data.session.access_token)
     } finally {
       signInInProgressRef.current = false
+      setLoading(false)
     }
   }, [loadProfile])
 

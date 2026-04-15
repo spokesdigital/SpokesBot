@@ -25,6 +25,13 @@ const config: Config = {
     "^@/(.*)$": "<rootDir>/src/$1",
   },
 
+  modulePathIgnorePatterns: [
+    "<rootDir>/.next/",
+    "<rootDir>/coverage/",
+    "<rootDir>/playwright-report/",
+    "<rootDir>/test-results/",
+  ],
+
   // Only pick up unit tests in tests/components/ — Playwright owns e2e/
   testMatch: ["<rootDir>/tests/components/**/*.test.{ts,tsx}"],
 };

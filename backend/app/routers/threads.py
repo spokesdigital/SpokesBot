@@ -251,6 +251,12 @@ async def chat(
         accumulated = ""
         try:
             async for token in stream_agent(df, history, body.message, page_context=body.page_context):
+                if not token:
+                    # Empty token = keep-alive heartbeat from the polling loop.
+                    # Send a structured status event so the client can show a
+                    # meaningful "thinking" indicator instead of nothing.
+                    yield f"data: {json.dumps({'status': 'thinking'})}\n\n"
+                    continue
                 accumulated += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
 

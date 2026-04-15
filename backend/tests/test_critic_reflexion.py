@@ -103,8 +103,8 @@ class TestRouting:
         )
         assert route_after_critic(state) == "inject_feedback"
 
-    def test_max_retries_constant_is_2(self):
-        assert MAX_RETRIES == 2
+    def test_max_retries_constant_is_1(self):
+        assert MAX_RETRIES == 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -253,10 +253,8 @@ class TestGraphTraversal:
         #  • _get_llm           — so the critic node uses critic_llm
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -285,10 +283,8 @@ class TestGraphTraversal:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -340,10 +336,8 @@ class TestGraphTraversal:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -382,10 +376,8 @@ class TestGraphTraversal:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -428,10 +420,8 @@ class TestGraphTraversal:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -472,10 +462,8 @@ class TestGraphTraversal:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             graph = make_graph(df)
 
@@ -519,10 +507,8 @@ class TestStreamAgent:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             chunks = []
             async for chunk in stream_agent(df, [], "What is average revenue?"):
@@ -533,6 +519,23 @@ class TestStreamAgent:
             f"Expected '{expected_answer}', got '{assembled}'"
         )
         assert len(chunks) > 1, "Expected multiple chunks (streaming behaviour)"
+
+    @pytest.mark.asyncio
+    async def test_stream_agent_fast_path_handles_last_week_sales_without_llm(self):
+        df = pd.DataFrame(
+            {
+                "Date": pd.date_range(end=pd.Timestamp.now(tz="UTC"), periods=7, freq="D"),
+                "Sales": [100, 120, 140, 160, 180, 200, 220],
+            }
+        )
+
+        chunks = []
+        async for chunk in stream_agent(df, [], "what is the last week's sale"):
+            chunks.append(chunk)
+
+        assembled = "".join(chunks)
+        assert "Sales for last 7 days is $" in assembled
+        assert "filtered by Date" in assembled
 
     @pytest.mark.asyncio
     async def test_stream_agent_timeout_raises(self):
@@ -553,10 +556,8 @@ class TestStreamAgent:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
             # Override the graph-level timeout to 1s so the test doesn't take 2 minutes
             patch("app.agent.graph._GRAPH_TIMEOUT", 1.0),
         ):

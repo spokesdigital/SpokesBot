@@ -57,7 +57,7 @@ jobs:
         run: pytest tests/ -v --tb=short
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Frontend — lint, type-check, build
+  # Frontend — lint, test, type-check, build
   # ─────────────────────────────────────────────────────────────────────────
   frontend:
     name: Frontend (Next.js)
@@ -78,10 +78,13 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --frozen-lockfile
+        run: npm ci
 
       - name: Lint (ESLint)
         run: npm run lint
+
+      - name: Run unit tests
+        run: npm test -- --runInBand --watch=false
 
       - name: Type check
         run: npx tsc --noEmit
@@ -100,8 +103,6 @@ jobs:
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    # Only run on main/develop pushes to avoid burning minutes on every PR
-    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v4

@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from uuid import UUID
 
@@ -17,6 +18,8 @@ from app.main import limiter
 from app.schemas import AnalyticsRequest, AnalyticsResponse, InsightsRequest, InsightsResponse
 from app.services import analytics_service, dataset_service
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -228,6 +231,23 @@ async def get_overall_insights(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        # Catches OpenAI API errors (RateLimitError, AuthenticationError,
+        # APIConnectionError, etc.) that are not TimeoutError or ValueError.
+        logger.error(
+            "[insights] AI generation failed for dataset_id=%s: %s: %s",
+            body.dataset_id,
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"AI service error ({type(exc).__name__}): {exc}. "
+                "Check your OpenAI API key and quota, then try again."
+            ),
         ) from exc
 
     return InsightsResponse(dataset_id=body.dataset_id, insights=insights)

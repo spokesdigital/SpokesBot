@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -31,27 +31,32 @@ const COLORS = {
 }
 
 function useZoom(dataLength: number) {
-  const [range, setRange] = useState<[number, number]>([0, Math.max(0, dataLength - 1)])
-  const prevLen = useRef(dataLength)
-
-  useEffect(() => {
-    if (prevLen.current !== dataLength) {
-      prevLen.current = dataLength
-      setRange([0, Math.max(0, dataLength - 1)])
-    }
-  }, [dataLength])
+  const [zoomState, setZoomState] = useState<{ dataLength: number; range: [number, number] | null }>({
+    dataLength,
+    range: null,
+  })
+  const fullRange: [number, number] = [0, Math.max(0, dataLength - 1)]
+  const range = zoomState.dataLength === dataLength && zoomState.range ? zoomState.range : fullRange
 
   const visible = range[1] - range[0] + 1
 
   const zoomIn = () => {
     if (visible <= 4) return
     const step = Math.max(1, Math.floor(visible * 0.25))
-    setRange([Math.min(range[0] + step, range[1] - 3), Math.max(range[1] - step, range[0] + 3)])
+    setZoomState({
+      dataLength,
+      range: [Math.min(range[0] + step, range[1] - 3), Math.max(range[1] - step, range[0] + 3)],
+    })
   }
 
   const zoomOut = () => {
     const step = Math.max(1, Math.floor(visible * 0.25))
-    setRange([Math.max(0, range[0] - step), Math.min(dataLength - 1, range[1] + step)])
+    const nextRange: [number, number] = [Math.max(0, range[0] - step), Math.min(dataLength - 1, range[1] + step)]
+    const isFullRange = nextRange[0] === fullRange[0] && nextRange[1] === fullRange[1]
+    setZoomState({
+      dataLength,
+      range: isFullRange ? null : nextRange,
+    })
   }
 
   return {

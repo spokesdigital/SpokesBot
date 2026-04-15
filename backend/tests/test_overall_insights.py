@@ -24,7 +24,8 @@ STRUCTURED_RESPONSE = """
 [
   {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 4.2x."},
   {"type": "trend", "text": "Clicks climbed 18% week over week while CPC stayed flat at $1.24."},
-  {"type": "warning", "text": "One spend-heavy campaign is converting at only 0.9x ROAS."}
+  {"type": "success", "text": "Conversion rate is holding steady at 3.2% across all campaigns."},
+  {"type": "trend", "text": "Top channel accounts for 62% of total impressions this period."}
 ]
 """.strip()
 
@@ -60,10 +61,8 @@ class TestGenerateStructuredInsights:
 
         with (
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
-            patch(
-                "app.agent.graph._get_llm",
-                side_effect=lambda *, streaming=True: MagicMock() if streaming else critic_llm,
-            ),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
         ):
             return await generate_structured_insights(df)
 
@@ -73,7 +72,7 @@ class TestGenerateStructuredInsights:
 
         result = asyncio.run(self._run())
 
-        assert len(result) == 3
+        assert len(result) == 4
         assert result[0]["type"] == "success"
         assert "Revenue reached $124,500" in result[0]["text"]
 
@@ -106,7 +105,8 @@ class TestOverallInsightsEndpoint:
                     return_value=[
                         {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 4.2x."},
                         {"type": "trend", "text": "Clicks climbed 18% week over week while CPC stayed flat at $1.24."},
-                        {"type": "warning", "text": "One spend-heavy campaign is converting at only 0.9x ROAS."},
+                        {"type": "success", "text": "Conversion rate is holding steady at 3.2% across all campaigns."},
+                        {"type": "trend", "text": "Top channel accounts for 62% of total impressions this period."},
                     ]
                 ),
             ),
@@ -119,5 +119,5 @@ class TestOverallInsightsEndpoint:
 
         assert response.status_code == 200
         body = response.json()
-        assert len(body["insights"]) == 3
+        assert len(body["insights"]) == 4
         assert body["insights"][0]["type"] == "success"

@@ -20,6 +20,7 @@ import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
+import { ExportButton } from '@/components/dashboard/ExportButton'
 import type { AIInsight, Dataset, AnalyticsResult, InsightsResult } from '@/types'
 
 type NumericSummary = Record<string, Record<string, number>>
@@ -417,7 +418,7 @@ function RevenueSplitPanel({ slices }: { slices: SplitSlice[] }) {
 
 const LIVE_REFRESH_MS = 30_000
 
-export default function DashboardPage() {
+export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}) {
   const { session, organizations, user } = useAuth()
   const { organizationId, activeDatasetId, setActiveDataset, datePreset, dateRange } = useDashboardStore()
 
@@ -441,6 +442,17 @@ export default function DashboardPage() {
   }, [])
 
   const completedDatasets = useMemo(() => datasets.filter((dataset) => dataset.status === 'completed'), [datasets])
+  const insightsEmptyMessage = useMemo(() => {
+    if (loadingDatasets) return 'Loading datasets…'
+    if (datasets.length === 0) return 'No datasets found. An admin needs to upload a CSV file first.'
+    if (completedDatasets.length === 0) {
+      const hasFailed = datasets.some((d) => d.status === 'failed')
+      const hasProcessing = datasets.some((d) => d.status === 'processing' || d.status === 'queued')
+      if (hasFailed) return 'Dataset processing failed. Contact your admin to re-upload the CSV file.'
+      if (hasProcessing) return 'Dataset is being processed. AI insights will appear once it\'s ready.'
+    }
+    return 'Insights will appear once the active dataset is ready for AI analysis.'
+  }, [loadingDatasets, datasets, completedDatasets])
   const activeDataset = useMemo(() => 
     completedDatasets.find((dataset) => dataset.id === activeDatasetId)
     ?? datasets.find((dataset) => dataset.id === activeDatasetId), 
@@ -454,9 +466,8 @@ export default function DashboardPage() {
     () => (datePreset === 'custom' && dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
     [datePreset, dateRange.end],
   )
-  const organizationScope = user?.role === 'admin'
-    ? organizationId ?? 'admin-default'
-    : user?.organization?.id ?? 'client-org'
+  const organizationScope = targetOrgId
+    ?? (user?.role === 'admin' ? organizationId ?? 'admin-default' : user?.organization?.id ?? 'client-org')
   const analyticsRequestKey = activeDatasetId
     ? buildDashboardRequestKey({
         datasetId: activeDatasetId,
@@ -480,8 +491,8 @@ export default function DashboardPage() {
       setLoadingDatasets(true)
       setError(null)
       try {
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const data = await api.datasets.list(token, targetOrgId)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const data = await api.datasets.list(token, effectiveOrgId)
         if (cancelled) return
 
         const sortedData = [...data].sort(
@@ -490,7 +501,7 @@ export default function DashboardPage() {
         setDatasets(sortedData)
 
         const availableDatasets = sortedData.filter((dataset) => dataset.status === 'completed')
-        const currentOrgKey = targetOrgId ?? 'client-org'
+        const currentOrgKey = effectiveOrgId ?? 'client-org'
 
         if (isInitialOrOrgLoadRef.current !== currentOrgKey) {
           isInitialOrOrgLoadRef.current = currentOrgKey
@@ -521,7 +532,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true
     }
-  }, [session, organizationId, setActiveDataset, user?.role, refreshTick])
+  }, [session, organizationId, targetOrgId, setActiveDataset, user?.role, refreshTick])
 
   useEffect(() => {
     if (!session || !activeDatasetId) {
@@ -564,8 +575,8 @@ export default function DashboardPage() {
             : {}),
         }
 
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const result = await api.analytics.compute(body, token, targetOrgId)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const result = await api.analytics.compute(body, token, effectiveOrgId)
 
         rememberDashboardCache(analyticsResponseCache, analyticsRequestKey, result)
 
@@ -600,6 +611,7 @@ export default function DashboardPage() {
     endDateValue,
     activeDateColumn,
     organizationId,
+    targetOrgId,
     user?.role,
   ])
 
@@ -652,8 +664,8 @@ export default function DashboardPage() {
             : {}),
         }
 
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const result = await api.analytics.getInsights(body, token, targetOrgId)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const result = await api.analytics.getInsights(body, token, effectiveOrgId)
 
         rememberDashboardCache(insightsResponseCache, insightsRequestKey, result)
 
@@ -696,10 +708,12 @@ export default function DashboardPage() {
     endDateValue,
     activeDateColumn,
     organizationId,
+    targetOrgId,
     user?.role,
   ])
 
-  const activeOrganizationName = organizations.find((org) => org.id === organizationId)?.name
+  const activeOrganizationName = (targetOrgId ? organizations.find((org) => org.id === targetOrgId)?.name : null)
+    ?? organizations.find((org) => org.id === organizationId)?.name
     ?? user?.organization?.name
     ?? 'Client Overview'
 
@@ -853,7 +867,7 @@ export default function DashboardPage() {
   }, [analytics, activeDataset])
 
   return (
-    <div className="min-h-full bg-[#fcfaf7]">
+    <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <div>
           <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
@@ -878,6 +892,11 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap items-center gap-3">
           <DateFilter />
+          <ExportButton
+            contentId="dashboard-pdf-content"
+            fileName={`${activeOrganizationName.replace(/\s+/g, '-')}-overview`}
+            reportTitle={`${activeOrganizationName} · Overview`}
+          />
         </div>
       </header>
 
@@ -966,12 +985,17 @@ export default function DashboardPage() {
 
             <OverallInsights
               insights={overallInsights}
-              loading={loadingInsights}
+              loading={loadingInsights || (loadingDatasets && !activeDatasetId)}
               error={insightsError}
+              emptyMessage={insightsEmptyMessage}
             />
           </>
         )}
       </div>
     </div>
   )
+}
+
+export default function DashboardPage() {
+  return <OverviewDashboard />
 }

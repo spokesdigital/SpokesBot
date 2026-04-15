@@ -9,8 +9,17 @@ import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
+import { ExportButton } from '@/components/dashboard/ExportButton'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { ChartCard, DualAxisComboChart, AreaTrendChart, DistributionChart } from '@/components/dashboard/ChannelChart'
+import { splitInsightsBySection } from '@/components/dashboard/channelInsights'
+import {
+  buildConversionRateData,
+  buildTransactionsCpaData,
+  hasConversionRateData,
+  hasTransactionsOrCpaData,
+  pickConversionsColumn,
+} from '@/components/dashboard/channelMetrics'
 import type { AIInsight, Dataset, AnalyticsResult, InsightsResult } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -59,20 +68,9 @@ type ClicksCpcPoint = {
   cpc?: number
 }
 
-type TransactionsCpaPoint = {
-  date: string
-  transactions?: number
-  cpa?: number
-}
-
 type RoasPoint = {
   date: string
   roas?: number
-}
-
-type ConversionRatePoint = {
-  date: string
-  conversionRate?: number
 }
 
 type RevenueSplitDatum = {
@@ -279,24 +277,17 @@ interface ChannelPageProps {
   accentColor: string      // e.g. '#4285f4' for Google, '#1877f2' for Meta
   accentLight: string      // e.g. '#e8f0fe' for badge bg
   accentText: string       // e.g. '#1a56a7' for badge text
+  /** When set (admin impersonation), all API calls are scoped to this org. */
+  targetOrgId?: string
 }
 
 function getChannelSubtitle(channelName: string) {
   return `Detailed analytics for your ${channelName} campaigns`
 }
 
-function getInsightChunks(insights: AIInsight[]) {
-  return {
-    traffic: insights.slice(0, 4),
-    conversion: insights.slice(4, 8),
-    revenue: insights.slice(8, 12),
-    distribution: insights.slice(12, 15),
-  }
-}
-
 const LIVE_REFRESH_MS = 30_000
 
-export function ChannelPage({ reportType, channelName, accentColor, accentLight: _accentLight, accentText: _accentText }: ChannelPageProps) {
+export function ChannelPage({ reportType, channelName, accentColor, accentLight: _accentLight, accentText: _accentText, targetOrgId }: ChannelPageProps) {
   void _accentLight
   void _accentText
   const { session, organizations, user } = useAuth()
@@ -338,9 +329,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     [datePreset, dateRange.end],
   )
 
-  const organizationScope = user?.role === 'admin'
-    ? organizationId ?? 'admin-default'
-    : user?.organization?.id ?? 'client-org'
+  const organizationScope = targetOrgId
+    ?? (user?.role === 'admin' ? organizationId ?? 'admin-default' : user?.organization?.id ?? 'client-org')
 
   const analyticsRequestKey = activeDatasetId
     ? buildCacheKey({
@@ -377,15 +367,15 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       setLoadingDatasets(true)
       setError(null)
       try {
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const data = await api.datasets.list(token, targetOrgId, undefined, reportType)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const data = await api.datasets.list(token, effectiveOrgId, undefined, reportType)
         if (cancelled) return
 
         const sorted = [...data].sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
         setDatasets(sorted)
 
         const available = sorted.filter((d) => d.status === 'completed')
-        const scopeKey = `${reportType}::${targetOrgId ?? 'client-org'}`
+        const scopeKey = `${reportType}::${effectiveOrgId ?? 'client-org'}`
 
         if (orgLoadRef.current !== scopeKey) {
           orgLoadRef.current = scopeKey
@@ -407,7 +397,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     void load()
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, organizationId, user?.role, reportType, refreshTick])
+  }, [session, organizationId, targetOrgId, user?.role, reportType, refreshTick])
 
   // Load analytics
   useEffect(() => {
@@ -440,8 +430,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                 : {}
             : {}),
         }
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const result = await api.analytics.compute(body, token, targetOrgId)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const result = await api.analytics.compute(body, token, effectiveOrgId)
         setCache(analyticsCache, analyticsRequestKey, result)
         if (!cancelled) { setAnalytics(result); setLastUpdated(new Date()) }
       } catch (err) {
@@ -457,7 +447,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
     void load()
     return () => { cancelled = true }
-  }, [session, activeDatasetId, analyticsRequestKey, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, user?.role])
+  }, [session, activeDatasetId, analyticsRequestKey, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role])
 
   // Load AI insights
   useEffect(() => {
@@ -488,8 +478,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               : datePreset ? { date_preset: datePreset, date_column: activeDateColumn } : {}
             : {}),
         }
-        const targetOrgId = user?.role === 'admin' ? organizationId ?? undefined : undefined
-        const result = await api.analytics.getInsights(body, token, targetOrgId)
+        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+        const result = await api.analytics.getInsights(body, token, effectiveOrgId)
         setCache(insightsCache, insightsRequestKey, result)
         if (!cancelled) setInsights(result.insights)
       } catch (err) {
@@ -506,7 +496,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     setInsightsError(null)
     const tid = window.setTimeout(() => { void load() }, 350)
     return () => { cancelled = true; window.clearTimeout(tid) }
-  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, user?.role])
+  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role])
 
   // ── ViewModel ─────────────────────────────────────────────────────────────
 
@@ -599,14 +589,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const impressionsSeries = getSeriesForColumn(metricColumns.impressions)
     const revenueSeries = getSeriesForColumn(metricColumns.revenue)
     const costSeries = getSeriesForColumn(metricColumns.cost)
-    const conversionsColumn = pickMetricColumn(numericColumns, [
-      /\bconversion/i,
-      /\bconversions\b/i,
-      /\btransactions?\b/i,
-      /\bpurchases?\b/i,
-      /\borders?\b/i,
-      /\bacquisitions?\b/i,
-    ])
+    const conversionsColumn = pickConversionsColumn(storedMappings, numericColumns)
     const conversionsSeries = getSeriesForColumn(conversionsColumn)
 
     // Revenue vs Cost trend
@@ -664,34 +647,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       })
     })()
 
-    const transactionsCpaData: TransactionsCpaPoint[] = (() => {
-      const convMap = new Map(conversionsSeries.map((p) => [p.date, p.value]))
-      const costMap = new Map(costSeries.map((p) => [p.date, p.value]))
-      const dates = Array.from(new Set([...convMap.keys(), ...costMap.keys()])).sort()
-      return dates.map((date) => {
-        const transactions = convMap.get(date)
-        const cost = costMap.get(date)
-        return {
-          date,
-          ...(transactions != null ? { transactions } : {}),
-          ...(transactions != null && cost != null && transactions > 0 ? { cpa: cost / transactions } : {}),
-        }
-      })
-    })()
-
-    const conversionRateData: ConversionRatePoint[] = (() => {
-      const convMap = new Map(conversionsSeries.map((p) => [p.date, p.value]))
-      const clicksMap = new Map(clicksSeries.map((p) => [p.date, p.value]))
-      const dates = Array.from(new Set([...convMap.keys(), ...clicksMap.keys()])).sort()
-      return dates.map((date) => {
-        const conversions = convMap.get(date)
-        const clicks = clicksMap.get(date)
-        return {
-          date,
-          ...(conversions != null && clicks != null && clicks > 0 ? { conversionRate: (conversions / clicks) * 100 } : {}),
-        }
-      })
-    })()
+    const transactionsCpaData = buildTransactionsCpaData(conversionsSeries, costSeries)
+    const conversionRateData = buildConversionRateData(conversionsSeries, clicksSeries)
 
     const revenueDistribution: RevenueSplitDatum[] = (() => {
       const revenueColumn = metricColumns.revenue
@@ -829,12 +786,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     }
   }, [analytics, activeDataset])
 
-  const sectionInsights = useMemo(() => getInsightChunks(insights), [insights])
+  const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-full bg-[#fcfaf7]">
+    <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <div>
@@ -861,6 +818,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <DateFilter />
+          <ExportButton
+            contentId="dashboard-pdf-content"
+            fileName={`${activeOrganizationName.replace(/\s+/g, '-')}-${reportType}`}
+            reportTitle={`${activeOrganizationName} · ${channelName}`}
+          />
         </div>
       </header>
 
@@ -973,6 +935,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               loading={loadingInsights}
               error={insightsError}
               title="Traffic Insights"
+              emptyMessage="No traffic insights available for this dataset."
             />
 
             <section className="space-y-4">
@@ -991,7 +954,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                 <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
                   <ChartCard
                     title="Transactions vs CPA"
-                    empty={viewModel.transactionsCpaData.length === 0}
+                    empty={!hasTransactionsOrCpaData(viewModel.transactionsCpaData)}
                     emptyMsg="Need conversions and cost data with a date column to draw this chart."
                   >
                     <DualAxisComboChart
@@ -1000,6 +963,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                         { type: 'bar', dataKey: 'transactions', name: 'Transactions', color: accentColor, axis: 'l' },
                         { type: 'line', dataKey: 'cpa', name: 'CPA $', color: '#f5b800', axis: 'r' },
                       ]}
+                      connectNulls={false}
                       leftTickFormatter={(v) => formatCompactNumber(v)}
                       rightTickFormatter={(v) => `$${v.toFixed(0)}`}
                       tooltipFormatter={(v, n) => (n === 'CPA $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n])}
@@ -1008,7 +972,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
                   <ChartCard
                     title="Conversion Rate Trend"
-                    empty={viewModel.conversionRateData.filter((p) => p.conversionRate != null).length === 0}
+                    empty={!hasConversionRateData(viewModel.conversionRateData)}
                     emptyMsg="Need conversions and clicks data with a date column to compute conversion rate."
                   >
                     <AreaTrendChart
@@ -1023,6 +987,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           gradientOpacity: 0.18,
                         },
                       ]}
+                      connectNulls={false}
+                      curveType="linear"
                       tickFormatter={(v) => `${v.toFixed(0)}%`}
                       tooltipFormatter={(v) => `${v.toFixed(2)}%`}
                     />
@@ -1036,6 +1002,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               loading={loadingInsights}
               error={insightsError}
               title="Conversion Insights"
+              emptyMessage="No conversion insights available for this dataset."
             />
 
             {/* ── Revenue Performance ─────────────────────────────────── */}
@@ -1092,6 +1059,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               loading={loadingInsights}
               error={insightsError}
               title="Revenue Insights"
+              emptyMessage="No revenue insights available for this dataset."
             />
 
             <section className="space-y-4">
@@ -1110,6 +1078,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   loading={loadingInsights}
                   error={insightsError}
                   title="Distribution Insights"
+                  emptyMessage="No distribution insights available for this dataset."
                 />
               </div>
             </section>

@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, CheckCircle, Lightbulb, TrendingUp, Zap } from 'lucide-react'
+import { CheckCircle, Lightbulb, TrendingUp } from 'lucide-react'
 import type { AIInsight } from '@/types'
 
 interface OverallInsightsProps {
@@ -9,13 +9,12 @@ interface OverallInsightsProps {
   error?: string | null
   title?: string
   subtitle?: string | null
+  emptyMessage?: string
 }
 
 const insightConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
-  success: { icon: CheckCircle,   color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  trend:   { icon: TrendingUp,    color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
-  warning: { icon: Zap,           color: 'text-amber-500',   bg: 'bg-amber-500/10'   },
-  alert:   { icon: AlertTriangle, color: 'text-orange-500',  bg: 'bg-orange-500/10'  },
+  success: { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  trend:   { icon: TrendingUp,  color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
 }
 
 const fallbackInsightConfig = { icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-500/10' }
@@ -26,6 +25,7 @@ export function OverallInsights({
   error = null,
   title = 'AI Insights',
   subtitle,
+  emptyMessage = 'Insights will appear once the active dataset is ready for AI analysis.',
 }: OverallInsightsProps) {
   return (
     <div className="bg-gradient-to-br from-card to-muted/30 rounded-xl p-5 card-shadow border border-border">
@@ -46,7 +46,7 @@ export function OverallInsights({
       {/* Insight items */}
       <div className="space-y-3">
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
+          Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="shimmer-warm h-14 rounded-lg" />
           ))
         ) : error ? (
@@ -54,7 +54,7 @@ export function OverallInsights({
             {error}
           </div>
         ) : insights.length > 0 ? (
-          insights.map((insight, i) => {
+          insights.slice(0, 4).map((insight, i) => {
             const { icon: Icon, color, bg } = insightConfig[insight.type] ?? fallbackInsightConfig
             return (
               <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background/60 border border-border/50">
@@ -67,7 +67,7 @@ export function OverallInsights({
           })
         ) : (
           <div className="p-3 rounded-lg bg-background/60 border border-border/50 text-sm text-muted-foreground">
-            Insights will appear once the active dataset is ready for AI analysis.
+            {emptyMessage}
           </div>
         )}
       </div>

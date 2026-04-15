@@ -14,12 +14,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (loading) return
+    // session exists but profile hasn't arrived yet — stay on the skeleton,
+    // don't redirect prematurely.
+    if (session && !user) return
     if (!session) {
       router.replace('/login')
       return
     }
-    // user is guaranteed non-null here (loading=false, session set means loadProfile ran)
-    // null user (API failure) is also redirected to login for safety
     if (!user || user.role !== 'admin') {
       router.replace('/dashboard')
     }
