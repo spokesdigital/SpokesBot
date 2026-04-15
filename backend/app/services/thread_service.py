@@ -13,12 +13,14 @@ def create_thread(
     """Insert a new thread. Uses the user-scoped client so RLS validates the write."""
     response = (
         supabase.table("threads")
-        .insert({
-            "dataset_id": dataset_id,
-            "title": title,
-            "user_id": user_id,
-            "organization_id": org_id,
-        })
+        .insert(
+            {
+                "dataset_id": dataset_id,
+                "title": title,
+                "user_id": user_id,
+                "organization_id": org_id,
+            }
+        )
         .execute()
     )
     return response.data[0]
@@ -37,13 +39,7 @@ def list_threads(supabase: Client, dataset_id: str | None = None) -> list[dict]:
 
 def get_thread(thread_id: str, supabase: Client) -> dict:
     """Fetch a single thread. RLS enforced."""
-    response = (
-        supabase.table("threads")
-        .select("*")
-        .eq("id", thread_id)
-        .maybe_single()
-        .execute()
-    )
+    response = supabase.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
     if not response.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
     return response.data

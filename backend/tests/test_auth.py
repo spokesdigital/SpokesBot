@@ -35,7 +35,10 @@ class TestAuthDependencies:
     def test_unauthenticated_user_denied_analytics_access(self):
         """Unauthenticated users should be denied analytics access."""
         with TestClient(app) as client:
-            response = client.post("/analytics/compute", json={"dataset_id": "test-id", "operation": "sum", "column": "amount"})
+            response = client.post(
+                "/analytics/compute",
+                json={"dataset_id": "test-id", "operation": "sum", "column": "amount"},
+            )
             assert response.status_code in (401, 403)
 
     def test_unauthenticated_user_denied_upload_access(self):

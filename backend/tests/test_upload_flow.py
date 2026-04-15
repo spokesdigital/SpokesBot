@@ -38,6 +38,7 @@ class TestUploadFlow:
     def test_non_csv_rejected(self):
         """Non-CSV files should be rejected with 400."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
 
         app.dependency_overrides[get_supabase_client] = lambda: mock_supabase
@@ -49,7 +50,13 @@ class TestUploadFlow:
         with TestClient(app) as client:
             response = client.post(
                 "/upload/",
-                files={"file": ("data.xlsx", BytesIO(b"fake"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+                files={
+                    "file": (
+                        "data.xlsx",
+                        BytesIO(b"fake"),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                },
                 data={"org_id": "00000000-0000-0000-0000-000000000001"},
             )
             assert response.status_code == 400
@@ -58,6 +65,7 @@ class TestUploadFlow:
     def test_empty_file_rejected(self):
         """Empty files should be rejected with 400."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
 
         app.dependency_overrides[get_supabase_client] = lambda: mock_supabase
@@ -78,6 +86,7 @@ class TestUploadFlow:
     def test_non_admin_rejected(self):
         """Non-admin users should be denied upload with 403."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
 
         app.dependency_overrides[get_supabase_client] = lambda: mock_supabase
@@ -97,6 +106,7 @@ class TestUploadFlow:
     def test_unknown_org_rejected(self):
         """Upload to non-existent org should return 404."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
         mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = None
 
@@ -117,9 +127,14 @@ class TestUploadFlow:
     def test_valid_upload_returns_202(self):
         """Valid CSV upload by admin should return 202 with dataset_id."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
-        mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {"id": "00000000-0000-0000-0000-000000000001"}
-        mock_supabase.table.return_value.insert.return_value.execute.return_value.data = [{"id": "test-dataset-id"}]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "id": "00000000-0000-0000-0000-000000000001"
+        }
+        mock_supabase.table.return_value.insert.return_value.execute.return_value.data = [
+            {"id": "test-dataset-id"}
+        ]
 
         app.dependency_overrides[get_supabase_client] = lambda: mock_supabase
         app.dependency_overrides[get_service_client] = lambda: mock_supabase
@@ -141,9 +156,14 @@ class TestUploadFlow:
     def test_dataset_status_lifecycle(self):
         """Verify dataset status transitions: queued → processing → completed."""
         from io import BytesIO
+
         mock_supabase = _make_mock_supabase()
-        mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {"id": "00000000-0000-0000-0000-000000000001"}
-        mock_supabase.table.return_value.insert.return_value.execute.return_value.data = [{"id": "test-dataset-id"}]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = {
+            "id": "00000000-0000-0000-0000-000000000001"
+        }
+        mock_supabase.table.return_value.insert.return_value.execute.return_value.data = [
+            {"id": "test-dataset-id"}
+        ]
 
         app.dependency_overrides[get_supabase_client] = lambda: mock_supabase
         app.dependency_overrides[get_service_client] = lambda: mock_supabase

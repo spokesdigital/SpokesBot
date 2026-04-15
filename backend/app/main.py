@@ -35,12 +35,14 @@ from app.routers import (  # noqa: E402
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup: log active configuration to catch deployment misconfiguration ─
-    effective_origins = list({
-        "https://spokesbot.vercel.app",
-        settings.FRONTEND_URL,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    })
+    effective_origins = list(
+        {
+            "https://spokesbot.vercel.app",
+            settings.FRONTEND_URL,
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        }
+    )
     logger.info(
         "startup_config",
         environment=settings.ENVIRONMENT,
@@ -57,10 +59,12 @@ async def lifespan(app: FastAPI):
     # advance on its own — the background task that was running it is gone.
     # Reset them to "failed" so the UI surfaces the error instead of spinning.
     service_client = get_service_client()
-    service_client.table("datasets").update({
-        "status": "failed",
-        "error_message": "Server restarted while this dataset was being processed. Please re-upload.",
-    }).eq("status", "processing").execute()
+    service_client.table("datasets").update(
+        {
+            "status": "failed",
+            "error_message": "Server restarted while this dataset was being processed. Please re-upload.",
+        }
+    ).eq("status", "processing").execute()
     logger.info("startup_recovery", message="Reset stuck processing datasets to failed")
     yield
 
@@ -75,7 +79,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, lambda req, exc: JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}))
+app.add_exception_handler(
+    RateLimitExceeded,
+    lambda req, exc: JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"}),
+)
 
 # ── Middleware stack (order matters: first added = last executed) ────────────
 # 1. Correlation ID + timing (outermost — captures full request lifecycle)
@@ -83,12 +90,14 @@ app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 
 # 2. Stricter CORS — explicit methods, no wildcard headers
-_CORS_ORIGINS = list({
-    "https://spokesbot.vercel.app",  # production — always allowed
-    settings.FRONTEND_URL,           # picks up any override set in Render dashboard
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-})
+_CORS_ORIGINS = list(
+    {
+        "https://spokesbot.vercel.app",  # production — always allowed
+        settings.FRONTEND_URL,  # picks up any override set in Render dashboard
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    }
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ORIGINS,
@@ -108,6 +117,7 @@ app.include_router(threads.router)
 app.include_router(analytics.router)
 app.include_router(events.router)
 app.include_router(support.router)
+
 
 # ── Global exception handler ─────────────────────────────────────────────────
 @app.exception_handler(Exception)
@@ -134,11 +144,17 @@ async def global_exception_handler(request: Request, exc: Exception):
         headers=headers,
     )
 
+
 # ── System endpoints ─────────────────────────────────────────────────────────
 @app.get("/health", tags=["system"], summary="Health check")
 def health():
     """Returns service status and version. Used by load balancers and uptime monitors."""
-    return {"status": "ok", "version": app.version, "environment": settings.ENVIRONMENT, "frontend_url": settings.FRONTEND_URL}
+    return {
+        "status": "ok",
+        "version": app.version,
+        "environment": settings.ENVIRONMENT,
+        "frontend_url": settings.FRONTEND_URL,
+    }
 
 
 @app.get(
@@ -154,4 +170,5 @@ def metrics():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

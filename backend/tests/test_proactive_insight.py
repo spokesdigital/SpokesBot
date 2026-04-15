@@ -7,6 +7,7 @@ Layers:
   1. Unit  — generate_insight() helper in isolation (mocked LLM, no network)
   2. HTTP  — /threads/{id}/proactive-insight endpoint via FastAPI TestClient
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -39,14 +40,18 @@ from app.main import app
 TOOL_PAYLOAD = json.dumps({"mean": {"revenue": 233.33}, "count": 3}, indent=2)
 
 
-def _make_fake_agent_result(draft: str = "Total revenue is $700, averaging $233 per record.") -> dict:
+def _make_fake_agent_result(
+    draft: str = "Total revenue is $700, averaging $233 per record.",
+) -> dict:
     return {
         "messages": [
             SystemMessage(content=INSIGHT_SYSTEM_PROMPT),
             HumanMessage(content=INSIGHT_USER_PROMPT),
             AIMessage(
                 content="",
-                tool_calls=[{"name": "run_analysis", "args": {}, "id": "tc-1", "type": "tool_call"}],
+                tool_calls=[
+                    {"name": "run_analysis", "args": {}, "id": "tc-1", "type": "tool_call"}
+                ],
             ),
             ToolMessage(content=TOOL_PAYLOAD, tool_call_id="tc-1"),
             AIMessage(content=draft),
@@ -234,6 +239,7 @@ class TestProactiveInsightEndpoint:
 
     def _mock_table(self, mock_supabase, thread_data: dict | None, dataset_data: dict | None):
         """Wire table().select().eq().maybe_single().execute() for thread and dataset."""
+
         def table_side_effect(table_name: str):
             chain = MagicMock()
             if table_name == "threads":
@@ -243,7 +249,13 @@ class TestProactiveInsightEndpoint:
             elif table_name == "messages":
                 # save_message insert path
                 chain.insert.return_value.execute.return_value.data = [
-                    {"id": "msg-uuid", "thread_id": "thread-uuid", "role": "assistant", "content": "insight", "created_at": "2024-01-01T00:00:00"}
+                    {
+                        "id": "msg-uuid",
+                        "thread_id": "thread-uuid",
+                        "role": "assistant",
+                        "content": "insight",
+                        "created_at": "2024-01-01T00:00:00",
+                    }
                 ]
             return chain
 
@@ -309,7 +321,10 @@ class TestProactiveInsightEndpoint:
             await asyncio.sleep(9999)
 
         with (
-            patch("app.routers.threads.dataset_service.load_dataframe", return_value=pd.DataFrame({"x": [1]})),
+            patch(
+                "app.routers.threads.dataset_service.load_dataframe",
+                return_value=pd.DataFrame({"x": [1]}),
+            ),
             patch("app.routers.threads.generate_insight", side_effect=asyncio.TimeoutError),
         ):
             with TestClient(app) as client:
@@ -326,7 +341,9 @@ class TestProactiveInsightEndpoint:
           • message persisted
           • response has thread_id, message_id, insight
         """
-        EXPECTED_INSIGHT = "Total revenue across all campaigns is $700, with the top channel at 43%."
+        EXPECTED_INSIGHT = (
+            "Total revenue across all campaigns is $700, with the top channel at 43%."
+        )
 
         THREAD_ID = "00000000-0000-0000-0000-000000000010"
         DATASET_ID = "00000000-0000-0000-0000-000000000020"
@@ -349,6 +366,7 @@ class TestProactiveInsightEndpoint:
 
         # save_message should return a valid message dict
         mock_supabase.table.side_effect = None
+
         def multi_table(table_name):
             chain = MagicMock()
             if table_name == "threads":
@@ -356,14 +374,17 @@ class TestProactiveInsightEndpoint:
             elif table_name == "datasets":
                 chain.select.return_value.eq.return_value.maybe_single.return_value.execute.return_value.data = dataset
             elif table_name == "messages":
-                chain.insert.return_value.execute.return_value.data = [{
-                    "id": MSG_ID,
-                    "thread_id": THREAD_ID,
-                    "role": "assistant",
-                    "content": EXPECTED_INSIGHT,
-                    "created_at": "2024-01-01T00:00:00",
-                }]
+                chain.insert.return_value.execute.return_value.data = [
+                    {
+                        "id": MSG_ID,
+                        "thread_id": THREAD_ID,
+                        "role": "assistant",
+                        "content": EXPECTED_INSIGHT,
+                        "created_at": "2024-01-01T00:00:00",
+                    }
+                ]
             return chain
+
         mock_supabase.table.side_effect = multi_table
 
         self._setup_admin_deps(mock_supabase)

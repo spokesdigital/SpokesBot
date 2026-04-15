@@ -49,11 +49,7 @@ def list_datasets(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only admins can list datasets across all organizations.",
             )
-        q = (
-            service_client.table("datasets")
-            .select(_DATASET_COLS)
-            .order("uploaded_at", desc=True)
-        )
+        q = service_client.table("datasets").select(_DATASET_COLS).order("uploaded_at", desc=True)
         if report_type:
             q = q.eq("report_type", report_type)
         resp = q.execute()

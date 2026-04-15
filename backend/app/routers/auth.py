@@ -27,7 +27,9 @@ def get_me(
         user_response = supabase.auth.get_user(credentials.credentials)
         user = user_response.user
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token."
+        ) from exc
 
     # Use service client — the `organizations` RLS policy allows members to SELECT their own org,
     # but service client avoids any edge-case failures during auth lookup.

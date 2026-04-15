@@ -39,9 +39,5 @@ def create_organization(
             detail="Only admins can create organizations.",
         )
 
-    response = (
-        service_client.table("organizations")
-        .insert({"name": body.name.strip()})
-        .execute()
-    )
+    response = service_client.table("organizations").insert({"name": body.name.strip()}).execute()
     return response.data[0]

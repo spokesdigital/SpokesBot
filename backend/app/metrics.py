@@ -5,6 +5,7 @@ Centralised here so every module that wants to record a metric imports from
 this file instead of creating duplicate collectors (which would raise a
 ValueError on the second registration).
 """
+
 from prometheus_client import Counter, Histogram
 
 # ── HTTP request metrics ──────────────────────────────────────────────────────

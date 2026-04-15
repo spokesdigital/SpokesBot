@@ -31,6 +31,7 @@ MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard limit
 
 # ── Background worker ───────────────────────────────────────────────────────
 
+
 def _process_csv(
     dataset_id: str,
     file_path: str,
@@ -82,15 +83,18 @@ def _process_csv(
         )
 
         # ── Persist success metadata ─────────────────────────────────────────
-        _set_status("completed", extra={
-            "row_count":            row_count,
-            "column_headers":       column_headers,
-            "storage_path":         storage_path,
-            "metric_mappings":      profile["metric_mappings"],
-            "detected_date_column": profile["detected_date_column"],
-            "schema_profile":       profile["schema_profile"],
-            "ingestion_warnings":   profile["ingestion_warnings"],
-        })
+        _set_status(
+            "completed",
+            extra={
+                "row_count": row_count,
+                "column_headers": column_headers,
+                "storage_path": storage_path,
+                "metric_mappings": profile["metric_mappings"],
+                "detected_date_column": profile["detected_date_column"],
+                "schema_profile": profile["schema_profile"],
+                "ingestion_warnings": profile["ingestion_warnings"],
+            },
+        )
 
     except Exception as exc:
         # ── Persist failure — UI will show 'failed' instead of hanging ──────
@@ -103,6 +107,7 @@ def _process_csv(
 
 # ── Upload endpoint ─────────────────────────────────────────────────────────
 
+
 @router.post("/", status_code=202)
 @limiter.limit("10/minute")
 async def upload_csv(
@@ -111,7 +116,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     org_id: UUID = Form(...),
     report_name: str | None = Form(None),
-    report_type: str = Form('overview'),
+    report_type: str = Form("overview"),
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
     _admin: None = Depends(require_admin),
@@ -133,7 +138,7 @@ async def upload_csv(
         )
 
     # ── Validate report_type ────────────────────────────────────────────────
-    valid_report_types = {'overview', 'google_ads', 'meta_ads'}
+    valid_report_types = {"overview", "google_ads", "meta_ads"}
     if report_type not in valid_report_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -164,11 +169,11 @@ async def upload_csv(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         if isinstance(e, HTTPException):
-            raise e
+            raise
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Upload processing failed: {str(e)}"
-        )
+            detail=f"Upload processing failed: {str(e)}",
+        ) from e
 
     if total_size == 0:
         os.remove(tmp_path)
@@ -197,19 +202,21 @@ async def upload_csv(
     # Uses service client: INSERT RLS requires organization_id = get_my_org_id(),
     # which would reject a client org id under the admin's JWT.
     dataset_id = str(uuid_lib.uuid4())
-    normalized_report_name = (report_name or '').strip() or Path(file.filename).stem
-    service_client.table("datasets").insert({
-        "id":                   dataset_id,
-        "organization_id":      org_id_str,
-        "report_name":          normalized_report_name,
-        "report_type":          report_type,
-        "file_name":            file.filename,
-        "file_size":            total_size,
-        "status":               "queued",
-        "metric_mappings":      {},
-        "schema_profile":       {},
-        "ingestion_warnings":   [],
-    }).execute()
+    normalized_report_name = (report_name or "").strip() or Path(file.filename).stem
+    service_client.table("datasets").insert(
+        {
+            "id": dataset_id,
+            "organization_id": org_id_str,
+            "report_name": normalized_report_name,
+            "report_type": report_type,
+            "file_name": file.filename,
+            "file_size": total_size,
+            "status": "queued",
+            "metric_mappings": {},
+            "schema_profile": {},
+            "ingestion_warnings": [],
+        }
+    ).execute()
 
     # ── Offload heavy work ───────────────────────────────────────────────────
     background_tasks.add_task(
@@ -220,7 +227,7 @@ async def upload_csv(
     )
 
     return {
-        "status":     "queued",
+        "status": "queued",
         "dataset_id": dataset_id,
-        "message":    f"'{file.filename}' queued for org '{org_id_str}'. Poll GET /datasets/{dataset_id} for status.",
+        "message": f"'{file.filename}' queued for org '{org_id_str}'. Poll GET /datasets/{dataset_id} for status.",
     }

@@ -98,15 +98,30 @@ class TestOverallInsightsEndpoint:
         client = TestClient(app)
 
         with (
-            patch("app.routers.analytics.dataset_service.load_dataframe", return_value=pd.DataFrame({"revenue": [1, 2, 3]})),
+            patch(
+                "app.routers.analytics.dataset_service.load_dataframe",
+                return_value=pd.DataFrame({"revenue": [1, 2, 3]}),
+            ),
             patch(
                 "app.routers.analytics.generate_structured_insights",
                 AsyncMock(
                     return_value=[
-                        {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 4.2x."},
-                        {"type": "trend", "text": "Clicks climbed 18% week over week while CPC stayed flat at $1.24."},
-                        {"type": "success", "text": "Conversion rate is holding steady at 3.2% across all campaigns."},
-                        {"type": "trend", "text": "Top channel accounts for 62% of total impressions this period."},
+                        {
+                            "type": "success",
+                            "text": "Revenue reached $124,500 with ROAS holding at 4.2x.",
+                        },
+                        {
+                            "type": "trend",
+                            "text": "Clicks climbed 18% week over week while CPC stayed flat at $1.24.",
+                        },
+                        {
+                            "type": "success",
+                            "text": "Conversion rate is holding steady at 3.2% across all campaigns.",
+                        },
+                        {
+                            "type": "trend",
+                            "text": "Top channel accounts for 62% of total impressions this period.",
+                        },
                     ]
                 ),
             ),

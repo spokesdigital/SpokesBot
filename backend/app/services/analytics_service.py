@@ -46,9 +46,9 @@ def _looks_like_date_column_name(col: str) -> bool:
     """
     name = col.lower()
     return bool(
-        re.search(r'\b(date|time|timestamp|day|month|year)\b', name)
-        or name.endswith(('_date', '_time', '_at'))
-        or name in {'created_at', 'updated_at', 'timestamp', 'date', 'time'}
+        re.search(r"\b(date|time|timestamp|day|month|year)\b", name)
+        or name.endswith(("_date", "_time", "_at"))
+        or name in {"created_at", "updated_at", "timestamp", "date", "time"}
     )
 
 
@@ -85,8 +85,7 @@ def _coerce_numeric_like_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[s
             continue
 
         normalized = (
-            cleaned
-            .str.replace(",", "", regex=False)
+            cleaned.str.replace(",", "", regex=False)
             .str.replace("$", "", regex=False)
             .str.replace("%", "", regex=False)
             .str.replace("€", "", regex=False)
@@ -230,12 +229,14 @@ def build_dataset_profile(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any
     profile = {
         "detected_date_column": date_columns[0] if date_columns else None,
         "metric_mappings": _sanitize(metric_mappings),
-        "schema_profile": _sanitize({
-            "numeric_columns": numeric_columns,
-            "date_columns": date_columns,
-            "coerced_numeric_columns": coerced_columns,
-            "dtypes": {col: str(dtype) for col, dtype in normalized_df.dtypes.items()},
-        }),
+        "schema_profile": _sanitize(
+            {
+                "numeric_columns": numeric_columns,
+                "date_columns": date_columns,
+                "coerced_numeric_columns": coerced_columns,
+                "dtypes": {col: str(dtype) for col, dtype in normalized_df.dtypes.items()},
+            }
+        ),
         "ingestion_warnings": warnings,
     }
     return normalized_df, profile
@@ -294,7 +295,10 @@ def _pick_metric_columns(df: pd.DataFrame, limit: int = 20) -> list[str]:
 
 def _uses_average_basis(col: str) -> bool:
     name = col.lower()
-    return any(token in name for token in ("ctr", "rate", "ratio", "roas", "cpc", "cpm", "cpa", "avg", "average"))
+    return any(
+        token in name
+        for token in ("ctr", "rate", "ratio", "roas", "cpc", "cpm", "cpa", "avg", "average")
+    )
 
 
 def build_auto_comparison(
@@ -320,8 +324,8 @@ def build_auto_comparison(
     for col in all_columns:
         basis = "mean" if _uses_average_basis(col) else "total"
         if basis == "mean":
-            current_value = ((current_summary.get(col) or {}).get("mean"))
-            previous_value = ((previous_summary.get(col) or {}).get("mean"))
+            current_value = (current_summary.get(col) or {}).get("mean")
+            previous_value = (previous_summary.get(col) or {}).get("mean")
         else:
             current_value = current_totals.get(col)
             previous_value = previous_totals.get(col)
@@ -367,28 +371,28 @@ def resolve_date_range(
 
     if preset == "today":
         start = datetime.combine(today, time.min, tzinfo=UTC)
-        end   = datetime.combine(today, time.max, tzinfo=UTC)
+        end = datetime.combine(today, time.max, tzinfo=UTC)
     elif preset == "yesterday":
         yesterday = today - timedelta(days=1)
         start = datetime.combine(yesterday, time.min, tzinfo=UTC)
-        end   = datetime.combine(yesterday, time.max, tzinfo=UTC)
+        end = datetime.combine(yesterday, time.max, tzinfo=UTC)
     elif preset == "last_7_days":
         start = datetime.combine(today - timedelta(days=6), time.min, tzinfo=UTC)
-        end   = now
+        end = now
     elif preset == "last_30_days":
         start = datetime.combine(today - timedelta(days=29), time.min, tzinfo=UTC)
-        end   = now
+        end = now
     elif preset == "this_month":
         start = datetime.combine(today.replace(day=1), time.min, tzinfo=UTC)
-        end   = now
+        end = now
     elif preset == "ytd":
         start = datetime.combine(today.replace(month=1, day=1), time.min, tzinfo=UTC)
-        end   = now
+        end = now
     elif preset == "custom":
         # Schema-level validation guarantees start_date and end_date are present
         # and that start_date <= end_date; no defensive checks needed here.
         start = datetime.combine(start_date, time.min, tzinfo=UTC)
-        end   = datetime.combine(end_date,   time.max, tzinfo=UTC)
+        end = datetime.combine(end_date, time.max, tzinfo=UTC)
     else:
         raise ValueError(f"Unknown date_preset: '{preset}'.")
 
@@ -457,7 +461,9 @@ def compute(
     if operation == "auto":
         return _auto_analyze(df)
 
-    raise ValueError(f"Unknown operation: '{operation}'. Use describe, value_counts, groupby, correlation, or auto.")
+    raise ValueError(
+        f"Unknown operation: '{operation}'. Use describe, value_counts, groupby, correlation, or auto."
+    )
 
 
 def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
@@ -470,10 +476,9 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
     numeric_summary = _sanitize(df.describe(include="number").to_dict())
     # Rate/ratio metrics (CTR, ROAS, CPC, etc.) must be averaged, not summed.
     # Summing them produces nonsense KPI values (e.g. CTR of 12.3 instead of 0.08).
-    numeric_totals = _sanitize({
-        col: df[col].mean() if _uses_average_basis(col) else df[col].sum()
-        for col in numeric_cols
-    })
+    numeric_totals = _sanitize(
+        {col: df[col].mean() if _uses_average_basis(col) else df[col].sum() for col in numeric_cols}
+    )
 
     # Detect date columns
     date_columns = _detect_date_columns(df)
@@ -501,16 +506,14 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
                 grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
                 agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
                 parsed_dates[col] = [
-                    {"date": str(k), "value": _sanitize(v)}
-                    for k, v in agg.items()
+                    {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
                 ]
             metric_series_for_col: dict[str, list[dict[str, Any]]] = {}
             for metric_col in selected_metric_columns:
                 grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
                 agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
                 metric_series_for_col[metric_col] = [
-                    {"date": str(k), "value": _sanitize(v)}
-                    for k, v in agg.items()
+                    {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
                 ]
             if metric_series_for_col:
                 metric_time_series[col] = metric_series_for_col

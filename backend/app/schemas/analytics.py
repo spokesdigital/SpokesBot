@@ -7,28 +7,28 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class DatePreset(StrEnum):
-    today        = "today"
-    yesterday    = "yesterday"
-    last_7_days  = "last_7_days"
+    today = "today"
+    yesterday = "yesterday"
+    last_7_days = "last_7_days"
     last_30_days = "last_30_days"
-    this_month   = "this_month"
-    ytd          = "ytd"
-    custom       = "custom"
+    this_month = "this_month"
+    ytd = "ytd"
+    custom = "custom"
 
 
 class AnalyticsRequest(BaseModel):
     dataset_id: UUID
-    operation:  str         # describe | value_counts | groupby | correlation | auto
+    operation: str  # describe | value_counts | groupby | correlation | auto
 
     # Existing operation params (unchanged)
-    column:     str | None = None
-    group_by:   str | None = None
+    column: str | None = None
+    group_by: str | None = None
 
     # Date filter — all optional; omitting means full dataset
     date_preset: DatePreset | None = None
-    date_column: str | None = None   # column to filter on; required when date_preset is set
-    start_date:  date | None = None  # required only when date_preset = 'custom'
-    end_date:    date | None = None  # required only when date_preset = 'custom'
+    date_column: str | None = None  # column to filter on; required when date_preset is set
+    start_date: date | None = None  # required only when date_preset = 'custom'
+    end_date: date | None = None  # required only when date_preset = 'custom'
 
     @model_validator(mode="after")
     def validate_date_filter(self) -> "AnalyticsRequest":
@@ -69,8 +69,8 @@ class InsightsRequest(BaseModel):
 
 class AnalyticsResponse(BaseModel):
     dataset_id: UUID
-    operation:  str
-    result:     dict[str, Any]
+    operation: str
+    result: dict[str, Any]
 
 
 class InsightItem(BaseModel):

@@ -8,6 +8,7 @@ Tests are structured in three layers:
   2. Graph — full StateGraph traversal with mocked LLM and react agent
   3. Timeout — verifies the graph raises asyncio.TimeoutError on a hang
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +48,9 @@ def _make_fake_agent_result(draft: str = "The average revenue is 233.33.") -> di
             HumanMessage(content="What is the average revenue?"),
             AIMessage(
                 content="",
-                tool_calls=[{"name": "run_analysis", "args": {}, "id": "tc-1", "type": "tool_call"}],
+                tool_calls=[
+                    {"name": "run_analysis", "args": {}, "id": "tc-1", "type": "tool_call"}
+                ],
             ),
             ToolMessage(content=TOOL_PAYLOAD, tool_call_id="tc-1"),
             AIMessage(content=draft),
@@ -233,9 +236,7 @@ class TestGraphTraversal:
         Returns (graph, mock_agent, critic_llm).
         """
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(
-            return_value=_make_fake_agent_result()
-        )
+        mock_agent.ainvoke = AsyncMock(return_value=_make_fake_agent_result())
 
         critic_call_idx = 0
 
@@ -288,9 +289,7 @@ class TestGraphTraversal:
         ):
             graph = make_graph(df)
 
-        initial = _base_state(
-            messages=[HumanMessage(content="What is the average revenue?")]
-        )
+        initial = _base_state(messages=[HumanMessage(content="What is the average revenue?")])
         result = await graph.ainvoke(initial)
 
         # ── Assertions ─────────────────────────────────────────────────────
@@ -341,9 +340,7 @@ class TestGraphTraversal:
         ):
             graph = make_graph(df)
 
-        initial = _base_state(
-            messages=[HumanMessage(content="What is the average revenue?")]
-        )
+        initial = _base_state(messages=[HumanMessage(content="What is the average revenue?")])
         result = await graph.ainvoke(initial)
 
         assert call_count == 2, f"Expected 2 critic calls, got {call_count}"
@@ -381,9 +378,7 @@ class TestGraphTraversal:
         ):
             graph = make_graph(df)
 
-        initial = _base_state(
-            messages=[HumanMessage(content="What is the average revenue?")]
-        )
+        initial = _base_state(messages=[HumanMessage(content="What is the average revenue?")])
 
         # Must complete within 10s (not hang)
         result = await asyncio.wait_for(graph.ainvoke(initial), timeout=10.0)
@@ -498,9 +493,7 @@ class TestStreamAgent:
         expected_answer = "The average revenue is 233.33."
 
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(
-            return_value=_make_fake_agent_result(draft=expected_answer)
-        )
+        mock_agent.ainvoke = AsyncMock(return_value=_make_fake_agent_result(draft=expected_answer))
 
         critic_llm = MagicMock()
         critic_llm.invoke.return_value = AIMessage(content="YES")
@@ -515,9 +508,7 @@ class TestStreamAgent:
                 chunks.append(chunk)
 
         assembled = "".join(chunks)
-        assert assembled == expected_answer, (
-            f"Expected '{expected_answer}', got '{assembled}'"
-        )
+        assert assembled == expected_answer, f"Expected '{expected_answer}', got '{assembled}'"
         assert len(chunks) > 1, "Expected multiple chunks (streaming behaviour)"
 
     @pytest.mark.asyncio

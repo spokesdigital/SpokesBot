@@ -9,12 +9,14 @@ The Critic validates every number in the draft answer against the raw tool
 output before anything reaches the user.  If the numbers don't match, the
 agent is asked to recalculate.  A hard MAX_RETRIES cap prevents infinite loops.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import re
 import time
+from contextlib import suppress
 from typing import TypedDict
 
 import pandas as pd
@@ -42,21 +44,30 @@ from app.services.analytics_service import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-MAX_RETRIES: int = 1            # max critic-triggered corrections per request
+MAX_RETRIES: int = 1  # max critic-triggered corrections per request
 _GRAPH_TIMEOUT: float = 120.0  # seconds before we give up on the whole graph
-_STREAM_CHUNK: int = 12        # characters per yield when streaming final answer
+_STREAM_CHUNK: int = 12  # characters per yield when streaming final answer
+
+
+async def _cancel_graph_task(task: asyncio.Task[object]) -> None:
+    """Allow graph cleanup callbacks to finish before surfacing our timeout."""
+    task.cancel()
+    with suppress(BaseException):
+        await task
+
 
 # Critic tool-output limits — keeps the critic prompt tight and fast
-_CRITIC_TOOL_LIMIT_PER_OUTPUT: int = 4_000   # chars per individual tool call
-_CRITIC_TOOL_LIMIT_TOTAL: int = 8_000         # chars for the combined payload
+_CRITIC_TOOL_LIMIT_PER_OUTPUT: int = 4_000  # chars per individual tool call
+_CRITIC_TOOL_LIMIT_TOTAL: int = 8_000  # chars for the combined payload
 
 # Regex to detect whether a draft contains any numeric claims worth validating
-_HAS_NUMBER_RE = re.compile(r'\d')
+_HAS_NUMBER_RE = re.compile(r"\d")
 
 # History window — keeps token count manageable for long conversations
 _MAX_HISTORY_MESSAGES: int = 16  # 8 turns × 2 (user + assistant)
 
 # ── Answer post-processor ────────────────────────────────────────────────────
+
 
 def _finalize_answer(text: str, max_sentences: int = 3) -> str:
     """
@@ -115,11 +126,19 @@ def _score_metric_column(metric_column: str, question: str) -> int:
     for metric_name, patterns in METRIC_PATTERNS.items():
         if any(pattern in lowered_question for pattern in patterns):
             score += 4 if any(pattern in lowered_column for pattern in patterns) else 0
-            if metric_name == "revenue" and any(term in lowered_question for term in ("sales", "sell-through")):
-                score += 2 if any(pattern in lowered_column for pattern in METRIC_PATTERNS["revenue"]) else 0
+            if metric_name == "revenue" and any(
+                term in lowered_question for term in ("sales", "sell-through")
+            ):
+                score += (
+                    2
+                    if any(pattern in lowered_column for pattern in METRIC_PATTERNS["revenue"])
+                    else 0
+                )
 
     if score == 0 and any(term in lowered_question for term in ("sales", "revenue", "gmv")):
-        score += 1 if any(pattern in lowered_column for pattern in METRIC_PATTERNS["revenue"]) else 0
+        score += (
+            1 if any(pattern in lowered_column for pattern in METRIC_PATTERNS["revenue"]) else 0
+        )
 
     return score
 
@@ -186,10 +205,14 @@ def _try_build_comparison_response(df: pd.DataFrame, question: str) -> str | Non
             if len(matched_rows) != len(targets):
                 continue
 
-            dimension_score = 1 if any(
-                hint in str(dimension).lower()
-                for hint in ("channel", "fulfillment", "delivery", "type", "store")
-            ) else 0
+            dimension_score = (
+                1
+                if any(
+                    hint in str(dimension).lower()
+                    for hint in ("channel", "fulfillment", "delivery", "type", "store")
+                )
+                else 0
+            )
             candidate = (metric_score, dimension_score, metric_column, matched_rows)
 
             if best_match is None or candidate[:2] > best_match[:2]:
@@ -220,10 +243,7 @@ def _try_build_comparison_response(df: pd.DataFrame, question: str) -> str | Non
     table_lines = [
         f"| Channel | {metric_label} |",
         "| --- | ---: |",
-        *[
-            f"| {label} | {_format_metric_value(metric_column, value)} |"
-            for label, value in rows
-        ],
+        *[f"| {label} | {_format_metric_value(metric_column, value)} |" for label, value in rows],
     ]
     chart_payload = {
         "type": "bar",
@@ -236,10 +256,7 @@ def _try_build_comparison_response(df: pd.DataFrame, question: str) -> str | Non
                 "color": "#f5b800",
             }
         ],
-        "data": [
-            {"label": label, "value": round(value, 2)}
-            for label, value in rows
-        ],
+        "data": [{"label": label, "value": round(value, 2)} for label, value in rows],
     }
 
     return (
@@ -298,10 +315,10 @@ def _try_build_period_metric_response(df: pd.DataFrame, question: str) -> str | 
     date_column = date_columns[0]
     preset, label = period
     try:
-      start, end = resolve_date_range(preset)
-      filtered_df = apply_date_filter(df, date_column, start, end)
+        start, end = resolve_date_range(preset)
+        filtered_df = apply_date_filter(df, date_column, start, end)
     except Exception:
-      return None
+        return None
 
     if filtered_df.empty:
         return f"No {metric_name.replace('_', ' ')} data is available for {label}."
@@ -433,11 +450,11 @@ Respond with EXACTLY one of:
 
 
 class AgentState(TypedDict):
-    messages: list[BaseMessage]   # full conversation (managed explicitly)
-    tool_outputs: list[str]       # raw JSON strings from ToolMessages this round
-    draft_answer: str             # agent's latest text response
-    validation_feedback: str      # critic verdict: "YES" or "NO: …"
-    retry_count: int              # critic-triggered retries so far
+    messages: list[BaseMessage]  # full conversation (managed explicitly)
+    tool_outputs: list[str]  # raw JSON strings from ToolMessages this round
+    draft_answer: str  # agent's latest text response
+    validation_feedback: str  # critic verdict: "YES" or "NO: …"
+    retry_count: int  # critic-triggered retries so far
 
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
@@ -505,7 +522,9 @@ def build_history(messages: list[dict], page_context: str | None = None) -> list
     result: list[BaseMessage] = [SystemMessage(content=system_content)]
 
     # Cap to most recent messages — older turns add cost without improving relevance
-    recent = messages[-_MAX_HISTORY_MESSAGES:] if len(messages) > _MAX_HISTORY_MESSAGES else messages
+    recent = (
+        messages[-_MAX_HISTORY_MESSAGES:] if len(messages) > _MAX_HISTORY_MESSAGES else messages
+    )
 
     for msg in recent:
         if msg["role"] == "user":
@@ -548,16 +567,12 @@ async def run_agent_node(
     # Last AIMessage with text content (no pending tool_calls) is the draft
     draft = ""
     for msg in reversed(all_messages):
-        if (
-            isinstance(msg, AIMessage)
-            and msg.content
-            and not getattr(msg, "tool_calls", None)
-        ):
+        if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
             draft = msg.content
             break
 
     return {
-        "messages": all_messages,      # replace with full history from sub-agent
+        "messages": all_messages,  # replace with full history from sub-agent
         "tool_outputs": tool_outputs,
         "draft_answer": draft,
     }
@@ -709,7 +724,7 @@ async def stream_agent(
     The final answer is yielded in small chunks to preserve the typewriter
     streaming UX at the HTTP layer.
 
-    Raises asyncio.TimeoutError if the graph exceeds _GRAPH_TIMEOUT seconds.
+    Raises TimeoutError if the graph exceeds _GRAPH_TIMEOUT seconds.
     The caller (threads.py event_stream) handles this and surfaces an error SSE.
     """
     fast_answer = _try_build_comparison_response(df, new_message)
@@ -743,12 +758,12 @@ async def stream_agent(
 
     while not task.done():
         if time.time() - start_time > _GRAPH_TIMEOUT:
-            task.cancel()
-            raise asyncio.TimeoutError("Graph execution exceeded timeout")
+            await _cancel_graph_task(task)
+            raise TimeoutError("Graph execution exceeded timeout")
         try:
             # Yield empty tokens as keep-alives every 5 s to bypass proxy timeouts
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Still running — send a heartbeat and loop again
             yield ""
         except Exception:
@@ -835,13 +850,13 @@ async def generate_insight(
 
     Args:
         df:      The dataset to analyse.
-        timeout: Hard timeout in seconds.  Raises asyncio.TimeoutError on breach.
+        timeout: Hard timeout in seconds.  Raises TimeoutError on breach.
 
     Returns:
         A concise, validated insight string (1-2 sentences, ≤ ~45 words).
 
     Raises:
-        asyncio.TimeoutError: if the graph takes longer than ``timeout`` seconds.
+        TimeoutError: if the graph takes longer than ``timeout`` seconds.
     """
     graph = make_graph(df)
 
@@ -862,11 +877,11 @@ async def generate_insight(
     task = asyncio.create_task(graph.ainvoke(initial_state))
     while not task.done():
         if time.time() - start > timeout:
-            task.cancel()
-            raise asyncio.TimeoutError("generate_insight exceeded timeout")
+            await _cancel_graph_task(task)
+            raise TimeoutError("generate_insight exceeded timeout")
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass  # non-streaming — no yield needed, we just keep the event loop alive
         except Exception:
             break
@@ -915,11 +930,11 @@ async def generate_structured_insights(
     task = asyncio.create_task(graph.ainvoke(initial_state))
     while not task.done():
         if time.time() - start > timeout:
-            task.cancel()
-            raise asyncio.TimeoutError("generate_structured_insights exceeded timeout")
+            await _cancel_graph_task(task)
+            raise TimeoutError("generate_structured_insights exceeded timeout")
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         except Exception:
             break

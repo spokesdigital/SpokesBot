@@ -55,24 +55,13 @@ def clear_dataframe_cache() -> None:
 
 def list_datasets(supabase: Client) -> list[dict]:
     """List all datasets for the authenticated user's org. RLS enforced."""
-    response = (
-        supabase.table("datasets")
-        .select("*")
-        .order("uploaded_at", desc=True)
-        .execute()
-    )
+    response = supabase.table("datasets").select("*").order("uploaded_at", desc=True).execute()
     return response.data
 
 
 def get_dataset(dataset_id: str, supabase: Client) -> dict:
     """Fetch a single dataset. RLS enforced — 404 if not found or wrong org."""
-    response = (
-        supabase.table("datasets")
-        .select("*")
-        .eq("id", dataset_id)
-        .maybe_single()
-        .execute()
-    )
+    response = supabase.table("datasets").select("*").eq("id", dataset_id).maybe_single().execute()
     if not response.data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

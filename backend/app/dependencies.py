@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -14,6 +12,7 @@ ROLE_USER = "user"
 
 
 # ── Supabase clients ─────────────────────────────────────────────────────────
+
 
 def get_supabase_client(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -41,6 +40,7 @@ def get_service_client() -> Client:
 
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
+
 
 def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -118,7 +118,8 @@ def get_current_role(supabase: Client = Depends(get_supabase_client)) -> str:
 
 # ── Optional auth helpers (for /auth/me — do not raise on missing org/role) ──
 
-def get_optional_org_id(supabase: Client = Depends(get_supabase_client)) -> Optional[str]:
+
+def get_optional_org_id(supabase: Client = Depends(get_supabase_client)) -> str | None:
     """
     Like get_current_org_id but returns None instead of raising 403.
     Safe to use on bootstrap endpoints where the user may not yet be assigned
@@ -131,7 +132,7 @@ def get_optional_org_id(supabase: Client = Depends(get_supabase_client)) -> Opti
         return None
 
 
-def get_optional_role(supabase: Client = Depends(get_supabase_client)) -> Optional[str]:
+def get_optional_role(supabase: Client = Depends(get_supabase_client)) -> str | None:
     """
     Like get_current_role but returns None instead of raising 403.
     """
@@ -143,6 +144,7 @@ def get_optional_role(supabase: Client = Depends(get_supabase_client)) -> Option
 
 
 # ── Role enforcement guards ──────────────────────────────────────────────────
+
 
 def require_admin(role: str = Depends(get_current_role)) -> None:
     """

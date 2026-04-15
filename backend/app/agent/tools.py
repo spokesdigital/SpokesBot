@@ -59,6 +59,7 @@ def make_tools(df: pd.DataFrame):
             group_by: Column to group by (required for groupby).
         """
         from app.services.analytics_service import compute
+
         try:
             result = compute(
                 df,

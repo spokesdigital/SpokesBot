@@ -6,9 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
-logger = logging.getLogger(__name__)
-
-
 from app.agent.graph import generate_insight, stream_agent
 from app.dependencies import (
     ROLE_ADMIN,
@@ -30,6 +27,8 @@ from app.schemas import (
 )
 from app.services import dataset_service, thread_service
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/threads", tags=["threads"])
 
@@ -124,11 +123,7 @@ def get_thread(
     """
     if role == ROLE_ADMIN:
         result = (
-            service_client.table("threads")
-            .select("*")
-            .eq("id", thread_id)
-            .maybe_single()
-            .execute()
+            service_client.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
         )
         if not result.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
@@ -151,11 +146,7 @@ def get_messages(
     """
     if role == ROLE_ADMIN:
         thread = (
-            service_client.table("threads")
-            .select("*")
-            .eq("id", thread_id)
-            .maybe_single()
-            .execute()
+            service_client.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
         )
         if not thread.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
@@ -195,11 +186,7 @@ async def chat(
     # ── 1. Validate thread + dataset ─────────────────────────────────────────
     if role == ROLE_ADMIN:
         thread = (
-            service_client.table("threads")
-            .select("*")
-            .eq("id", thread_id)
-            .maybe_single()
-            .execute()
+            service_client.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
         ).data
         if not thread:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
@@ -244,13 +231,17 @@ async def chat(
     # ── 4. Fetch message history (excluding the message we just saved) ────────
     all_messages = thread_service.get_messages(thread_id, history_client)
     # Exclude the last user message — stream_agent() receives it separately
-    history = [m for m in all_messages if not (m["role"] == "user" and m["content"] == body.message)]
+    history = [
+        m for m in all_messages if not (m["role"] == "user" and m["content"] == body.message)
+    ]
 
     # ── 5. Stream generator ───────────────────────────────────────────────────
     async def event_stream():
         accumulated = ""
         try:
-            async for token in stream_agent(df, history, body.message, page_context=body.page_context):
+            async for token in stream_agent(
+                df, history, body.message, page_context=body.page_context
+            ):
                 if not token:
                     # Empty token = keep-alive heartbeat from the polling loop.
                     # Send a structured status event so the client can show a
@@ -282,7 +273,12 @@ async def chat(
             )
             # Save a failure placeholder so the thread isn't left in a broken state
             if not accumulated:
-                thread_service.save_message(thread_id, "assistant", "I encountered an error while processing your request. Please try again.", service_client)
+                thread_service.save_message(
+                    thread_id,
+                    "assistant",
+                    "I encountered an error while processing your request. Please try again.",
+                    service_client,
+                )
             yield f"data: {json.dumps({'error': 'The AI agent encountered an error. Please try again.'})}\n\n"
 
     return StreamingResponse(
@@ -340,11 +336,7 @@ async def proactive_insight(
     # ── 1. Validate thread & dataset access ──────────────────────────────────
     if role == ROLE_ADMIN:
         thread = (
-            service_client.table("threads")
-            .select("*")
-            .eq("id", thread_id)
-            .maybe_single()
-            .execute()
+            service_client.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
         ).data
         if not thread:
             raise HTTPException(

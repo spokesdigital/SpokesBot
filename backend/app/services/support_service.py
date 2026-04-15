@@ -29,11 +29,7 @@ def create_message(
 
 def list_messages(service_client: Client, status_filter: str | None = None) -> list[dict]:
     """List all support messages (admin only). Newest first."""
-    query = (
-        service_client.table("support_messages")
-        .select("*")
-        .order("created_at", desc=True)
-    )
+    query = service_client.table("support_messages").select("*").order("created_at", desc=True)
     if status_filter:
         query = query.eq("status", status_filter)
     return query.execute().data

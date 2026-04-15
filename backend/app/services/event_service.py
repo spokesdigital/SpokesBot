@@ -12,12 +12,14 @@ def log_event(
 ) -> None:
     """Write an event log entry. Uses service client — fire-and-forget safe."""
     try:
-        service_client.table("event_logs").insert({
-            "event_type": event_type,
-            "event_metadata": metadata,
-            "user_id": user_id,
-            "organization_id": org_id,
-        }).execute()
+        service_client.table("event_logs").insert(
+            {
+                "event_type": event_type,
+                "event_metadata": metadata,
+                "user_id": user_id,
+                "organization_id": org_id,
+            }
+        ).execute()
     except Exception as e:
         # Event logging must never crash the calling endpoint
         print(f"[EVENT LOG ERROR] Failed to log '{event_type}': {e}")
