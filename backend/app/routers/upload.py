@@ -6,6 +6,8 @@ from pathlib import Path
 from uuid import UUID
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -27,6 +29,11 @@ router = APIRouter(prefix="/upload", tags=["admin_upload"])
 
 SUPABASE_BUCKET = "datasets"
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard limit
+
+# Rows read from the CSV for schema/metric inference (fast, low-RAM)
+PROFILE_SAMPLE_ROWS = 10_000
+# Rows per chunk when streaming the full CSV → Parquet
+STREAM_CHUNK_ROWS   = 50_000
 
 
 # ── Background worker ───────────────────────────────────────────────────────
@@ -59,22 +66,56 @@ def _process_csv(
         # ── Mark as processing ──────────────────────────────────────────────
         _set_status("processing")
 
-        # ── Parse CSV ───────────────────────────────────────────────────────
-        # Using the file path directly is more memory-efficient than io.BytesIO
-        df = pd.read_csv(file_path)
-        if df.empty:
+        # ── Phase 1: Sample read for schema / metric inference ───────────────
+        # Only load PROFILE_SAMPLE_ROWS rows to determine column types, date
+        # columns, metric mappings, etc.  This keeps peak RAM proportional to
+        # the sample size (≤ 10k rows) regardless of how large the file is.
+        sample_df = pd.read_csv(file_path, nrows=PROFILE_SAMPLE_ROWS)
+        if sample_df.empty:
             raise ValueError("CSV file contained no rows.")
 
-        normalized_df, profile = analytics_service.build_dataset_profile(df)
-        row_count = len(normalized_df)
-        column_headers = list(normalized_df.columns)
+        _, profile = analytics_service.build_dataset_profile(sample_df)
+        column_headers = list(sample_df.columns)
+        # Which columns were coerced from string → numeric during profiling.
+        # We replicate those same coercions on every streaming chunk below.
+        coerced_columns: list[str] = profile["schema_profile"].get(
+            "coerced_numeric_columns", []
+        )
 
-        # ── Convert to Parquet in-memory (no disk, survives redeploys) ──────
+        # ── Phase 2: Stream full CSV → Parquet without loading it all into RAM ─
+        # Each STREAM_CHUNK_ROWS chunk is normalised and appended to the Parquet
+        # writer.  Peak RAM ≈ one chunk + the growing Parquet buffer — roughly
+        # half of the old approach which kept both the full DataFrame and the
+        # full Parquet bytes alive simultaneously.
         buf = io.BytesIO()
-        normalized_df.to_parquet(buf, index=False)
+        pq_writer: pq.ParquetWriter | None = None
+        arrow_schema: pa.Schema | None = None
+        row_count = 0
+
+        for chunk_df in pd.read_csv(file_path, chunksize=STREAM_CHUNK_ROWS):
+            chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns)
+            table = pa.Table.from_pandas(chunk_df, preserve_index=False)
+
+            if pq_writer is None:
+                # First chunk establishes the canonical Arrow schema.
+                arrow_schema = table.schema
+                pq_writer = pq.ParquetWriter(buf, arrow_schema)
+            elif table.schema != arrow_schema:
+                # Later chunks may differ slightly (e.g. int64 vs float64 when
+                # a nullable int column happens to have no nulls in chunk 1 but
+                # gains one in chunk 2).  safe=False allows lossless promotions.
+                table = table.cast(arrow_schema, safe=False)
+
+            pq_writer.write_table(table)
+            row_count += len(chunk_df)
+
+        if pq_writer is None or row_count == 0:
+            raise ValueError("CSV file contained no rows.")
+        pq_writer.close()
+
         parquet_bytes = buf.getvalue()
 
-        # ── Upload to Supabase Storage ───────────────────────────────────────
+        # ── Phase 3: Upload Parquet to Supabase Storage ──────────────────────
         storage_path = f"{organization_id}/{dataset_id}.parquet"
         supabase.storage.from_(SUPABASE_BUCKET).upload(
             path=storage_path,
@@ -82,7 +123,7 @@ def _process_csv(
             file_options={"content-type": "application/octet-stream", "upsert": "true"},
         )
 
-        # ── Persist success metadata ─────────────────────────────────────────
+        # ── Phase 4: Persist success metadata ────────────────────────────────
         _set_status(
             "completed",
             extra={

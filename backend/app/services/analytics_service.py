@@ -114,6 +114,36 @@ def _coerce_numeric_like_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[s
     return converted, coerced_columns
 
 
+def normalize_chunk(chunk: pd.DataFrame, coerced_columns: list[str]) -> pd.DataFrame:
+    """
+    Apply the numeric coercions determined during profile inference to a single
+    DataFrame chunk. Mirrors the transformations in _coerce_numeric_like_columns
+    so every streaming chunk has the same dtypes as the profiled sample.
+
+    Used by _process_csv to convert CSVs to Parquet in a streaming fashion
+    without loading the entire file into RAM at once.
+    """
+    if not coerced_columns:
+        return chunk
+    result = chunk.copy()
+    for col in coerced_columns:
+        if col not in result.columns:
+            continue
+        cleaned = (
+            result[col].astype(str)
+            .str.strip()
+            .replace({"": None, "nan": None, "None": None, "null": None})
+            .str.replace(",", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("%", "", regex=False)
+            .str.replace("€", "", regex=False)
+            .str.replace("£", "", regex=False)
+            .str.replace(r"^\((.*)\)$", r"-\1", regex=True)
+        )
+        result[col] = pd.to_numeric(cleaned, errors="coerce")
+    return result
+
+
 def _detect_date_columns(df: pd.DataFrame) -> list[str]:
     date_columns: list[str] = []
     row_count = max(len(df), 1)
