@@ -54,7 +54,10 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password)
-      router.push('/dashboard')
+      // We do NOT call router.push('/dashboard') here.
+      // Modifying the auth context state (specifically session) triggers
+      // the useEffect above, which will reliably handle the redirect
+      // without causing a push/replace collision bug in the Next.js router.
     } catch (err: unknown) {
       console.error('[LoginPage] Sign-in submission failed:', err)
       const msg = err instanceof Error ? err.message : 'Login failed.'
