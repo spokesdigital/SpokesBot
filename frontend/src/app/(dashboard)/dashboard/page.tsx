@@ -870,68 +870,26 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
 
   return (
     <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
-        <div>
-          <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
-            {activeOrganizationName}
-          </p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">Overview</h1>
-            <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              Live
-            </span>
-          </div>
-          {lastUpdated && (
-            <p className="mt-1 text-sm text-[#b0b7c5]">
-              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {loadingDatasets ? (
-            <div className="shimmer-warm h-[42px] w-[200px] rounded-[1rem] border border-[#e5dfd6]" />
-          ) : (
-            <select
-              id="report-selector"
-              value={activeDatasetId ?? ''}
-              onChange={(e) => setActiveDataset(e.target.value || null)}
-              disabled={completedDatasets.length === 0}
-              className="h-[42px] w-[220px] appearance-none rounded-[1rem] border border-[#e5dfd6] bg-white px-4 pr-10 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#f0a500]/50 focus:border-[#f0a500]/50"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c8493'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 0.8rem center',
-                backgroundSize: '1.2rem',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {completedDatasets.length === 0 ? (
-                <option value="">No reports available</option>
-              ) : (
-                completedDatasets.map((dataset) => (
-                  <option key={dataset.id} value={dataset.id}>
-                    {dataset.report_name || dataset.file_name}
-                  </option>
-                ))
-              )}
-            </select>
-          )}
-
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e7e1d6] bg-white px-8 py-6">
+        <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">
+          {activeOrganizationName}
+        </h1>
+        <div className="flex items-center gap-3">
           <DateFilter />
-          <ExportButton
-            contentId="dashboard-pdf-content"
-            fileName={`${activeOrganizationName.replace(/\s+/g, '-')}-overview`}
-            reportTitle={`${activeOrganizationName} · Overview`}
-          />
         </div>
       </header>
 
       <div className="space-y-6 px-4 py-5 sm:px-6 sm:py-6 md:space-y-8 md:px-8 md:py-8">
+        <div>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-4xl font-semibold tracking-tight text-[#252b36]">Overview</h2>
+              <p className="mt-2 text-base text-[#727b8d]">
+                Combined performance across all active channels
+              </p>
+            </div>
+          </div>
+        </div>
 
         {error && (
           <div className="flex items-start gap-3 rounded-[1.2rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
