@@ -298,6 +298,8 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
               <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={true} />
               <XAxis
                 dataKey="date"
+                interval={visibleData.length > 30 ? Math.ceil(visibleData.length / 7) : visibleData.length > 14 ? Math.ceil(visibleData.length / 5) : 0}
+                minTickGap={35}
                 tickFormatter={renderXAxisLabel}
                 tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
@@ -891,6 +893,35 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {loadingDatasets ? (
+            <div className="shimmer-warm h-[42px] w-[200px] rounded-[1rem] border border-[#e5dfd6]" />
+          ) : (
+            <select
+              id="report-selector"
+              value={activeDatasetId ?? ''}
+              onChange={(e) => setActiveDataset(e.target.value || null)}
+              disabled={completedDatasets.length === 0}
+              className="h-[42px] w-[220px] appearance-none rounded-[1rem] border border-[#e5dfd6] bg-white px-4 pr-10 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#f0a500]/50 focus:border-[#f0a500]/50"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c8493'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.8rem center',
+                backgroundSize: '1.2rem',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {completedDatasets.length === 0 ? (
+                <option value="">No reports available</option>
+              ) : (
+                completedDatasets.map((dataset) => (
+                  <option key={dataset.id} value={dataset.id}>
+                    {dataset.report_name || dataset.file_name}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
+
           <DateFilter />
           <ExportButton
             contentId="dashboard-pdf-content"
