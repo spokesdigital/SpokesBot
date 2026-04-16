@@ -839,25 +839,56 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     const trendData = Array.from(trendMap.values()).sort((left, right) => left.date.localeCompare(right.date))
 
     const revenueSplit = (() => {
-      // Only render the Revenue Distribution chart when we have an explicit
-      // in-store/delivery breakdown. The previous fallback ("any 2–5 category
-      // breakdown") could silently display unrelated dimensions (device type,
-      // match type, etc.) under a "Revenue Distribution" heading.
       if (!revenueColumn || !metricBreakdowns[revenueColumn]) return [] as SplitSlice[]
 
       const grouped = metricBreakdowns[revenueColumn]
-      const deliveryStoreBreakdown = Object.values(grouped).find((breakdown) => {
+      
+      let selectedBreakdown: Record<string, number> | undefined
+      
+      // 1. Try explicit delivery / store breakdown
+      selectedBreakdown = Object.values(grouped).find((breakdown) => {
         const labels = Object.keys(breakdown).map((label) => label.toLowerCase())
         return labels.some((label) => label.includes('delivery') || label.includes('ship')) &&
           labels.some((label) => label.includes('store') || label.includes('pickup') || label.includes('walk'))
       })
 
-      if (!deliveryStoreBreakdown) return [] as SplitSlice[]
+      // 2. Try campaign or adset dimension
+      if (!selectedBreakdown) {
+         const cmpKey = Object.keys(grouped).find(k => /campaign|ad.?set|ad.?group/i.test(k))
+         if (cmpKey) selectedBreakdown = grouped[cmpKey]
+      }
 
-      return Object.entries(deliveryStoreBreakdown)
+      // 3. Fallback to any sensible breakdown (2 to 7 keys)
+      if (!selectedBreakdown) {
+        selectedBreakdown = Object.values(grouped).find((breakdown) => Object.keys(breakdown).length >= 2 && Object.keys(breakdown).length <= 7)
+      }
+
+      // 4. Default to first available breakdown
+      if (!selectedBreakdown && Object.values(grouped).length > 0) {
+         selectedBreakdown = Object.values(grouped)[0]
+      }
+
+      if (!selectedBreakdown) return [] as SplitSlice[]
+
+      const sorted = Object.entries(selectedBreakdown)
         .sort((left, right) => right[1] - left[1])
-        .slice(0, 4)
-        .map(([name, value]) => ({ name: titleCase(name), value }))
+        .filter(([, val]) => val > 0)
+
+      if (sorted.length === 0) return [] as SplitSlice[]
+
+      const top5 = sorted.slice(0, 5)
+      const others = sorted.slice(5).reduce((acc, [, val]) => acc + val, 0)
+      
+      const slices = top5.map(([name, value]) => ({ 
+         name: titleCase(name.length > 28 ? name.substring(0, 28) + '...' : name), 
+         value 
+      }))
+
+      if (others > 0) {
+         slices.push({ name: 'Other', value: others })
+      }
+
+      return slices
     })()
 
     return {
