@@ -226,13 +226,16 @@ export function DualAxisComboChart({
           <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="date"
+            interval={0}
             tickFormatter={formatXLabel}
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             angle={-45}
             textAnchor="end"
-            height={50}
+            tickMargin={10}
+            height={60}
+            padding={{ left: 12, right: 12 }}
           />
           <YAxis
             yAxisId="l"
@@ -275,6 +278,7 @@ export function DualAxisComboChart({
                   fill={s.color}
                   radius={[4, 4, 0, 0]}
                   opacity={0.85}
+                  barSize={20}
                 />
               )
             }

@@ -331,6 +331,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     () => (datePreset === 'custom' && dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
     [datePreset, dateRange.end],
   )
+  const chartStartDateValue = useMemo(
+    () => (dateRange.start ? format(dateRange.start, 'yyyy-MM-dd') : null),
+    [dateRange.start],
+  )
+  const chartEndDateValue = useMemo(
+    () => (dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
+    [dateRange.end],
+  )
 
   const organizationScope = targetOrgId
     ?? (user?.role === 'admin' ? organizationId ?? 'admin-default' : user?.organization?.id ?? 'client-org')
@@ -624,7 +632,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         return {
           date,
           clicks: c,
-          ctr: (c > 0 && i != null && i > 0) ? ((c / i) * 100) : null,
+          ...((c > 0 && i != null && i > 0) ? { ctr: (c / i) * 100 } : {}),
         }
       })
     })()
@@ -655,13 +663,19 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         return {
           date,
           clicks: c,
-          cpc: (c > 0 && co != null) ? (co / c) : null,
+          ...((c > 0 && co != null) ? { cpc: co / c } : {}),
         }
       })
     })()
 
-    const transactionsCpaData = buildTransactionsCpaData(conversionsSeries, costSeries)
-    const conversionRateData = buildConversionRateData(conversionsSeries, clicksSeries)
+    const transactionsCpaData = buildTransactionsCpaData(conversionsSeries, costSeries, {
+      startDate: chartStartDateValue,
+      endDate: chartEndDateValue,
+    })
+    const conversionRateData = buildConversionRateData(conversionsSeries, clicksSeries, {
+      startDate: chartStartDateValue,
+      endDate: chartEndDateValue,
+    })
 
     const revenueDistribution: RevenueSplitDatum[] = (() => {
       const revenueColumn = metricColumns.revenue
@@ -809,7 +823,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       campaignRows,
       dailyRows,
     }
-  }, [analytics, activeDataset])
+  }, [analytics, activeDataset, chartEndDateValue, chartStartDateValue])
 
   const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
 
