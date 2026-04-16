@@ -103,7 +103,7 @@ const metricDefinitions: MetricCardDefinition[] = [
   },
 ]
 
-const splitColors = ['#f5b800', '#22c55e', '#f97316', '#64748b']
+const splitColors = ['#f5b800', '#22c55e', '#f97316', '#64748b', '#3b82f6', '#ec4899', '#8b5cf6']
 const DASHBOARD_CACHE_LIMIT = 24
 const analyticsResponseCache = new Map<string, AnalyticsResult>()
 const insightsResponseCache = new Map<string, InsightsResult>()
