@@ -659,18 +659,32 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
           setStreamingContent(accumulated)
         }
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `stream-${Date.now()}`,
-          thread_id: thread!.id,
-          role: 'assistant',
-          content: accumulated,
-          created_at: new Date().toISOString(),
-        },
-      ])
+      // Do NOT add a local copy — wait for the server-persisted version.
+      // Retry a few times in case the backend hasn't committed yet.
       if (accumulated) setSuggestions(getSuggestions(accumulated))
-      await syncMessages(thread.id)
+
+      // Short retry loop: backend can take up to ~1s to persist the assistant message.
+      let synced = false
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 600))
+        try {
+          const nextMessages = await api.threads.messages(thread.id, session.access_token)
+          const hasAssistantReply = nextMessages.some(
+            (m) => m.role === 'assistant' && m.content === accumulated,
+          )
+          if (hasAssistantReply || attempt === 3) {
+            setMessages((prev) => mergeServerMessages(nextMessages, prev.filter(
+              // drop the optimistic user message only — keep nothing with a local id
+              (m) => !m.id.startsWith('stream-'),
+            )))
+            synced = true
+            break
+          }
+        } catch {
+          // best-effort
+        }
+      }
+      if (!synced) await syncMessages(thread.id)
 
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
