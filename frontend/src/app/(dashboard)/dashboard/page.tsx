@@ -149,9 +149,10 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
+// CTR is stored as a ratio (0–1). Always multiply by 100.
+// No ≤1 heuristic — it would incorrectly double-multiply values like 0.5 (0.5% → 50%).
 function formatPercent(value: number) {
-  const percentValue = Math.abs(value) <= 1 ? value * 100 : value
-  return `${percentValue.toFixed(2)}%`
+  return `${(value * 100).toFixed(2)}%`
 }
 
 function formatRatio(value: number) {
@@ -307,7 +308,7 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
                 tickLine={false}
                 axisLine={false}
                 width={64}
-                tickFormatter={(value) => String(Math.round(value))}
+                tickFormatter={(value) => `$${Math.round(value).toLocaleString('en-US')}`}
               />
               <Tooltip
                 formatter={(value: number | string | Array<number | string>) => {
@@ -836,26 +837,25 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     const trendData = Array.from(trendMap.values()).sort((left, right) => left.date.localeCompare(right.date))
 
     const revenueSplit = (() => {
-      if (revenueColumn && metricBreakdowns[revenueColumn]) {
-        const grouped = metricBreakdowns[revenueColumn]
-        const deliveryStoreBreakdown = Object.values(grouped).find((breakdown) => {
-          const labels = Object.keys(breakdown).map((label) => label.toLowerCase())
-          return labels.some((label) => label.includes('delivery')) &&
-            labels.some((label) => label.includes('store') || label.includes('pickup'))
-        })
+      // Only render the Revenue Distribution chart when we have an explicit
+      // in-store/delivery breakdown. The previous fallback ("any 2–5 category
+      // breakdown") could silently display unrelated dimensions (device type,
+      // match type, etc.) under a "Revenue Distribution" heading.
+      if (!revenueColumn || !metricBreakdowns[revenueColumn]) return [] as SplitSlice[]
 
-        const selected = deliveryStoreBreakdown
-          ?? Object.values(grouped).find((breakdown) => Object.keys(breakdown).length >= 2 && Object.keys(breakdown).length <= 5)
+      const grouped = metricBreakdowns[revenueColumn]
+      const deliveryStoreBreakdown = Object.values(grouped).find((breakdown) => {
+        const labels = Object.keys(breakdown).map((label) => label.toLowerCase())
+        return labels.some((label) => label.includes('delivery') || label.includes('ship')) &&
+          labels.some((label) => label.includes('store') || label.includes('pickup') || label.includes('walk'))
+      })
 
-        if (!selected) return []
+      if (!deliveryStoreBreakdown) return [] as SplitSlice[]
 
-        return Object.entries(selected)
-          .sort((left, right) => right[1] - left[1])
-          .slice(0, 4)
-          .map(([name, value]) => ({ name: titleCase(name), value }))
-      }
-
-      return [] as SplitSlice[]
+      return Object.entries(deliveryStoreBreakdown)
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 4)
+        .map(([name, value]) => ({ name: titleCase(name), value }))
     })()
 
     return {

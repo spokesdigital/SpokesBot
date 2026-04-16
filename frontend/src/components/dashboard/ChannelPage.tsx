@@ -86,6 +86,7 @@ type CampaignRow = {
   cost: number | null
   revenue: number | null
   conversions: number | null
+  /** Ratio 0–1. fmtPct multiplies by 100 for display. */
   ctr: number | null
   cpc: number | null
   roas: number | null
@@ -98,6 +99,7 @@ type DailyRow = {
   cost: number | null
   revenue: number | null
   conversions: number | null
+  /** Ratio 0–1. fmtPct multiplies by 100 for display. */
   ctr: number | null
   cpc: number | null
   roas: number | null
@@ -207,9 +209,10 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
 }
 
+// CTR is always stored as a ratio (0–1). Multiply unconditionally — no ≤1 heuristic
+// that would silently double-multiply values like 0.5 (0.5% CTR → 50% wrong).
 function formatPercent(value: number) {
-  const v = Math.abs(value) <= 1 ? value * 100 : value
-  return `${v.toFixed(2)}%`
+  return `${(value * 100).toFixed(2)}%`
 }
 
 function formatRatio(value: number) {
@@ -234,10 +237,10 @@ function fmtCur(v: number | null) {
   if (v == null) return '—'
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v)
 }
+// Table CTR values are stored as ratios (0–1). Always multiply by 100.
 function fmtPct(v: number | null) {
   if (v == null) return '—'
-  const pv = Math.abs(v) <= 1 ? v * 100 : v
-  return `${pv.toFixed(2)}%`
+  return `${(v * 100).toFixed(2)}%`
 }
 function fmtX(v: number | null) {
   if (v == null) return '—'
@@ -562,10 +565,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         }
 
         if (currNum != null && currDen != null && currDen > 0) {
-          value = def.key === 'ctr' ? (currNum / currDen) * 100 : currNum / currDen
+          // CTR: store as ratio (0–1); formatPercent multiplies by 100.
+          // avg_cpc / roas are plain ratios displayed as currency / x.
+          value = currNum / currDen
         }
         if (prevNum != null && prevDen != null && prevDen > 0 && value != null) {
-          const prev = def.key === 'ctr' ? (prevNum / prevDen) * 100 : prevNum / prevDen
+          const prev = prevNum / prevDen
           if (prev !== 0) delta = ((value - prev) / Math.abs(prev)) * 100
         }
       }
@@ -606,6 +611,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     })()
 
     // Clicks vs CTR (compute CTR per date point)
+    // CHART-ONLY: ctr stored as percentage (0–100) here because the Recharts axis/tooltip
+    // formatters append "%" directly without further multiplication. This is intentionally
+    // different from the KPI card and table contract (ratio 0–1).
     const clicksCtrData: ClicksCtrPoint[] = (() => {
       const clicksMap = new Map(clicksSeries.map((p) => [p.date, p.value]))
       const impressMap = new Map(impressionsSeries.map((p) => [p.date, p.value]))
@@ -724,7 +732,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             cost,
             revenue,
             conversions,
-            ctr: clicks != null && impr != null && impr > 0 ? (clicks / impr) * 100 : null,
+            // Store as ratio (0–1); fmtPct multiplies by 100 for display.
+            ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
             cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
             roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
           }
@@ -769,7 +778,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           cost,
           revenue,
           conversions,
-          ctr: clicks != null && impr != null && impr > 0 ? (clicks / impr) * 100 : null,
+          // Store as ratio (0–1); fmtPct multiplies by 100 for display.
+          ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
           cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
           roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
         }

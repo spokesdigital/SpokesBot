@@ -550,15 +550,32 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
         except Exception:
             pass
 
+    # Pattern to detect campaign-like column names (ad group, ad set, campaign, etc.).
+    # These need a higher cardinality threshold because a dataset can easily have
+    # dozens of campaigns; the old limit of 8 would silently produce an empty table.
+    _CAMPAIGN_COL_RE = re.compile(
+        r"\b(campaign|ad[\s_\-]*group|ad[\s_\-]*set|adgroup|adset|ad[\s_\-]*name|ad\s*title)\b",
+        re.IGNORECASE,
+    )
+
     # Categorical value counts for bar charts
     categorical_charts: dict[str, dict] = {}
     metric_breakdowns: dict[str, dict[str, dict[str, Any]]] = {}
     for col in df.select_dtypes(include=["object", "category", "string"]).columns:
         if col in date_columns:
             continue
-        if df[col].nunique() <= 20:
+        n_unique = df[col].nunique()
+        if n_unique <= 20:
             categorical_charts[col] = _sanitize(df[col].value_counts().head(10).to_dict())
-        if 1 < df[col].nunique() <= 8:
+
+        # Threshold for metric breakdowns:
+        #   - Campaign-like columns: up to 200 unique values (head(8) limits output).
+        #   - All other categoricals: up to 50 unique values.
+        # This prevents UUID / free-text columns from triggering expensive groupbys
+        # while ensuring campaign tables never go blank for real-world datasets.
+        is_campaign_col = bool(_CAMPAIGN_COL_RE.search(col))
+        breakdown_limit = 200 if is_campaign_col else 50
+        if 1 < n_unique <= breakdown_limit:
             for metric_col in selected_metric_columns:
                 metric_breakdowns.setdefault(metric_col, {})
                 agg_fn = "mean" if _uses_average_basis(metric_col) else "sum"
@@ -566,8 +583,9 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
                     df.groupby(col, dropna=True)[metric_col]
                     .agg(agg_fn)
                     .sort_values(ascending=False)
-                    .head(8)
                 )
+                if not is_campaign_col:
+                    grouped = grouped.head(8)
                 if not grouped.empty:
                     metric_breakdowns[metric_col][col] = _sanitize(grouped.to_dict())
 

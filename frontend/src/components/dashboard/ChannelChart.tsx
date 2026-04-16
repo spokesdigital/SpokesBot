@@ -259,6 +259,7 @@ export function DualAxisComboChart({
                 : undefined
             }
           />
+          <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
           {series.map((s) => {
             const axis = s.axis ?? 'l'
             if (s.type === 'bar') {
@@ -374,6 +375,7 @@ export function AreaTrendChart({
                 : undefined
             }
           />
+          <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
           {series.map((s) => (
             <Area
               key={s.dataKey}
