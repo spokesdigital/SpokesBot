@@ -88,7 +88,7 @@ export function buildTransactionsCpaData(
     return {
       date,
       transactions,
-      ...(transactions > 0 && cost != null ? { cpa: cost / transactions } : {}),
+      cpa: (transactions > 0 && cost != null) ? (cost / transactions) : null,
     }
   })
 }
@@ -107,7 +107,7 @@ export function buildConversionRateData(
 
     return {
       date,
-      ...(conversions != null && clicks != null && clicks > 0 ? { conversionRate: (conversions / clicks) * 100 } : {}),
+      conversionRate: (conversions != null && clicks != null && clicks > 0) ? ((conversions / clicks) * 100) : null,
     }
   })
 }

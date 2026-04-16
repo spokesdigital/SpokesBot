@@ -624,7 +624,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         return {
           date,
           clicks: c,
-          ...(c > 0 && i != null && i > 0 ? { ctr: (c / i) * 100 } : {}),
+          ctr: (c > 0 && i != null && i > 0) ? ((c / i) * 100) : null,
         }
       })
     })()
@@ -655,7 +655,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         return {
           date,
           clicks: c,
-          ...(c > 0 && co != null ? { cpc: co / c } : {}),
+          cpc: (c > 0 && co != null) ? (co / c) : null,
         }
       })
     })()
