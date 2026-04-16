@@ -988,7 +988,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                         { type: 'bar', dataKey: 'transactions', name: 'Transactions', color: accentColor, axis: 'l' },
                         { type: 'line', dataKey: 'cpa', name: 'CPA $', color: '#f5b800', axis: 'r' },
                       ]}
-                      connectNulls={false}
+                      connectNulls={true}
                       leftTickFormatter={(v) => formatCompactNumber(v)}
                       rightTickFormatter={(v) => `$${v.toFixed(0)}`}
                       tooltipFormatter={(v, n) => (n === 'CPA $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n])}
@@ -1012,7 +1012,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           gradientOpacity: 0.18,
                         },
                       ]}
-                      connectNulls={false}
+                      connectNulls={true}
                       curveType="linear"
                       tickFormatter={(v) => `${v.toFixed(0)}%`}
                       tooltipFormatter={(v) => `${v.toFixed(2)}%`}
