@@ -218,6 +218,13 @@ export function DualAxisComboChart({
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
   const hasRight = series.some((s) => s.axis === 'r')
+  // At ~6 labels max visible: every N-th tick. Recharts interval is 0-based index step.
+  const tickInterval = visibleData.length > 60 ? Math.ceil(visibleData.length / 8)
+    : visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
+    : visibleData.length > 14 ? Math.ceil(visibleData.length / 6)
+    : visibleData.length > 7  ? Math.ceil(visibleData.length / 5)
+    : 0
+  const barSize = visibleData.length > 60 ? 4 : visibleData.length > 30 ? 8 : visibleData.length > 14 ? 14 : 20
 
   return (
     <div className="relative flex flex-col h-full">
@@ -226,15 +233,15 @@ export function DualAxisComboChart({
           <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="date"
-            interval={0}
+            interval={tickInterval}
+            minTickGap={40}
             tickFormatter={formatXLabel}
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             angle={-45}
             textAnchor="end"
-            tickMargin={10}
-            height={60}
+            height={55}
             padding={{ left: 12, right: 12 }}
           />
           <YAxis
@@ -278,7 +285,7 @@ export function DualAxisComboChart({
                   fill={s.color}
                   radius={[4, 4, 0, 0]}
                   opacity={0.85}
-                  barSize={20}
+                  barSize={barSize}
                 />
               )
             }
@@ -361,13 +368,15 @@ export function AreaTrendChart({
           <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
           <XAxis
             dataKey="date"
+            interval={visibleData.length > 30 ? Math.ceil(visibleData.length / 7) : visibleData.length > 14 ? Math.ceil(visibleData.length / 6) : 0}
+            minTickGap={40}
             tickFormatter={formatXLabel}
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             angle={-45}
             textAnchor="end"
-            height={50}
+            height={55}
           />
           <YAxis
             tick={{ fill: '#7a8292', fontSize: 11 }}
