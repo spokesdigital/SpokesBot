@@ -879,11 +879,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             </select>
           ) : null}
           <DateFilter />
-          <ExportButton
-            contentId="dashboard-pdf-content"
-            fileName={`${activeOrganizationName.replace(/\s+/g, '-')}-${reportType}`}
-            reportTitle={`${activeOrganizationName} · ${channelName}`}
-          />
+
         </div>
       </header>
 
