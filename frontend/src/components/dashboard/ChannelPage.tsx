@@ -619,12 +619,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       const impressMap = new Map(impressionsSeries.map((p) => [p.date, p.value]))
       const dates = Array.from(new Set([...clicksMap.keys(), ...impressMap.keys()])).sort()
       return dates.map((date) => {
-        const c = clicksMap.get(date)
+        const c = clicksMap.get(date) ?? 0
         const i = impressMap.get(date)
         return {
           date,
-          ...(c != null ? { clicks: c } : {}),
-          ...(c != null && i != null && i > 0 ? { ctr: (c / i) * 100 } : {}),
+          clicks: c,
+          ...(c > 0 && i != null && i > 0 ? { ctr: (c / i) * 100 } : {}),
         }
       })
     })()
@@ -650,12 +650,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       const costMap = new Map(costSeries.map((p) => [p.date, p.value]))
       const dates = Array.from(new Set([...clicksMap.keys(), ...costMap.keys()])).sort()
       return dates.map((date) => {
-        const c = clicksMap.get(date)
+        const c = clicksMap.get(date) ?? 0
         const co = costMap.get(date)
         return {
           date,
-          ...(c != null ? { clicks: c } : {}),
-          ...(c != null && co != null && c > 0 ? { cpc: co / c } : {}),
+          clicks: c,
+          ...(c > 0 && co != null ? { cpc: co / c } : {}),
         }
       })
     })()

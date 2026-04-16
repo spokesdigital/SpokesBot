@@ -82,13 +82,13 @@ export function buildTransactionsCpaData(
   const dates = getSortedDates(convMap, costMap)
 
   return dates.map((date) => {
-    const transactions = convMap.get(date)
+    const transactions = convMap.get(date) ?? 0
     const cost = costMap.get(date)
 
     return {
       date,
-      ...(transactions != null ? { transactions } : {}),
-      ...(transactions != null && cost != null && transactions > 0 ? { cpa: cost / transactions } : {}),
+      transactions,
+      ...(transactions > 0 && cost != null ? { cpa: cost / transactions } : {}),
     }
   })
 }
