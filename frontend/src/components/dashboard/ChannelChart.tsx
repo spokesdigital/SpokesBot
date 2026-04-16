@@ -230,6 +230,9 @@ export function DualAxisComboChart({
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
+            angle={-45}
+            textAnchor="end"
+            height={50}
           />
           <YAxis
             yAxisId="l"
@@ -358,6 +361,9 @@ export function AreaTrendChart({
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
+            angle={-45}
+            textAnchor="end"
+            height={50}
           />
           <YAxis
             tick={{ fill: '#7a8292', fontSize: 11 }}
