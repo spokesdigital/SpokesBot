@@ -666,25 +666,35 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const revenueDistribution: RevenueSplitDatum[] = (() => {
       const revenueColumn = metricColumns.revenue
       if (!revenueColumn) return []
-      const breakdowns = metricBreakdowns[revenueColumn] ?? {}
-
-      const candidate = Object.entries(breakdowns).find(([, categories]) =>
-        Object.keys(categories).some((name) => /store|delivery|pickup|ship/i.test(name)),
-      )
-      if (!candidate) return []
-
-      const [, categories] = candidate
-      let inStore = 0
-      let delivery = 0
-
-      for (const [name, value] of Object.entries(categories)) {
-        if (/delivery|ship/i.test(name)) delivery += value
-        else if (/store|pickup|walk/i.test(name)) inStore += value
+      
+      const allBreakdownCols = Object.values(metricBreakdowns).flatMap((byCat) => Object.keys(byCat))
+      const campaignDimension = allBreakdownCols.find((col) => CAMPAIGN_PATTERNS.some((p) => p.test(col)))
+      if (!campaignDimension) return []
+      
+      const campaignRevenues = metricBreakdowns[revenueColumn]?.[campaignDimension]
+      if (!campaignRevenues) return []
+      
+      const sorted = Object.entries(campaignRevenues)
+        .sort((a, b) => b[1] - a[1])
+        .filter(([, val]) => val > 0)
+        
+      if (sorted.length === 0) return []
+      
+      const top5 = sorted.slice(0, 5)
+      const others = sorted.slice(5).reduce((acc, [, val]) => acc + val, 0)
+      
+      const palette = ['#4285f4', '#34a853', '#fbbc05', '#ea4335', '#f39c12', '#9ea0a4']
+      
+      const data: RevenueSplitDatum[] = top5.map(([name, value], i) => ({
+        name: name.length > 22 ? name.substring(0, 22) + '...' : name,
+        value,
+        color: palette[i % palette.length],
+      }))
+      
+      if (others > 0) {
+        data.push({ name: 'Other', value: others, color: palette[5] })
       }
-
-      const data: RevenueSplitDatum[] = []
-      if (inStore > 0) data.push({ name: 'In-Store', value: inStore, color: '#f2c84b' })
-      if (delivery > 0) data.push({ name: 'Delivery', value: delivery, color: '#69d18a' })
+      
       return data
     })()
 
@@ -1081,9 +1091,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               <h2 className="text-lg font-bold">Revenue Distribution</h2>
               <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
                 <ChartCard
-                  title="In-Store vs Delivery Revenue"
+                  title="Revenue by Campaign (Top 5)"
                   empty={viewModel.revenueDistribution.length === 0}
-                  emptyMsg="Need a revenue breakdown with in-store and delivery categories to draw this chart."
+                  emptyMsg="Need a campaign revenue breakdown to draw this chart."
                 >
                   <DistributionChart data={viewModel.revenueDistribution} />
                 </ChartCard>
