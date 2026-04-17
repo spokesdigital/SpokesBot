@@ -101,6 +101,14 @@ const metricDefinitions: MetricCardDefinition[] = [
     kind: 'ratio',
     patterns: [/\broas\b/i, /return[\s_-]*on[\s_-]*ad[\s_-]*spend/i],
   },
+  {
+    // Derived: Revenue ÷ Conversions. Shows how much revenue each transaction
+    // generates on average — a key signal of basket size / pricing health.
+    key: 'atv',
+    label: 'AVG ORDER VALUE',
+    kind: 'currency',
+    patterns: [/\batv\b/i, /avg[\s_-]*(?:order|transaction)[\s_-]*value/i, /average[\s_-]*(?:order|transaction)/i],
+  },
 ]
 
 const splitColors = ['#f5b800', '#22c55e', '#f97316', '#64748b', '#3b82f6', '#ec4899', '#8b5cf6']
@@ -738,6 +746,21 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       ]),
     ) as Record<string, string | null>
 
+    // ATV = Revenue ÷ Conversions. The conversions column is not a displayed KPI
+    // card so it isn't in metricDefinitions/metricColumns. Look it up from the
+    // stored metric mappings (written during CSV ingestion) or fall back to
+    // pattern-matching against the numeric column list.
+    const conversionColumn: string | null =
+      (storedMetricMappings as Record<string, string | null>)['conversions'] ??
+      pickMetricColumn(numericColumns, [
+        /\bconversions?\b/i,
+        /\btransactions?\b/i,
+        /\bpurchases?\b/i,
+        /\borders?\b/i,
+        /\bacquisitions?\b/i,
+        /\bleads?\b/i,
+      ])
+
     const cards: MetricCardData[] = metricDefinitions.map((definition) => {
       const column = metricColumns[definition.key]
       let value: number | null = null
@@ -753,7 +776,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       }
 
       // Hardcode mathematical soundness for derived metrics
-      const isDerived = ['ctr', 'avg_cpc', 'roas'].includes(definition.key)
+      const isDerived = ['ctr', 'avg_cpc', 'roas', 'atv'].includes(definition.key)
 
       if (column && !isDerived) {
         if (definition.kind === 'percent' || definition.kind === 'ratio') {
@@ -784,6 +807,17 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
           const co = getMetricValues('cost')
           currNum = r.current; currDen = co.current
           prevNum = r.previous; prevDen = co.previous
+        } else if (definition.key === 'atv') {
+          // Revenue ÷ Conversions — conversionColumn is resolved outside this loop
+          const { current: revCurr, previous: revPrev } = getMetricValues('revenue')
+          const convCurr = conversionColumn
+            ? (comparison[conversionColumn]?.current ?? numericTotals[conversionColumn] ?? null)
+            : null
+          const convPrev = conversionColumn
+            ? (comparison[conversionColumn]?.previous ?? null)
+            : null
+          currNum = revCurr; currDen = convCurr
+          prevNum = revPrev; prevDen = convPrev
         }
 
         if (currNum != null && currDen != null && currDen > 0) {
@@ -947,8 +981,8 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         ) : (
           <>
             {loadingAnalytics ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-                {Array.from({ length: 7 }).map((_, index) => (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
+                {Array.from({ length: 8 }).map((_, index) => (
                   <div
                     key={index}
                     className="rounded-[1.45rem] border border-[#ebe4da] bg-white px-4 py-6"
@@ -963,7 +997,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
                 ))}
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
                 {viewModel.cards.map((card) => (
                   <MetricCard key={card.key} card={card} />
                 ))}

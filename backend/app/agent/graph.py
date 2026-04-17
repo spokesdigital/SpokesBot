@@ -64,7 +64,11 @@ _CRITIC_TOOL_LIMIT_TOTAL: int = 8_000  # chars for the combined payload
 _HAS_NUMBER_RE = re.compile(r"\d")
 
 # History window — keeps token count manageable for long conversations
-_MAX_HISTORY_MESSAGES: int = 16  # 8 turns × 2 (user + assistant)
+_MAX_HISTORY_MESSAGES: int = 16   # 8 turns × 2 (user + assistant)
+# First N messages are always kept as an "anchor" regardless of window truncation.
+# The opening turns typically contain the user's framing, channel/metric preferences,
+# and dataset context that the agent should never forget in long conversations.
+_ANCHOR_MESSAGES: int = 4         # first 2 turns (1 user + 1 assistant × 2)
 
 # ── Answer post-processor ────────────────────────────────────────────────────
 
@@ -73,6 +77,8 @@ def _finalize_answer(text: str, max_sentences: int = 3) -> str:
     """
     Strip inline markdown formatting, collapse excess whitespace, and hard-cap
     plain-text answers to max_sentences.  Table/chart blocks are left intact.
+    Responses with newlines (tables, multi-line breakdowns) get a higher cap so
+    we never truncate mid-table.
     """
     # Strip **bold** and *italic* markers (but not inside <chart> blocks)
     text = re.sub(r"\*{1,3}([^*\n]+)\*{1,3}", r"\1", text)
@@ -84,12 +90,14 @@ def _finalize_answer(text: str, max_sentences: int = 3) -> str:
 
     # Hard-cap sentence count for plain prose (skip if response contains a
     # table or chart — those are intentionally multi-line structures).
+    # Also skip if the response has newlines (multi-line breakdown / listing) —
+    # sentence splitting on \n-separated passages silently drops rows.
     # The split pattern requires:
     #   - sentence-ending punctuation (.!?)
     #   - NOT preceded by a digit (avoids splitting "$4.57" or "3.5x")
     #   - followed by whitespace then an uppercase letter (avoids splitting
     #     mid-sentence abbreviations like "vs." or "approx.")
-    if "<chart>" not in text and "|" not in text:
+    if "<chart>" not in text and "|" not in text and "\n" not in text:
         sentences = re.split(r"(?<!\d)(?<=[.!?])\s+(?=[A-Z])", text)
         if len(sentences) > max_sentences:
             text = " ".join(sentences[:max_sentences])
@@ -148,6 +156,19 @@ def _format_metric_value(metric_column: str, value: float) -> str:
     if any(pattern in lowered_column for pattern in METRIC_PATTERNS["revenue"]) or any(
         pattern in lowered_column for pattern in METRIC_PATTERNS["cost"]
     ):
+        return f"${value:,.2f}"
+
+    # CTR and similar rate columns are stored as a ratio (0–1); multiply by 100
+    # so the chatbot displays "3.45%" not "0.03" — matching the dashboard cards.
+    if any(pattern in lowered_column for pattern in METRIC_PATTERNS["ctr"]):
+        return f"{value * 100:.2f}%"
+
+    # ROAS is a multiplier: display as "4.20x"
+    if any(pattern in lowered_column for pattern in METRIC_PATTERNS["roas"]):
+        return f"{value:.2f}x"
+
+    # CPC / CPM / CPA — cost-per-X metrics are currency values
+    if any(pattern in lowered_column for pattern in METRIC_PATTERNS["avg_cpc"]):
         return f"${value:,.2f}"
 
     if float(value).is_integer():
@@ -512,21 +533,36 @@ def build_history(messages: list[dict], page_context: str | None = None) -> list
     """
     Convert DB message records → LangChain message objects.
 
-    Applies a sliding window (_MAX_HISTORY_MESSAGES) to keep token count
-    manageable for long conversations, and truncates verbose assistant messages
-    in history so they don't crowd out the active reasoning context.
+    Windowing strategy for long conversations:
+      - If the conversation fits within _MAX_HISTORY_MESSAGES, include all of it.
+      - Otherwise, always keep the first _ANCHOR_MESSAGES messages (the opening
+        turns where the user establishes intent, channel preferences, and dataset
+        context) and fill the remaining slots with the most recent messages.
+        This prevents the agent from forgetting early framing in turn 9+.
+
+    Verbose assistant messages are truncated in context to save tokens — the
+    full text is still persisted in the database.
     """
     system_content = SYSTEM_PROMPT
     if page_context:
         system_content += f"\n\n[Context] User is currently viewing: {page_context}."
     result: list[BaseMessage] = [SystemMessage(content=system_content)]
 
-    # Cap to most recent messages — older turns add cost without improving relevance
-    recent = (
-        messages[-_MAX_HISTORY_MESSAGES:] if len(messages) > _MAX_HISTORY_MESSAGES else messages
-    )
+    if len(messages) <= _MAX_HISTORY_MESSAGES:
+        windowed = messages
+    else:
+        # Anchor: always keep the opening turns so early context is never lost
+        anchor = messages[:_ANCHOR_MESSAGES]
+        # Fill remaining window slots with the most recent messages
+        tail_count = _MAX_HISTORY_MESSAGES - _ANCHOR_MESSAGES
+        tail_start = len(messages) - tail_count
+        if tail_start <= _ANCHOR_MESSAGES:
+            # Anchor and tail overlap — just take the last _MAX_HISTORY_MESSAGES
+            windowed = messages[-_MAX_HISTORY_MESSAGES:]
+        else:
+            windowed = anchor + messages[tail_start:]
 
-    for msg in recent:
+    for msg in windowed:
         if msg["role"] == "user":
             result.append(HumanMessage(content=msg["content"]))
         elif msg["role"] == "assistant":
@@ -644,11 +680,22 @@ def route_after_critic(state: AgentState) -> str:
     """
     YES or retries exhausted → END.
     NO and retries remaining  → inject_feedback (which feeds back into agent).
+
+    Detection logic is inverted compared to a naive startswith("YES") check:
+    we only trigger self-correction when the critic explicitly says NO.
+    Ambiguous, empty, or unexpected responses default to accepting the answer —
+    this is safer than accidentally looping when the critic returns an
+    unexpected phrasing like "Sure, YES..." or the LLM wraps its verdict
+    in prose.
     """
     if state.get("retry_count", 0) >= MAX_RETRIES:
         return END
-    feedback = state.get("validation_feedback", "YES")
-    return END if feedback.upper().startswith("YES") else "inject_feedback"
+    feedback = state.get("validation_feedback", "").strip()
+    upper = feedback.upper()
+    # Only self-correct on an explicit NO verdict ("NO", "NO:", "NO <reason>")
+    if re.match(r"^NO[:\s]", upper) or upper == "NO":
+        return "inject_feedback"
+    return END
 
 
 # ── Graph construction ────────────────────────────────────────────────────────
@@ -707,6 +754,10 @@ def make_graph(df: pd.DataFrame):
 # ── Public streaming interface ────────────────────────────────────────────────
 
 
+import logging as _logging
+_agent_logger = _logging.getLogger(__name__)
+
+
 async def stream_agent(
     df: pd.DataFrame,
     history: list[dict],
@@ -716,10 +767,11 @@ async def stream_agent(
     """
     Async generator that yields validated text tokens to the SSE router.
 
-    Unlike a naive streaming approach, we run the full Reflexion graph to
-    completion first (agent → critic [→ correction → agent]*) and only
-    yield the critic-approved answer.  This guarantees the user never sees
-    an unvalidated response.
+    All answers — including comparison and period queries — are routed through
+    the full Reflexion graph (agent → critic [→ correction → agent]*) so that
+    every number the user sees has been critic-validated against raw tool data.
+    Fast-path shortcuts have been removed: they bypassed the critic and could
+    produce confident but unvalidated wrong numbers.
 
     The final answer is yielded in small chunks to preserve the typewriter
     streaming UX at the HTTP layer.
@@ -727,20 +779,6 @@ async def stream_agent(
     Raises TimeoutError if the graph exceeds _GRAPH_TIMEOUT seconds.
     The caller (threads.py event_stream) handles this and surfaces an error SSE.
     """
-    fast_answer = _try_build_comparison_response(df, new_message)
-    if fast_answer:
-        answer = _finalize_answer(fast_answer)
-        for i in range(0, len(answer), _STREAM_CHUNK):
-            yield answer[i : i + _STREAM_CHUNK]
-        return
-
-    period_answer = _try_build_period_metric_response(df, new_message)
-    if period_answer:
-        answer = _finalize_answer(period_answer)
-        for i in range(0, len(answer), _STREAM_CHUNK):
-            yield answer[i : i + _STREAM_CHUNK]
-        return
-
     graph = make_graph(df)
     messages = build_history(history, page_context=page_context)
     messages.append(HumanMessage(content=new_message))
@@ -768,11 +806,21 @@ async def stream_agent(
             yield ""
         except Exception:
             # Task finished with an exception inside the 5 s window.
-            # Break out of the loop so task.result() re-raises it below,
-            # where the event_stream error handler will log it properly.
+            # Break out so the result() call below re-raises it where the
+            # event_stream error handler can log it with full traceback.
             break
 
-    final_state = task.result()
+    # Safely retrieve the final state; if the task raised an exception (either
+    # during polling or after the break above), result() will re-raise it here
+    # so the caller's except-block handles it consistently.
+    try:
+        final_state = task.result()
+    except asyncio.CancelledError:
+        # Propagate cleanly — caller distinguishes CancelledError from other errors
+        raise
+    except Exception:
+        # Re-raise so event_stream's generic except-block logs and surfaces it
+        raise
 
     answer = final_state.get("draft_answer", "")
     if not answer:
@@ -832,8 +880,21 @@ def _normalize_structured_insights(raw_items: list[dict]) -> list[dict[str, str]
 
         normalized.append({"type": insight_type, "text": text[:160]})
 
-    if len(normalized) < 4:
-        raise ValueError("Agent returned fewer than 4 valid structured insights.")
+    # Hard-fail only if we got nothing at all — a partial set is usable.
+    if len(normalized) < 1:
+        raise ValueError("Agent returned no valid structured insights.")
+
+    # Pad missing section slots with neutral defaults so the dashboard never
+    # shows an empty panel just because one section (e.g. Traffic on a
+    # revenue-only report) had no relevant data to produce an insight.
+    _SECTION_DEFAULTS = [
+        {"type": "trend", "text": "Traffic data is being analysed. Check back after the next data refresh."},
+        {"type": "trend", "text": "Conversion data is being analysed. Check back after the next data refresh."},
+        {"type": "trend", "text": "Revenue data is being analysed. Check back after the next data refresh."},
+        {"type": "trend", "text": "Distribution data is being analysed. Check back after the next data refresh."},
+    ]
+    while len(normalized) < 4:
+        normalized.append(_SECTION_DEFAULTS[len(normalized)])
 
     return normalized[:4]
 
@@ -885,7 +946,20 @@ async def generate_insight(
             pass  # non-streaming — no yield needed, we just keep the event loop alive
         except Exception:
             break
-    final_state = task.result()
+
+    # Guard against the rare race where the inner `except Exception: break` fires
+    # before the task is actually done — calling result() on a live task raises
+    # InvalidStateError. Wait briefly for it to settle first.
+    if not task.done():
+        with suppress(Exception):
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+
+    try:
+        final_state = task.result()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        raise
 
     raw = final_state.get("draft_answer", "").strip()
 
@@ -938,7 +1012,20 @@ async def generate_structured_insights(
             pass
         except Exception:
             break
-    final_state = task.result()
+
+    # Guard against the rare race where the inner `except Exception: break` fires
+    # before the task is actually done — calling result() on a live task raises
+    # InvalidStateError. Wait briefly for it to settle first.
+    if not task.done():
+        with suppress(Exception):
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+
+    try:
+        final_state = task.result()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        raise
 
     draft_answer = final_state.get("draft_answer", "").strip()
     if not draft_answer:

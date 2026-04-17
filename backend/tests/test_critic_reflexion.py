@@ -512,21 +512,36 @@ class TestStreamAgent:
         assert len(chunks) > 1, "Expected multiple chunks (streaming behaviour)"
 
     @pytest.mark.asyncio
-    async def test_stream_agent_fast_path_handles_last_week_sales_without_llm(self):
+    async def test_stream_agent_standard_path_handles_period_query(self):
+        """
+        Verify that period queries (which used to be on a fast-path) now flow
+        through the standard LLM-validated graph.
+        """
         df = pd.DataFrame(
             {
                 "Date": pd.date_range(end=pd.Timestamp.now(tz="UTC"), periods=7, freq="D"),
                 "Sales": [100, 120, 140, 160, 180, 200, 220],
             }
         )
+        expected_answer = "Your sales for the last week were $1,080."
 
-        chunks = []
-        async for chunk in stream_agent(df, [], "what is the last week's sale"):
-            chunks.append(chunk)
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_make_fake_agent_result(draft=expected_answer))
+
+        critic_llm = MagicMock()
+        critic_llm.invoke.return_value = AIMessage(content="YES")
+
+        with (
+            patch("app.agent.graph.create_react_agent", return_value=mock_agent),
+            patch("app.agent.graph._get_llm", return_value=MagicMock()),
+            patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
+        ):
+            chunks = []
+            async for chunk in stream_agent(df, [], "what is the last week's sale"):
+                chunks.append(chunk)
 
         assembled = "".join(chunks)
-        assert "Sales for last 7 days is $" in assembled
-        assert "filtered by Date" in assembled
+        assert assembled == expected_answer
 
     @pytest.mark.asyncio
     async def test_stream_agent_timeout_raises(self):

@@ -460,40 +460,86 @@ def apply_date_filter(
     return df[mask].copy()
 
 
+def _build_coercion_warnings(
+    pre_null_counts: dict[str, int],
+    coerced_df: pd.DataFrame,
+    coerced_columns: list[str],
+) -> list[str]:
+    """
+    Return human-readable warnings for columns where numeric coercion silently
+    dropped values (i.e. strings that could not be parsed became NaN).
+
+    These warnings are injected into every tool result so the agent knows
+    that some rows were excluded and can communicate that uncertainty to the user.
+    """
+    warnings: list[str] = []
+    total_rows = len(coerced_df)
+    for col in coerced_columns:
+        post_nulls = int(coerced_df[col].isnull().sum())
+        pre_nulls = pre_null_counts.get(col, 0)
+        lost = post_nulls - pre_nulls
+        if lost > 0:
+            pct = (lost / total_rows * 100) if total_rows else 0
+            warnings.append(
+                f"Column '{col}': {lost} of {total_rows} values ({pct:.1f}%) could not be "
+                f"parsed as numbers and were excluded from analysis — results for this column "
+                f"may be incomplete."
+            )
+    return warnings
+
+
 def compute(
     df: pd.DataFrame,
     operation: str,
     column: str | None = None,
     group_by: str | None = None,
 ) -> dict[str, Any]:
-    df, _ = _coerce_numeric_like_columns(df)
+    # Snapshot null counts before coercion so we can measure what was silently lost
+    pre_null_counts = {col: int(df[col].isnull().sum()) for col in df.columns}
+    df, coerced_columns = _coerce_numeric_like_columns(df)
+    coercion_warnings = _build_coercion_warnings(pre_null_counts, df, coerced_columns)
+
+    result: dict[str, Any]
 
     if operation == "describe":
-        return _sanitize(df.describe(include="all").to_dict())
+        result = _sanitize(df.describe(include="all").to_dict())
 
-    if operation == "value_counts":
+    elif operation == "value_counts":
         if not column or column not in df.columns:
             raise ValueError(f"Column '{column}' not found for value_counts.")
-        return _sanitize(df[column].value_counts().head(20).to_dict())
+        result = _sanitize(df[column].value_counts().head(20).to_dict())
 
-    if operation == "groupby":
+    elif operation == "groupby":
         if not column or not group_by:
             raise ValueError("Both 'column' and 'group_by' are required for groupby.")
         if column not in df.columns or group_by not in df.columns:
             raise ValueError("Specified columns not found in dataset.")
-        result = df.groupby(group_by)[column].mean().to_dict()
-        return _sanitize(result)
+        # Rate/ratio columns (CTR, ROAS, CPC…) must be averaged across groups;
+        # additive metrics (revenue, spend, conversions…) must be summed.
+        # Using mean() for revenue gives the average revenue per row — not the
+        # total — which is mathematically wrong for a "revenue by campaign" query.
+        agg_fn = "mean" if _uses_average_basis(column) else "sum"
+        result = _sanitize(df.groupby(group_by)[column].agg(agg_fn).to_dict())
 
-    if operation == "correlation":
+    elif operation == "correlation":
         numeric = df.select_dtypes(include="number")
-        return _sanitize(numeric.corr().to_dict())
+        result = _sanitize(numeric.corr().to_dict())
 
-    if operation == "auto":
-        return _auto_analyze(df)
+    elif operation == "auto":
+        result = _auto_analyze(df)
 
-    raise ValueError(
-        f"Unknown operation: '{operation}'. Use describe, value_counts, groupby, correlation, or auto."
-    )
+    else:
+        raise ValueError(
+            f"Unknown operation: '{operation}'. Use describe, value_counts, groupby, correlation, or auto."
+        )
+
+    # Attach coercion warnings to every result so the agent can factor them
+    # into its answer rather than presenting potentially incomplete numbers
+    # as if they were complete.
+    if coercion_warnings:
+        result["data_quality_warnings"] = coercion_warnings
+
+    return result
 
 
 def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:

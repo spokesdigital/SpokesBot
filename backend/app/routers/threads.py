@@ -230,10 +230,17 @@ async def chat(
 
     # ── 4. Fetch message history (excluding the message we just saved) ────────
     all_messages = thread_service.get_messages(thread_id, history_client)
-    # Exclude the last user message — stream_agent() receives it separately
-    history = [
-        m for m in all_messages if not (m["role"] == "user" and m["content"] == body.message)
-    ]
+    # Exclude only the LAST occurrence of the just-saved user message so that
+    # stream_agent() receives it as `new_message` without it appearing twice.
+    # Using content equality across all messages would incorrectly strip every
+    # prior turn where the user asked the exact same question (e.g. a retry).
+    last_user_idx: int | None = None
+    for i in range(len(all_messages) - 1, -1, -1):
+        m = all_messages[i]
+        if m["role"] == "user" and m["content"] == body.message:
+            last_user_idx = i
+            break
+    history = [m for i, m in enumerate(all_messages) if i != last_user_idx]
 
     # ── 5. Stream generator ───────────────────────────────────────────────────
     async def event_stream():

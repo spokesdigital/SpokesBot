@@ -364,42 +364,57 @@ function ThinkingIndicator() {
 
 // ── Follow-up suggestion chips ────────────────────────────────────────────────
 
+// Fallback suggestions are shown when the AI response contains no recognisable
+// keywords. They must be universally safe — every question here must be
+// answerable on any dataset regardless of column names.
 const FALLBACK_SUGGESTIONS = [
-  'What is my overall ROAS?',
-  'Show me revenue trends',
-  'Which campaign performs best?',
+  'Give me a summary of my data',
+  'Which campaign is performing best?',
+  'What are the key numbers I should know?',
 ]
 
+// Each entry in the keyword pools is a simple, safe question that maps to
+// one of three operations the agent can ALWAYS perform:
+//   • totals  → "What is my total X?"
+//   • breakdowns → "Show me X by campaign" / "Which campaign has the most X?"
+//   • summary  → "Give me a summary of X"
+//
+// Intentionally avoided:
+//   • "Why is X…" — causal questions the agent cannot answer from data alone
+//   • "Compare X vs Y" — fails if either category doesn't exist in the dataset
+//   • "Show me X over time" / "trend" — fails if there is no date column
 function getSuggestions(response: string): string[] {
   const lower = response.toLowerCase()
   const pool: string[] = []
 
   if (lower.includes('roas'))
-    pool.push('What is driving this ROAS?', 'How does ROAS compare by channel?')
+    pool.push('What is my overall ROAS?', 'Show me ROAS by campaign')
   if (lower.includes('revenue') || lower.includes('sales'))
-    pool.push('Show me revenue by channel', 'What is the revenue trend over time?')
+    pool.push('What is my total revenue?', 'Show me revenue by campaign')
   if (lower.includes('ctr') || lower.includes('click-through'))
-    pool.push('Which campaign has the best CTR?', 'Show me CTR over time')
+    pool.push('What is my overall CTR?', 'Which campaign has the best CTR?')
   if (lower.includes('click'))
-    pool.push('Show me a trend chart for daily clicks', 'Which campaign drives the most clicks?')
+    pool.push('What is my total click count?', 'Which campaign drives the most clicks?')
   if (lower.includes('cost') || lower.includes('spend'))
-    pool.push('Compare my cost vs revenue', 'What is my cost per conversion?')
+    pool.push('What is my total spend?', 'Which campaign spends the most?')
   if (lower.includes('impression'))
-    pool.push('What is my overall CTR?', 'Show impressions by campaign')
+    pool.push('What is my total impression count?', 'Which campaign has the most impressions?')
   if (lower.includes('campaign'))
-    pool.push('Which campaign has the highest ROAS?', 'Show campaign cost breakdown')
+    pool.push('Which campaign is performing best?', 'Show me a breakdown by campaign')
+  if (lower.includes('conversion'))
+    pool.push('What is my total conversion count?', 'Which campaign drives the most conversions?')
   if (lower.includes('in-store') || lower.includes('delivery'))
-    pool.push('Compare In-Store vs Delivery revenue', 'Show In-Store vs Delivery trend')
+    pool.push('What is my total In-Store revenue?', 'What is my total Delivery revenue?')
 
   const unique = [...new Set(pool)]
   return (unique.length > 0 ? unique : FALLBACK_SUGGESTIONS).slice(0, 3)
 }
 
 const PLACEHOLDER_PROMPTS = [
-  "Last month's revenue...",
-  "Show total revenue...",
-  "Top performing campaign...",
-  "Show me trends..."
+  'What is my total revenue?',
+  'Which campaign is performing best?',
+  'Give me a data summary',
+  'What is my overall ROAS?',
 ]
 
 const HELP_ARTICLES: HelpArticle[] = [
@@ -494,6 +509,18 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   // Abort any in-flight stream on unmount
   useEffect(() => () => { abortRef.current?.abort() }, [])
+
+  // Pre-fill the support email when the form opens, but only if the user
+  // hasn't already typed something. Binding the field value directly to
+  // `user?.email` means clearing the field snaps it back immediately because
+  // the empty string falls through the `||` and restores the default.
+  // Using state as the sole source of truth avoids that.
+  useEffect(() => {
+    if (showSupportForm && !supportEmail && user?.email) {
+      setSupportEmail(user.email)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSupportForm])
 
   // Re-hydrate the last active thread after a page refresh.
   // Fetches the single thread by ID rather than listing all threads.
@@ -859,7 +886,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                               setSupportError(null)
                               try {
                                 await api.support.send(
-                                  { email: supportEmail || user?.email || '', message: supportMessage.trim() },
+                                  { email: supportEmail, message: supportMessage.trim() },
                                   session.access_token,
                                 )
                                 setSupportSent(true)
@@ -886,7 +913,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                             <input
                               type="email"
                               placeholder="Your email address"
-                              value={supportEmail || user?.email || ''}
+                              value={supportEmail}
                               onChange={(e) => setSupportEmail(e.target.value)}
                               required
                               className="rounded-xl border border-[#e0deda] bg-[#faf9f7] px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20"
@@ -934,14 +961,14 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     </p>
                   )}
 
-                  {messages.map((msg) => (
+                  {messages.map((msg, index) => (
                     <div
                       key={msg.id}
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {/* Insight badge on the first assistant message */}
                       <div className="flex flex-col gap-1 max-w-[82%]">
-                        {msg.role === 'assistant' && messages.indexOf(msg) === 0 && (
+                        {msg.role === 'assistant' && index === 0 && (
                           <span className="flex items-center gap-1 text-[0.72rem] font-medium text-[#f0a500] pl-1">
                             <Sparkles className="h-3 w-3" />
                             Proactive insight
