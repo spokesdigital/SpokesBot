@@ -411,14 +411,14 @@ function RevenueSplitPanel({ slices }: { slices: SplitSlice[] }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-5 grid w-full grid-cols-2 gap-x-4 gap-y-2.5 px-2">
           {slices.map((slice, index) => (
-            <div key={slice.name} className="flex items-center gap-2 text-[0.95rem] text-[#657082]">
+            <div key={slice.name} className="flex items-center gap-2 text-[0.83rem] text-[#657082]">
               <span
-                className="h-4 w-4 rounded-sm"
+                className="h-3 w-3 flex-shrink-0 rounded-sm"
                 style={{ backgroundColor: splitColors[index % splitColors.length] }}
               />
-              <span>{slice.name}</span>
+              <span className="truncate">{slice.name}</span>
             </div>
           ))}
         </div>
