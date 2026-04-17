@@ -324,7 +324,7 @@ export function DualAxisComboChart({
           })}
         </ComposedChart>
       </ResponsiveContainer>
-      {data.length > 4 && (
+      {data.length > 0 && (
         <div className="flex justify-center mt-auto pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
@@ -445,7 +445,7 @@ export function AreaTrendChart({
           ))}
         </AreaChart>
       </ResponsiveContainer>
-      {data.length > 4 && (
+      {data.length > 0 && (
         <div className="flex justify-center mt-auto pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
