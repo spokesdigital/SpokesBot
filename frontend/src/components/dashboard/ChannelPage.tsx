@@ -1157,7 +1157,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS', 'Avg Order'].map((h) => (
+                        {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'Avg Order', 'ROAS'].map((h) => (
                           <th
                             key={h}
                             className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Campaign' ? 'text-left' : 'text-right'}`}
@@ -1183,12 +1183,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.cost)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtN(row.conversions)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
                             row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
                             {fmtX(row.roas)}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1209,7 +1209,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS', 'Avg Order'].map((h) => (
+                        {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'Avg Order', 'ROAS'].map((h) => (
                           <th
                             key={h}
                             className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Date' ? 'text-left' : 'text-right'}`}
@@ -1241,12 +1241,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.cost)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtN(row.conversions)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
                             row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
                             {fmtX(row.roas)}
                           </td>
-                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                         </tr>
                       ))}
                     </tbody>
