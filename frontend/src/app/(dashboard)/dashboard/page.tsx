@@ -378,49 +378,52 @@ function RevenueSplitPanel({ slices }: { slices: SplitSlice[] }) {
     <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
       <h3 className="text-[1.05rem] font-semibold text-[#687285]">Revenue Distribution</h3>
       <div className="mt-10 flex flex-col items-center">
-        <div className="h-[280px] w-full max-w-[320px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={slices}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={72}
-                outerRadius={118}
-                paddingAngle={4}
-                startAngle={180}
-                endAngle={-180}
-              >
-                {slices.map((slice, index) => (
-                  <Cell key={slice.name} fill={splitColors[index % splitColors.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                formatter={(value: number | string | Array<number | string>) => {
-                  if (typeof value === 'number') return formatCurrency(value)
-                  return value
-                }}
-                contentStyle={{
-                  background: '#ffffff',
-                  border: '1px solid #e8e1d7',
-                  borderRadius: '18px',
-                  boxShadow: '0 18px 44px rgba(15, 23, 42, 0.12)',
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Single width-constrained wrapper keeps chart and legend the same width */}
+        <div className="w-full max-w-[320px]">
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={slices}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={72}
+                  outerRadius={118}
+                  paddingAngle={4}
+                  startAngle={180}
+                  endAngle={-180}
+                >
+                  {slices.map((slice, index) => (
+                    <Cell key={slice.name} fill={splitColors[index % splitColors.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value: number | string | Array<number | string>) => {
+                    if (typeof value === 'number') return formatCurrency(value)
+                    return value
+                  }}
+                  contentStyle={{
+                    background: '#ffffff',
+                    border: '1px solid #e8e1d7',
+                    borderRadius: '18px',
+                    boxShadow: '0 18px 44px rgba(15, 23, 42, 0.12)',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
 
-        <div className="mt-5 grid w-full grid-cols-2 gap-x-4 gap-y-2.5 px-2">
-          {slices.map((slice, index) => (
-            <div key={slice.name} className="flex items-center gap-2 text-[0.83rem] text-[#657082]">
-              <span
-                className="h-3 w-3 flex-shrink-0 rounded-sm"
-                style={{ backgroundColor: splitColors[index % splitColors.length] }}
-              />
-              <span className="truncate">{slice.name}</span>
-            </div>
-          ))}
+          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 px-2">
+            {slices.map((slice, index) => (
+              <div key={slice.name} className="flex items-center gap-2 text-[0.83rem] text-[#657082]">
+                <span
+                  className="h-3 w-3 flex-shrink-0 rounded-sm"
+                  style={{ backgroundColor: splitColors[index % splitColors.length] }}
+                />
+                <span className="truncate">{slice.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
