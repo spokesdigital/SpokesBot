@@ -21,6 +21,11 @@ import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { ExportButton } from '@/components/dashboard/ExportButton'
+import { pickConversionsColumn } from '@/components/dashboard/channelMetrics'
+import {
+  getAnalyticsDataQualityWarnings,
+  getVerifiedMetricColumns,
+} from '@/components/dashboard/verifiedMetrics'
 import type { AIInsight, Dataset, AnalyticsResult, InsightsResult } from '@/types'
 
 type NumericSummary = Record<string, Record<string, number>>
@@ -139,10 +144,6 @@ function isLikelyDateColumn(name: string) {
     normalized === 'created_at' ||
     normalized === 'updated_at'
   )
-}
-
-function pickMetricColumn(columns: string[], patterns: RegExp[]) {
-  return columns.find((column) => patterns.some((pattern) => pattern.test(column))) ?? null
 }
 
 function formatCompactNumber(value: number) {
@@ -494,6 +495,14 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       })
     : null
   const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
+  const analyticsResultRecord = useMemo(
+    () => (analytics?.result ?? null) as Record<string, unknown> | null,
+    [analytics],
+  )
+  const analyticsDataQualityWarnings = useMemo(
+    () => getAnalyticsDataQualityWarnings(analyticsResultRecord),
+    [analyticsResultRecord],
+  )
 
   useEffect(() => {
     if (!session) return
@@ -506,7 +515,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       setError(null)
       try {
         const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
-        const data = await api.datasets.list(token, effectiveOrgId)
+        const data = await api.datasets.list(token, effectiveOrgId, undefined, 'overview')
         if (cancelled) return
 
         const sortedData = [...data].sort(
@@ -644,6 +653,13 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       return
     }
 
+    if (analyticsDataQualityWarnings.length > 0) {
+      setOverallInsights([])
+      setLoadingInsights(false)
+      setInsightsError('AI insights are hidden until dataset parsing issues are resolved.')
+      return
+    }
+
     let cancelled = false
 
     async function loadOverallInsights() {
@@ -724,6 +740,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     organizationId,
     targetOrgId,
     user?.role,
+    analyticsDataQualityWarnings,
   ])
 
   const activeOrganizationName = (targetOrgId ? organizations.find((org) => org.id === targetOrgId)?.name : null)
@@ -732,7 +749,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     ?? 'Client Overview'
 
   const viewModel = useMemo(() => {
-    const result = (analytics?.result ?? {}) as Record<string, unknown>
+    const result = analyticsResultRecord ?? {}
     const shape = (result.shape ?? null) as { rows: number; cols: number } | null
     const numericSummary = (result.numeric_summary ?? {}) as NumericSummary
     const numericTotals = (result.numeric_totals ?? {}) as NumericTotals
@@ -742,27 +759,12 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
 
     const numericColumns = Object.keys(numericSummary)
     const storedMetricMappings = activeDataset?.metric_mappings ?? {}
-    const metricColumns = Object.fromEntries(
-      metricDefinitions.map((definition) => [
-        definition.key,
-        storedMetricMappings[definition.key] ?? pickMetricColumn(numericColumns, definition.patterns),
-      ]),
-    ) as Record<string, string | null>
+    const metricColumns = getVerifiedMetricColumns(metricDefinitions, storedMetricMappings, numericColumns)
 
     // ATV = Revenue ÷ Conversions. The conversions column is not a displayed KPI
-    // card so it isn't in metricDefinitions/metricColumns. Look it up from the
-    // stored metric mappings (written during CSV ingestion) or fall back to
-    // pattern-matching against the numeric column list.
-    const conversionColumn: string | null =
-      (storedMetricMappings as Record<string, string | null>)['conversions'] ??
-      pickMetricColumn(numericColumns, [
-        /\bconversions?\b/i,
-        /\btransactions?\b/i,
-        /\bpurchases?\b/i,
-        /\borders?\b/i,
-        /\bacquisitions?\b/i,
-        /\bleads?\b/i,
-      ])
+    // card so it isn't in metricDefinitions/metricColumns. Only trust the
+    // stored ingestion-time mapping here; the dashboard no longer guesses.
+    const conversionColumn = pickConversionsColumn(storedMetricMappings, numericColumns)
 
     const cards: MetricCardData[] = metricDefinitions.map((definition) => {
       const column = metricColumns[definition.key]
@@ -934,7 +936,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       trendData,
       revenueSplit,
     }
-  }, [analytics, activeDataset])
+  }, [analyticsResultRecord, activeDataset])
 
   return (
     <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
@@ -970,6 +972,13 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
           <div className="flex items-start gap-3 rounded-[1.2rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
             <AlertCircle className="mt-0.5 h-[18px] w-[18px] flex-shrink-0" />
             <span>{activeDataset.ingestion_warnings.join(' ')}</span>
+          </div>
+        )}
+
+        {analyticsDataQualityWarnings.length > 0 && (
+          <div className="flex items-start gap-3 rounded-[1.2rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            <AlertCircle className="mt-0.5 h-[18px] w-[18px] flex-shrink-0" />
+            <span>{analyticsDataQualityWarnings.join(' ')}</span>
           </div>
         )}
 

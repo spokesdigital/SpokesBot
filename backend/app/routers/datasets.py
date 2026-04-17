@@ -53,7 +53,7 @@ def list_datasets(
         if report_type:
             q = q.eq("report_type", report_type)
         resp = q.execute()
-        return {"datasets": resp.data}
+        return {"datasets": [dataset_service.repair_dataset_metadata(dataset) for dataset in resp.data]}
 
     target_org_id = str(org_id) if org_id else caller_org_id
     client = service_client if role == ROLE_ADMIN else supabase
@@ -67,7 +67,7 @@ def list_datasets(
     if report_type:
         q = q.eq("report_type", report_type)
     resp = q.execute()
-    return {"datasets": resp.data}
+    return {"datasets": [dataset_service.repair_dataset_metadata(dataset) for dataset in resp.data]}
 
 
 @router.get("/{dataset_id}", response_model=DatasetResponse)
@@ -109,7 +109,7 @@ def get_dataset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dataset '{dataset_id}' not found.",
         )
-    return resp.data
+    return dataset_service.repair_dataset_metadata(resp.data)
 
 
 @router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)

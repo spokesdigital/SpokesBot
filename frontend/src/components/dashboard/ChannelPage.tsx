@@ -20,6 +20,10 @@ import {
   hasTransactionsOrCpaData,
   pickConversionsColumn,
 } from '@/components/dashboard/channelMetrics'
+import {
+  getAnalyticsDataQualityWarnings,
+  getVerifiedMetricColumns,
+} from '@/components/dashboard/verifiedMetrics'
 import type { AIInsight, Dataset, AnalyticsResult, InsightsResult } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -199,10 +203,6 @@ function isLikelyDateColumn(name: string) {
     n === 'created_at' || n === 'updated_at'
 }
 
-function pickMetricColumn(columns: string[], patterns: RegExp[]) {
-  return columns.find((col) => patterns.some((p) => p.test(col))) ?? null
-}
-
 function formatCompactNumber(value: number) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)
 }
@@ -357,6 +357,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       })
     : null
   const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
+  const analyticsResultRecord = useMemo(
+    () => (analytics?.result ?? null) as Record<string, unknown> | null,
+    [analytics],
+  )
+  const analyticsDataQualityWarnings = useMemo(
+    () => getAnalyticsDataQualityWarnings(analyticsResultRecord),
+    [analyticsResultRecord],
+  )
 
   // When viewing a client org (admin impersonation), resolve the name from
   // targetOrgId so we show the client's org name, not the admin's own org.
@@ -471,7 +479,18 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   useEffect(() => {
     if (!session || !activeDatasetId || loadingAnalytics) {
       setInsights([])
-      setInsightsError(null)
+      setInsightsError(
+        !loadingAnalytics && analyticsDataQualityWarnings.length > 0
+          ? 'AI insights are hidden until dataset parsing issues are resolved.'
+          : null,
+      )
+      setLoadingInsights(false)
+      return
+    }
+
+    if (analyticsDataQualityWarnings.length > 0) {
+      setInsights([])
+      setInsightsError('AI insights are hidden until dataset parsing issues are resolved.')
       setLoadingInsights(false)
       return
     }
@@ -514,12 +533,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     setInsightsError(null)
     const tid = window.setTimeout(() => { void load() }, 350)
     return () => { cancelled = true; window.clearTimeout(tid) }
-  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role])
+  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role, analyticsDataQualityWarnings])
 
   // ── ViewModel ─────────────────────────────────────────────────────────────
 
   const viewModel = useMemo(() => {
-    const result = (analytics?.result ?? {}) as Record<string, unknown>
+    const result = analyticsResultRecord ?? {}
     const numericSummary = (result.numeric_summary ?? {}) as NumericSummary
     const numericTotals = (result.numeric_totals ?? {}) as NumericTotals
     const comparison = (result.comparison ?? {}) as MetricComparison
@@ -529,12 +548,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
     const numericColumns = Object.keys(numericSummary)
     const storedMappings = activeDataset?.metric_mappings ?? {}
-    const metricColumns = Object.fromEntries(
-      metricDefinitions.map((def) => [
-        def.key,
-        storedMappings[def.key] ?? pickMetricColumn(numericColumns, def.patterns),
-      ]),
-    ) as Record<string, string | null>
+    const metricColumns = getVerifiedMetricColumns(metricDefinitions, storedMappings, numericColumns)
 
     const getMetricValues = (key: string) => {
       const col = metricColumns[key]
@@ -827,7 +841,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       campaignRows,
       dailyRows,
     }
-  }, [analytics, activeDataset, chartEndDateValue, chartStartDateValue])
+  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue])
 
   const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
 
@@ -860,28 +874,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {/* Dataset selector */}
-          {loadingDatasets ? (
-            <div className="shimmer-warm h-[42px] w-[200px] rounded-[1rem] border border-[#e5dfd6]" />
-          ) : completedDatasets.length > 0 ? (
-            <select
-              id="report-selector"
-              value={activeDatasetId ?? ''}
-              onChange={(e) => setActiveDatasetId(e.target.value || null)}
-              className="h-[42px] w-[220px] appearance-none rounded-[1rem] border border-[#e5dfd6] bg-white px-4 pr-10 text-[0.95rem] font-medium text-[#374151] shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition hover:border-[#f0a500]/50 focus:border-[#f0a500]/50"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c8493'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 0.8rem center',
-                backgroundSize: '1.2rem',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {completedDatasets.map((d) => (
-                <option key={d.id} value={d.id}>{d.report_name || d.file_name}</option>
-              ))}
-            </select>
-          ) : null}
           <DateFilter />
 
         </div>
@@ -900,6 +892,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>{activeDataset.ingestion_warnings.join(' ')}</span>
+        </div>
+      )}
+      {analyticsDataQualityWarnings.length > 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <span>{analyticsDataQualityWarnings.join(' ')}</span>
         </div>
       )}
 

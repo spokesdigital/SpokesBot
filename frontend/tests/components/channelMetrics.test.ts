@@ -16,13 +16,13 @@ describe("channelMetrics", () => {
     ).toBe("Purchases");
   });
 
-  it("avoids rate and cost metrics when inferring a conversions column", () => {
+  it("returns null when no verified conversions mapping exists", () => {
     expect(
       pickConversionsColumn(
         {},
         ["Conversion Rate", "Cost per Conversion", "All Conversions", "Transactions"],
       ),
-    ).toBe("Transactions");
+    ).toBeNull();
   });
 
   it("computes CPA only when transactions are positive", () => {

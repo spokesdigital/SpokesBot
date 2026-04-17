@@ -12,9 +12,9 @@ METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
     "conversions": ("conversion", "transaction", "purchase", "order", "acquisition", "lead"),
     "ctr": ("ctr", "click through rate"),
     "avg_cpc": ("cpc", "cost per click"),
-    "cost": ("cost", "spend", "expense"),
-    "revenue": ("revenue", "sales", "gmv", "income", "amount"),
-    "roas": ("roas", "return on ad spend"),
+    "cost": ("cost", "spend", "spent", "expense"),
+    "revenue": ("revenue", "sales", "gmv", "income", "purchase value", "conversion value"),
+    "roas": ("roas", "return on ad spend", "return on spend", "roas (", "/ spend"),
 }
 
 
@@ -172,12 +172,38 @@ def _detect_date_columns(df: pd.DataFrame) -> list[str]:
 
 
 def _pick_metric_mapping(columns: list[str], patterns: tuple[str, ...]) -> str | None:
-    normalized_columns = [(col, col.lower()) for col in columns]
-    for token in patterns:
-        for original, lowered in normalized_columns:
-            if token in lowered:
-                return original
-    return None
+    def score_match(column: str, token: str) -> tuple[int, str] | None:
+        lowered = column.strip().lower()
+        normalized_token = token.strip().lower()
+
+        if lowered == normalized_token:
+            return 0, lowered
+
+        flexible_token = re.escape(normalized_token).replace(r"\ ", r"[\s_-]+")
+        if re.search(rf"(?<![a-z0-9]){flexible_token}(?![a-z0-9])", lowered):
+            return 1, lowered
+
+        if lowered.startswith(normalized_token) or lowered.endswith(normalized_token):
+            return 2, lowered
+
+        if normalized_token in lowered:
+            return 3, lowered
+
+        return None
+
+    candidates: list[tuple[int, str, str]] = []
+    for original in columns:
+        for token in patterns:
+            match = score_match(original, token)
+            if match is None:
+                continue
+            priority, lowered = match
+            candidates.append((priority, lowered, original))
+
+    if not candidates:
+        return None
+
+    return min(candidates)[2]
 
 
 def _pick_conversion_metric_mapping(columns: list[str]) -> str | None:
@@ -230,13 +256,18 @@ def _pick_conversion_metric_mapping(columns: list[str]) -> str | None:
     return min(candidates, key=score)
 
 
+def infer_conversion_metric_mapping(columns: list[str]) -> str | None:
+    """Public wrapper for the safest conversion-count inference rule."""
+    return _pick_conversion_metric_mapping(columns)
+
+
 def infer_metric_mappings(df: pd.DataFrame) -> dict[str, str | None]:
     numeric_columns = df.select_dtypes(include="number").columns.tolist()
     metric_mappings = {
         metric_key: _pick_metric_mapping(numeric_columns, patterns)
         for metric_key, patterns in METRIC_PATTERNS.items()
     }
-    metric_mappings["conversions"] = _pick_conversion_metric_mapping(numeric_columns)
+    metric_mappings["conversions"] = infer_conversion_metric_mapping(numeric_columns)
     return metric_mappings
 
 

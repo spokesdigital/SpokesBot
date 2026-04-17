@@ -2,10 +2,12 @@ import io
 from collections import OrderedDict
 from threading import Lock
 from time import monotonic
+from typing import Any
 
 import pandas as pd
 from fastapi import HTTPException, status
 
+from app.services.analytics_service import infer_conversion_metric_mapping
 from supabase import Client
 
 BUCKET = "datasets"
@@ -53,10 +55,57 @@ def clear_dataframe_cache() -> None:
         _dataframe_cache.clear()
 
 
+def repair_dataset_metadata(dataset: dict[str, Any]) -> dict[str, Any]:
+    """
+    Backfill safe metadata for legacy datasets.
+
+    Older uploads can be missing the conversions mapping even though the
+    schema profile already proves a valid conversion-count column exists.
+    Repair only that narrow case so the dashboard can render conversion
+    charts without reintroducing broad frontend guessing.
+    """
+    repaired = dict(dataset)
+
+    raw_metric_mappings = repaired.get("metric_mappings")
+    metric_mappings = (
+        dict(raw_metric_mappings)
+        if isinstance(raw_metric_mappings, dict)
+        else {}
+    )
+
+    schema_profile = repaired.get("schema_profile")
+    if not isinstance(schema_profile, dict):
+        repaired["metric_mappings"] = metric_mappings
+        return repaired
+
+    numeric_columns = schema_profile.get("numeric_columns")
+    if not isinstance(numeric_columns, list):
+        numeric_columns = []
+    numeric_columns = [str(column) for column in numeric_columns if isinstance(column, str)]
+
+    if not metric_mappings.get("conversions"):
+        inferred_conversions = infer_conversion_metric_mapping(numeric_columns)
+        if inferred_conversions:
+            metric_mappings["conversions"] = inferred_conversions
+
+    if not repaired.get("detected_date_column"):
+        date_columns = schema_profile.get("date_columns")
+        if isinstance(date_columns, list):
+            first_date_column = next(
+                (str(column) for column in date_columns if isinstance(column, str)),
+                None,
+            )
+            if first_date_column:
+                repaired["detected_date_column"] = first_date_column
+
+    repaired["metric_mappings"] = metric_mappings
+    return repaired
+
+
 def list_datasets(supabase: Client) -> list[dict]:
     """List all datasets for the authenticated user's org. RLS enforced."""
     response = supabase.table("datasets").select("*").order("uploaded_at", desc=True).execute()
-    return response.data
+    return [repair_dataset_metadata(dataset) for dataset in response.data]
 
 
 def get_dataset(dataset_id: str, supabase: Client) -> dict:
@@ -67,7 +116,7 @@ def get_dataset(dataset_id: str, supabase: Client) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dataset '{dataset_id}' not found.",
         )
-    return response.data
+    return repair_dataset_metadata(response.data)
 
 
 def delete_dataset(dataset_id: str, supabase: Client, service_client: Client) -> None:

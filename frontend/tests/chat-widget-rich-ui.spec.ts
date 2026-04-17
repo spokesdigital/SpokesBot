@@ -36,7 +36,7 @@ test.describe('Chat Widget Rich UI', () => {
     await page.getByRole('button', { name: /Sign In/i }).click()
     await expect(page).toHaveURL(/.*dashboard/, { timeout: 10000 })
 
-    await page.locator('#report-selector').selectOption({ label: reportName })
+    await expect(page.getByText(reportName).first()).toBeVisible({ timeout: 15000 })
 
     const chatLauncher = page.getByRole('button', { name: /Open chat assistant/i })
     await chatLauncher.click({ force: true })

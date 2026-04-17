@@ -21,7 +21,6 @@ test.describe('Overall AI Insights Dashboard', () => {
 
     await expect(trendHeading).toBeVisible()
     await expect(splitHeading).toBeVisible()
-    await expect(page.locator('#report-selector')).toBeVisible()
 
     const trendBox = await trendHeading.boundingBox()
     const insightsBox = await insightsSection.boundingBox()

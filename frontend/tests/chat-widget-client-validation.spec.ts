@@ -13,8 +13,6 @@ test.describe('Chat Widget Client Validation', () => {
     await page.getByRole('button', { name: /Sign In/i }).click()
     await expect(page).toHaveURL(/.*dashboard/, { timeout: 10000 })
 
-    await expect(page.locator('#report-selector')).toBeVisible({ timeout: 10000 })
-
     const chatLauncher = page.getByRole('button', { name: /Open chat assistant/i })
     await chatLauncher.click({ force: true })
     await expect(page.getByTestId('chat-widget')).toBeVisible()

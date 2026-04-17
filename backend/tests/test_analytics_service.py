@@ -138,6 +138,20 @@ class AnalyticsServiceAutoTest(unittest.TestCase):
 
         self.assertEqual(profile["metric_mappings"]["conversions"], "Conversions")
 
+    def test_build_dataset_profile_does_not_treat_amount_spent_as_revenue(self):
+        df = pd.DataFrame(
+            {
+                "Day": ["2026-04-01", "2026-04-02"],
+                "Amount Spent": [120.0, 150.0],
+                "Clicks": [40, 55],
+            }
+        )
+
+        _, profile = build_dataset_profile(df)
+
+        self.assertEqual(profile["metric_mappings"]["cost"], "Amount Spent")
+        self.assertIsNone(profile["metric_mappings"]["revenue"])
+
 
 if __name__ == "__main__":
     unittest.main()
