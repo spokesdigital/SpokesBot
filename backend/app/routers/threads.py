@@ -278,8 +278,11 @@ async def chat(
                 exc,
                 exc_info=True,
             )
-            # Save a failure placeholder so the thread isn't left in a broken state
-            if not accumulated:
+            # Save whatever we have — partial answer is better than nothing.
+            # If we have nothing, save a placeholder so the thread isn't broken.
+            if accumulated:
+                thread_service.save_message(thread_id, "assistant", accumulated, service_client)
+            else:
                 thread_service.save_message(
                     thread_id,
                     "assistant",

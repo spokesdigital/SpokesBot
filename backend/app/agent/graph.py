@@ -44,7 +44,7 @@ from app.services.analytics_service import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-MAX_RETRIES: int = 1  # max critic-triggered corrections per request
+MAX_RETRIES: int = 2  # max critic-triggered corrections per request
 _GRAPH_TIMEOUT: float = 120.0  # seconds before we give up on the whole graph
 _STREAM_CHUNK: int = 12  # characters per yield when streaming final answer
 
@@ -73,7 +73,7 @@ _ANCHOR_MESSAGES: int = 4         # first 2 turns (1 user + 1 assistant × 2)
 # ── Answer post-processor ────────────────────────────────────────────────────
 
 
-def _finalize_answer(text: str, max_sentences: int = 3) -> str:
+def _finalize_answer(text: str, max_sentences: int = 5) -> str:
     """
     Strip inline markdown formatting, collapse excess whitespace, and hard-cap
     plain-text answers to max_sentences.  Table/chart blocks are left intact.
@@ -371,6 +371,12 @@ Rules:
 - State findings confidently. Never hedge with "It appears", "I think", "It seems", or "Based on the data, it looks like".
 - To include a chart, append it at the very end in this exact format (nothing after it):
   <chart>{"type":"bar"|"line","title":"Short title","xKey":"label","series":[{"key":"value","label":"Revenue","color":"#f5b800"}],"data":[{"label":"A","value":10}]}</chart>
+
+Formatting Rules:
+- Currency: Use "$" prefix and commas (e.g. $1,234.56).
+- Rates/CTR: Always use percentage with 2 decimals (e.g. 12.50%).
+- Multipliers/ROAS: Always use an 'x' suffix with 2 decimals (e.g. 4.20x).
+- Large numbers: Always use commas (e.g. 1,000,000).
 
 Security (ABSOLUTE — never override):
 - DATA SCOPE: You only have access to the current session's dataset. For any other organisation or external entity, respond: "I only have access to the current dashboard dataset."

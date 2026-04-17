@@ -52,7 +52,7 @@ def make_tools(df: pd.DataFrame):
             operation: One of: 'describe', 'value_counts', 'groupby', 'correlation', 'auto'.
                 - 'describe': Summary stats (mean, std, min, max) for all numeric columns.
                 - 'value_counts': Frequency count of unique values in a single column. Requires 'column'.
-                - 'groupby': Average of 'column' grouped by 'group_by'. Requires both.
+                - 'groupby': Aggregates 'column' grouped by 'group_by'. Additive metrics (revenue, cost, clicks, impressions, conversions) are SUMMED; ratio/rate metrics (CTR, CPC, ROAS, CPA) are averaged. Requires both 'column' and 'group_by'.
                 - 'correlation': Correlation matrix of all numeric columns.
                 - 'auto': Full dashboard-oriented analysis with totals, metric breakdowns, and time series.
             column: Target column name (required for value_counts and groupby).

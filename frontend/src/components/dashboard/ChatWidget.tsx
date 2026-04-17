@@ -670,8 +670,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
     setMessages((prev) => [...prev, optimistic])
 
-    // Create a fresh AbortController for this request
+    // Create a fresh AbortController for this request.
+    // A 90-second hard timeout prevents the UI from hanging if the backend stalls.
     const controller = new AbortController()
+    const streamTimeout = setTimeout(() => controller.abort(), 90_000)
     abortRef.current = controller
 
     let accumulated = ''
@@ -730,6 +732,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
         await syncMessages(thread.id)
       }
     } finally {
+      clearTimeout(streamTimeout)
       setStreamingContent('')
       setStreaming(false)
       setIsThinking(false)
@@ -968,7 +971,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     >
                       {/* Insight badge on the first assistant message */}
                       <div className="flex flex-col gap-1 max-w-[82%] min-w-0">
-                        {msg.role === 'assistant' && index === 0 && (
+                        {msg.role === 'assistant' && index === 0 && !msg.id.startsWith('stream-') && (
                           <span className="flex items-center gap-1 text-[0.72rem] font-medium text-[#f0a500] pl-1">
                             <Sparkles className="h-3 w-3" />
                             Proactive insight
