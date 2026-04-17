@@ -90,6 +90,7 @@ type CampaignRow = {
   ctr: number | null
   cpc: number | null
   roas: number | null
+  atv: number | null
 }
 
 type DailyRow = {
@@ -103,6 +104,7 @@ type DailyRow = {
   ctr: number | null
   cpc: number | null
   roas: number | null
+  atv: number | null
 }
 
 // ─── Metric definitions (same KPIs for both channels) ────────────────────────
@@ -760,6 +762,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
             cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
             roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
+            atv: revenue != null && conversions != null && conversions > 0 ? revenue / conversions : null,
           }
         })
         .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
@@ -806,6 +809,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
           cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
           roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
+          atv: revenue != null && conversions != null && conversions > 0 ? revenue / conversions : null,
         }
       })
     })()
@@ -1153,7 +1157,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS'].map((h) => (
+                        {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS', 'Avg Order'].map((h) => (
                           <th
                             key={h}
                             className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Campaign' ? 'text-left' : 'text-right'}`}
@@ -1184,6 +1188,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           }`}>
                             {fmtX(row.roas)}
                           </td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1204,7 +1209,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS'].map((h) => (
+                        {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'ROAS', 'Avg Order'].map((h) => (
                           <th
                             key={h}
                             className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Date' ? 'text-left' : 'text-right'}`}
@@ -1241,6 +1246,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           }`}>
                             {fmtX(row.roas)}
                           </td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                         </tr>
                       ))}
                     </tbody>
