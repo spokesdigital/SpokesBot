@@ -21,7 +21,7 @@ import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { ExportButton } from '@/components/dashboard/ExportButton'
-import { pickConversionsColumn } from '@/components/dashboard/channelMetrics'
+import { buildRevenueCostTrendData, pickConversionsColumn } from '@/components/dashboard/channelMetrics'
 import {
   getAnalyticsDataQualityWarnings,
   getVerifiedMetricColumns,
@@ -54,6 +54,8 @@ type MetricCardData = {
 
 type TrendPoint = {
   date: string
+  label?: string
+  tooltipLabel?: string
   revenue?: number
   cost?: number
 }
@@ -259,6 +261,17 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
     const limit = ZOOM_STEPS[zoomIndex]
     return data.slice(-limit)
   }, [data, zoomIndex])
+  const xAxisKey = visibleData.length > 0 && typeof visibleData[0].label === 'string' ? 'label' : 'date'
+  const shouldRotateTicks = visibleData.length > 10
+  const tooltipLabelMap = useMemo(
+    () => new Map(
+      visibleData.map((point) => [
+        String(point[xAxisKey as keyof TrendPoint] ?? point.date),
+        point.tooltipLabel ?? point.label ?? point.date,
+      ]),
+    ),
+    [visibleData, xAxisKey],
+  )
 
   return (
     <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -276,7 +289,7 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
               <span className="text-base font-bold leading-none">−</span>
             </button>
             <span className="min-w-[46px] text-center text-[0.8rem] font-medium text-[#8a93a5]">
-              {ZOOM_STEPS[zoomIndex]}d
+              {visibleData.length} pts
             </span>
             <button
               id="overview-chart-zoom-in"
@@ -306,13 +319,16 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
               </defs>
               <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={true} />
               <XAxis
-                dataKey="date"
+                dataKey={xAxisKey}
                 interval={visibleData.length > 30 ? Math.ceil(visibleData.length / 7) : visibleData.length > 14 ? Math.ceil(visibleData.length / 5) : 0}
                 minTickGap={35}
-                tickFormatter={renderXAxisLabel}
+                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : renderXAxisLabel(String(value))}
                 tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
+                angle={shouldRotateTicks ? -45 : 0}
+                textAnchor={shouldRotateTicks ? 'end' : 'middle'}
+                height={shouldRotateTicks ? 60 : 32}
               />
               <YAxis
                 tick={{ fill: '#7a8292', fontSize: 12 }}
@@ -326,7 +342,10 @@ function RevenueCostPanel({ data }: { data: TrendPoint[] }) {
                   if (typeof value === 'number') return formatCurrency(value)
                   return value
                 }}
-                labelFormatter={(label) => renderXAxisLabel(String(label))}
+                labelFormatter={(label) =>
+                  tooltipLabelMap.get(String(label))
+                  ?? (xAxisKey === 'label' ? String(label) : renderXAxisLabel(String(label)))
+                }
                 contentStyle={{
                   background: '#ffffff',
                   border: '1px solid #e8e1d7',
@@ -480,6 +499,14 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
   const endDateValue = useMemo(
     () => (datePreset === 'custom' && dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
     [datePreset, dateRange.end],
+  )
+  const chartStartDateValue = useMemo(
+    () => (dateRange.start ? format(dateRange.start, 'yyyy-MM-dd') : null),
+    [dateRange.start],
+  )
+  const chartEndDateValue = useMemo(
+    () => (dateRange.end ? format(dateRange.end, 'yyyy-MM-dd') : null),
+    [dateRange.end],
   )
   const organizationScope = targetOrgId
     ?? (user?.role === 'admin' ? organizationId ?? 'admin-default' : user?.organization?.id ?? 'client-org')
@@ -860,22 +887,18 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         ? activeDataset.detected_date_column
         : Object.keys(metricTimeSeries)[0]
     )
-    const trendMap = new Map<string, TrendPoint>()
-
-    if (firstDateKey) {
-      const seriesGroup = metricTimeSeries[firstDateKey] ?? {}
-      const revenueSeries = revenueColumn ? (seriesGroup[revenueColumn] ?? []) : []
-      const costSeries = costColumn ? (seriesGroup[costColumn] ?? []) : []
-
-      revenueSeries.forEach((point) => {
-        trendMap.set(point.date, { ...(trendMap.get(point.date) ?? { date: point.date }), revenue: point.value })
-      })
-      costSeries.forEach((point) => {
-        trendMap.set(point.date, { ...(trendMap.get(point.date) ?? { date: point.date }), cost: point.value })
-      })
-    }
-
-    const trendData = Array.from(trendMap.values()).sort((left, right) => left.date.localeCompare(right.date))
+    const seriesGroup = firstDateKey ? (metricTimeSeries[firstDateKey] ?? {}) : {}
+    const revenueSeries = revenueColumn ? (seriesGroup[revenueColumn] ?? []) : []
+    const costSeries = costColumn ? (seriesGroup[costColumn] ?? []) : []
+    const trendData = buildRevenueCostTrendData(
+      revenueSeries,
+      costSeries,
+      {
+        startDate: chartStartDateValue,
+        endDate: chartEndDateValue,
+      },
+      datePreset,
+    )
 
     const revenueSplit = (() => {
       if (!revenueColumn || !metricBreakdowns[revenueColumn]) return [] as SplitSlice[]
@@ -936,7 +959,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       trendData,
       revenueSplit,
     }
-  }, [analyticsResultRecord, activeDataset])
+  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset])
 
   return (
     <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">

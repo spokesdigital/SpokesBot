@@ -14,7 +14,11 @@ import { KPICard } from '@/components/dashboard/KPICard'
 import { ChartCard, DualAxisComboChart, AreaTrendChart, DistributionChart } from '@/components/dashboard/ChannelChart'
 import { splitInsightsBySection } from '@/components/dashboard/channelInsights'
 import {
+  buildClicksCpcData,
+  buildClicksCtrData,
   buildConversionRateData,
+  buildRevenueCostTrendData,
+  buildRoasData,
   buildTransactionsCpaData,
   hasConversionRateData,
   hasTransactionsOrCpaData,
@@ -625,73 +629,17 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const costSeries = getSeriesForColumn(metricColumns.cost)
     const conversionsColumn = pickConversionsColumn(storedMappings, numericColumns)
     const conversionsSeries = getSeriesForColumn(conversionsColumn)
-
-    // Revenue vs Cost trend
-    const trendData: TrendPoint[] = (() => {
-      const map = new Map<string, TrendPoint>()
-      revenueSeries.forEach((p) => { map.set(p.date, { ...map.get(p.date), date: p.date, revenue: p.value }) })
-      costSeries.forEach((p) => { map.set(p.date, { ...map.get(p.date), date: p.date, cost: p.value }) })
-      return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
-    })()
-
-    // Clicks vs CTR (compute CTR per date point)
-    // CHART-ONLY: ctr stored as percentage (0–100) here because the Recharts axis/tooltip
-    // formatters append "%" directly without further multiplication. This is intentionally
-    // different from the KPI card and table contract (ratio 0–1).
-    const clicksCtrData: ClicksCtrPoint[] = (() => {
-      const clicksMap = new Map(clicksSeries.map((p) => [p.date, p.value]))
-      const impressMap = new Map(impressionsSeries.map((p) => [p.date, p.value]))
-      const dates = Array.from(new Set([...clicksMap.keys(), ...impressMap.keys()])).sort()
-      return dates.map((date) => {
-        const c = clicksMap.get(date) ?? 0
-        const i = impressMap.get(date)
-        return {
-          date,
-          clicks: c,
-          ...((c > 0 && i != null && i > 0) ? { ctr: (c / i) * 100 } : {}),
-        }
-      })
-    })()
-
-    // ROAS trend (revenue / cost per date point)
-    const roasData: RoasPoint[] = (() => {
-      const revMap = new Map(revenueSeries.map((p) => [p.date, p.value]))
-      const costMap = new Map(costSeries.map((p) => [p.date, p.value]))
-      const dates = Array.from(new Set([...revMap.keys(), ...costMap.keys()])).sort()
-      return dates.map((date) => {
-        const r = revMap.get(date)
-        const c = costMap.get(date)
-        return {
-          date,
-          ...(r != null && c != null && c > 0 ? { roas: r / c } : {}),
-        }
-      })
-    })()
-
-    // Clicks vs Avg CPC (cost / clicks per date point)
-    const clicksCpcData: ClicksCpcPoint[] = (() => {
-      const clicksMap = new Map(clicksSeries.map((p) => [p.date, p.value]))
-      const costMap = new Map(costSeries.map((p) => [p.date, p.value]))
-      const dates = Array.from(new Set([...clicksMap.keys(), ...costMap.keys()])).sort()
-      return dates.map((date) => {
-        const c = clicksMap.get(date) ?? 0
-        const co = costMap.get(date)
-        return {
-          date,
-          clicks: c,
-          ...((c > 0 && co != null) ? { cpc: co / c } : {}),
-        }
-      })
-    })()
-
-    const transactionsCpaData = buildTransactionsCpaData(conversionsSeries, costSeries, {
+    const chartBounds = {
       startDate: chartStartDateValue,
       endDate: chartEndDateValue,
-    })
-    const conversionRateData = buildConversionRateData(conversionsSeries, clicksSeries, {
-      startDate: chartStartDateValue,
-      endDate: chartEndDateValue,
-    })
+    }
+    const trendData = buildRevenueCostTrendData(revenueSeries, costSeries, chartBounds, datePreset)
+    const clicksCtrData = buildClicksCtrData(clicksSeries, impressionsSeries, chartBounds, datePreset)
+    const roasData = buildRoasData(revenueSeries, costSeries, chartBounds, datePreset)
+    const clicksCpcData = buildClicksCpcData(clicksSeries, costSeries, chartBounds, datePreset)
+
+    const transactionsCpaData = buildTransactionsCpaData(conversionsSeries, costSeries, chartBounds, datePreset)
+    const conversionRateData = buildConversionRateData(conversionsSeries, clicksSeries, chartBounds, datePreset)
 
     const revenueDistribution: RevenueSplitDatum[] = (() => {
       const revenueColumn = metricColumns.revenue

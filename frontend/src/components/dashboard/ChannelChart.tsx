@@ -108,6 +108,10 @@ function formatXLabel(value: string) {
   }
 }
 
+function getXAxisKey(data: Record<string, unknown>[]) {
+  return data.length > 0 && typeof data[0].label === 'string' ? 'label' : 'date'
+}
+
 // ─── Shared chart card shell ───────────────────────────────────────────────────
 
 interface ChartCardProps {
@@ -218,6 +222,18 @@ export function DualAxisComboChart({
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
   const hasRight = series.some((s) => s.axis === 'r')
+  const xAxisKey = getXAxisKey(visibleData)
+  const shouldRotateTicks = visibleData.length > 10
+  const tooltipLabelMap = new Map(
+    visibleData.map((row) => [
+      String(row[xAxisKey] ?? row.date ?? ''),
+      typeof row.tooltipLabel === 'string'
+        ? row.tooltipLabel
+        : typeof row.label === 'string'
+          ? row.label
+          : String(row[xAxisKey] ?? row.date ?? ''),
+    ]),
+  )
   // At ~6 labels max visible: every N-th tick. Recharts interval is 0-based index step.
   const tickInterval = visibleData.length > 60 ? Math.ceil(visibleData.length / 8)
     : visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
@@ -232,16 +248,16 @@ export function DualAxisComboChart({
         <ComposedChart data={visibleData} margin={{ top: 8, right: hasRight ? 8 : 4, left: -20, bottom: 4 }}>
           <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
           <XAxis
-            dataKey="date"
+            dataKey={xAxisKey}
             interval={tickInterval}
             minTickGap={40}
-            tickFormatter={formatXLabel}
+            tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            angle={-45}
-            textAnchor="end"
-            height={55}
+            angle={shouldRotateTicks ? -45 : 0}
+            textAnchor={shouldRotateTicks ? 'end' : 'middle'}
+            height={shouldRotateTicks ? 55 : 32}
             padding={{ left: 12, right: 12 }}
           />
           <YAxis
@@ -265,7 +281,10 @@ export function DualAxisComboChart({
           )}
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            labelFormatter={(l) => formatXLabel(String(l))}
+            labelFormatter={(label) =>
+              tooltipLabelMap.get(String(label))
+              ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+            }
             formatter={
               tooltipFormatter
                 ? (value: number | string, name: string) => tooltipFormatter(Number(value), name)
@@ -352,6 +371,18 @@ export function AreaTrendChart({
 }: AreaTrendChartProps) {
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
+  const xAxisKey = getXAxisKey(visibleData)
+  const shouldRotateTicks = visibleData.length > 10
+  const tooltipLabelMap = new Map(
+    visibleData.map((row) => [
+      String(row[xAxisKey] ?? row.date ?? ''),
+      typeof row.tooltipLabel === 'string'
+        ? row.tooltipLabel
+        : typeof row.label === 'string'
+          ? row.label
+          : String(row[xAxisKey] ?? row.date ?? ''),
+    ]),
+  )
 
   return (
     <div className="relative flex flex-col h-full">
@@ -367,16 +398,16 @@ export function AreaTrendChart({
           </defs>
           <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
           <XAxis
-            dataKey="date"
+            dataKey={xAxisKey}
             interval={visibleData.length > 30 ? Math.ceil(visibleData.length / 7) : visibleData.length > 14 ? Math.ceil(visibleData.length / 6) : 0}
             minTickGap={40}
-            tickFormatter={formatXLabel}
+            tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
             tick={{ fill: '#7a8292', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            angle={-45}
-            textAnchor="end"
-            height={55}
+            angle={shouldRotateTicks ? -45 : 0}
+            textAnchor={shouldRotateTicks ? 'end' : 'middle'}
+            height={shouldRotateTicks ? 55 : 32}
           />
           <YAxis
             tick={{ fill: '#7a8292', fontSize: 11 }}
@@ -387,7 +418,10 @@ export function AreaTrendChart({
           />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            labelFormatter={(l) => formatXLabel(String(l))}
+            labelFormatter={(label) =>
+              tooltipLabelMap.get(String(label))
+              ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+            }
             formatter={
               tooltipFormatter
                 ? (v: number | string) => [tooltipFormatter(Number(v))]
