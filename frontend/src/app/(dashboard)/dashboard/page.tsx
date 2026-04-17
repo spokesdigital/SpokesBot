@@ -938,7 +938,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
 
   return (
     <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e7e1d6] bg-white px-8 py-6">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">
           {activeOrganizationName}
         </h1>

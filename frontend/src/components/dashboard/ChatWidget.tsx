@@ -967,7 +967,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                       className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {/* Insight badge on the first assistant message */}
-                      <div className="flex flex-col gap-1 max-w-[82%]">
+                      <div className="flex flex-col gap-1 max-w-[82%] min-w-0">
                         {msg.role === 'assistant' && index === 0 && (
                           <span className="flex items-center gap-1 text-[0.72rem] font-medium text-[#f0a500] pl-1">
                             <Sparkles className="h-3 w-3" />
