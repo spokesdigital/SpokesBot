@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, Database } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17,6 +17,8 @@ import {
   buildClicksCpcData,
   buildClicksCtrData,
   buildConversionRateData,
+  buildNoDataLabel,
+  buildPriorLabel,
   buildRevenueCostTrendData,
   buildRoasData,
   buildTransactionsCpaData,
@@ -24,6 +26,7 @@ import {
   hasTransactionsOrCpaData,
   pickConversionsColumn,
 } from '@/components/dashboard/channelMetrics'
+import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 import {
   getAnalyticsDataQualityWarnings,
   getVerifiedMetricColumns,
@@ -56,6 +59,7 @@ type MetricCardData = {
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
   priorLabel: string
+  noDataLabel: string
   comparisonAttempted: boolean
   tooltip: string
 }
@@ -551,22 +555,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const metricTimeSeries = (result.metric_time_series ?? {}) as MetricTimeSeries
     const metricBreakdowns = (result.metric_breakdowns ?? {}) as MetricBreakdowns
     const shape = (result.shape ?? null) as { rows: number; cols: number } | null
-    const comparisonWindow = (result.comparison_window ?? null) as {
-      previous_start: string
-      previous_end: string
-    } | null
-
+    const comparisonWindow = (result.comparison_window ?? null) as ComparisonWindow | null
     const comparisonAttempted = comparisonWindow !== null
-
-    const priorLabel = (() => {
-      if (!comparisonWindow) return 'prior period'
-      try {
-        const fmt = (iso: string) => format(parseISO(iso), 'MMM d')
-        return `${fmt(comparisonWindow.previous_start)} – ${fmt(comparisonWindow.previous_end)}`
-      } catch {
-        return 'prior period'
-      }
-    })()
+    const priorLabel = buildPriorLabel(comparisonWindow)
+    const noDataLabel = buildNoDataLabel(comparisonAttempted, priorLabel)
 
     const numericColumns = Object.keys(numericSummary)
     const storedMappings = activeDataset?.metric_mappings ?? {}
@@ -628,7 +620,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             ? delta > 0 ? 'negative' : 'positive'
             : delta > 0 ? 'positive' : 'negative'
 
-      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, priorLabel, comparisonAttempted, tooltip: def.tooltip }
+      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, priorLabel, noDataLabel, comparisonAttempted, tooltip: def.tooltip }
     })
 
     // Resolve time-series data
@@ -894,7 +886,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   trendValue={card.delta}
                   trendDirection={card.trendDirection}
                   priorLabel={card.priorLabel}
-                  noDataLabel={card.comparisonAttempted ? `No data: ${card.priorLabel}` : 'Select a date range to compare'}
+                  noDataLabel={card.noDataLabel}
                   tooltip={card.tooltip}
                 />
               ))}

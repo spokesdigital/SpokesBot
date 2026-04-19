@@ -21,7 +21,8 @@ import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { ExportButton } from '@/components/dashboard/ExportButton'
-import { buildRevenueCostTrendData, pickConversionsColumn } from '@/components/dashboard/channelMetrics'
+import { buildPriorLabel, buildNoDataLabel, buildRevenueCostTrendData, pickConversionsColumn } from '@/components/dashboard/channelMetrics'
+import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 import {
   getAnalyticsDataQualityWarnings,
   getVerifiedMetricColumns,
@@ -51,7 +52,7 @@ type MetricCardData = {
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
   priorLabel: string
-  /** true when backend ran a comparison (window dates exist), even if prior data was empty */
+  noDataLabel: string
   comparisonAttempted: boolean
 }
 
@@ -231,10 +232,6 @@ function MetricCard({ card }: { card: MetricCardData }) {
   const deltaText = formatDelta(card.delta, card.priorLabel)
   const dir = card.trendDirection
 
-  const noDataLabel = card.comparisonAttempted
-    ? `No data: ${card.priorLabel}`
-    : 'Select a date range to compare'
-
   return (
     <div className="rounded-[1.45rem] border border-[#e8e1d7] bg-white px-4 py-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
       <div className="flex items-center justify-between">
@@ -258,7 +255,7 @@ function MetricCard({ card }: { card: MetricCardData }) {
           {deltaText}
         </p>
       ) : (
-        <p className="mt-3 text-[0.92rem] text-[#98a1b2]">{noDataLabel}</p>
+        <p className="mt-3 text-[0.92rem] text-[#98a1b2]">{card.noDataLabel}</p>
       )}
     </div>
   )
@@ -797,24 +794,10 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     const comparison = (result.comparison ?? {}) as MetricComparison
     const metricTimeSeries = (result.metric_time_series ?? {}) as MetricTimeSeries
     const metricBreakdowns = (result.metric_breakdowns ?? {}) as MetricBreakdowns
-    const comparisonWindow = (result.comparison_window ?? null) as {
-      previous_start: string
-      previous_end: string
-    } | null
-
-    // true when the backend ran the comparison block (date_preset was set)
+    const comparisonWindow = (result.comparison_window ?? null) as ComparisonWindow | null
     const comparisonAttempted = comparisonWindow !== null
-
-    // Build human-readable prior period label, e.g. "Apr 5 – Apr 11"
-    const priorLabel = (() => {
-      if (!comparisonWindow) return 'prior period'
-      try {
-        const fmt = (iso: string) => format(parseISO(iso), 'MMM d')
-        return `${fmt(comparisonWindow.previous_start)} – ${fmt(comparisonWindow.previous_end)}`
-      } catch {
-        return 'prior period'
-      }
-    })()
+    const priorLabel = buildPriorLabel(comparisonWindow)
+    const noDataLabel = buildNoDataLabel(comparisonAttempted, priorLabel)
 
     const numericColumns = Object.keys(numericSummary)
     const storedMetricMappings = activeDataset?.metric_mappings ?? {}
@@ -910,6 +893,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         delta,
         trendDirection,
         priorLabel,
+        noDataLabel,
         comparisonAttempted,
       }
     })
