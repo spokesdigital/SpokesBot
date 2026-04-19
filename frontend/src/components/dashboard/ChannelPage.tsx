@@ -740,7 +740,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
     })()
 
-    // ── Daily Performance (last 14 date periods) ─────────────────────────────
+    // ── Daily Performance (all date periods within the selected range) ──────
     const dailyRows: DailyRow[] = (() => {
       if (!firstDateKey) return []
       const seriesGroup = metricTimeSeries[firstDateKey]
@@ -760,9 +760,13 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       const dates = Array.from(
         new Set([...impressMap.keys(), ...clicksMap.keys(), ...costMap.keys(), ...revMap.keys(), ...convMap.keys()]),
       )
+        .filter((date) => {
+          if (chartBounds.startDate && date < chartBounds.startDate) return false
+          if (chartBounds.endDate && date > chartBounds.endDate) return false
+          return true
+        })
         .sort()
         .reverse()
-        .slice(0, 14)
 
       return dates.map((date) => {
         const impr = impressMap.get(date) ?? null
