@@ -51,6 +51,8 @@ type MetricCardData = {
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
   priorLabel: string
+  /** true when backend ran a comparison (window dates exist), even if prior data was empty */
+  comparisonAttempted: boolean
 }
 
 type TrendPoint = {
@@ -229,6 +231,10 @@ function MetricCard({ card }: { card: MetricCardData }) {
   const deltaText = formatDelta(card.delta, card.priorLabel)
   const dir = card.trendDirection
 
+  const noDataLabel = card.comparisonAttempted
+    ? `No data: ${card.priorLabel}`
+    : 'Select a date range to compare'
+
   return (
     <div className="rounded-[1.45rem] border border-[#e8e1d7] bg-white px-4 py-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
       <div className="flex items-center justify-between">
@@ -252,7 +258,7 @@ function MetricCard({ card }: { card: MetricCardData }) {
           {deltaText}
         </p>
       ) : (
-        <p className="mt-3 text-[0.92rem] text-[#98a1b2]">No prior comparison</p>
+        <p className="mt-3 text-[0.92rem] text-[#98a1b2]">{noDataLabel}</p>
       )}
     </div>
   )
@@ -796,6 +802,9 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
       previous_end: string
     } | null
 
+    // true when the backend ran the comparison block (date_preset was set)
+    const comparisonAttempted = comparisonWindow !== null
+
     // Build human-readable prior period label, e.g. "Apr 5 – Apr 11"
     const priorLabel = (() => {
       if (!comparisonWindow) return 'prior period'
@@ -901,6 +910,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         delta,
         trendDirection,
         priorLabel,
+        comparisonAttempted,
       }
     })
 

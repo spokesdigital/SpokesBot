@@ -56,6 +56,7 @@ type MetricCardData = {
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
   priorLabel: string
+  comparisonAttempted: boolean
   tooltip: string
 }
 
@@ -555,6 +556,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       previous_end: string
     } | null
 
+    const comparisonAttempted = comparisonWindow !== null
+
     const priorLabel = (() => {
       if (!comparisonWindow) return 'prior period'
       try {
@@ -625,7 +628,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             ? delta > 0 ? 'negative' : 'positive'
             : delta > 0 ? 'positive' : 'negative'
 
-      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, priorLabel, tooltip: def.tooltip }
+      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, priorLabel, comparisonAttempted, tooltip: def.tooltip }
     })
 
     // Resolve time-series data
@@ -891,6 +894,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   trendValue={card.delta}
                   trendDirection={card.trendDirection}
                   priorLabel={card.priorLabel}
+                  noDataLabel={card.comparisonAttempted ? `No data: ${card.priorLabel}` : 'Select a date range to compare'}
                   tooltip={card.tooltip}
                 />
               ))}

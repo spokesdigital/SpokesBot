@@ -9,11 +9,12 @@ interface KPICardProps {
   trendValue?: number | null
   trendDirection?: 'positive' | 'negative' | 'neutral'
   priorLabel?: string
+  noDataLabel?: string
   tooltip?: string
   loading?: boolean
 }
 
-export function KPICard({ title, value, trendValue, trendDirection, priorLabel = 'prior period', tooltip, loading = false }: KPICardProps) {
+export function KPICard({ title, value, trendValue, trendDirection, priorLabel = 'prior period', noDataLabel = 'No prior comparison', tooltip, loading = false }: KPICardProps) {
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
@@ -33,8 +34,8 @@ export function KPICard({ title, value, trendValue, trendDirection, priorLabel =
         : 'negative')
 
   const trendLabel =
-    trendValue == null || Math.abs(trendValue) < 0.05
-      ? 'No prior comparison'
+    trendValue == null
+      ? noDataLabel
       : `${Math.abs(trendValue).toFixed(1)}% vs ${priorLabel}`
 
   const colorClass =
@@ -87,10 +88,14 @@ export function KPICard({ title, value, trendValue, trendDirection, priorLabel =
       <div className="text-xl sm:text-2xl font-bold tracking-tight mb-2">{value}</div>
 
       {/* Trend */}
-      <div className={`flex items-center gap-1 text-xs font-medium ${colorClass}`}>
-        <TrendIcon className="h-3 w-3 shrink-0" />
-        <span className="truncate">{trendLabel}</span>
-      </div>
+      {trendValue == null ? (
+        <p className="text-xs font-medium text-muted-foreground">{trendLabel}</p>
+      ) : (
+        <div className={`flex items-center gap-1 text-xs font-medium ${colorClass}`}>
+          <TrendIcon className="h-3 w-3 shrink-0" />
+          <span className="truncate">{trendLabel}</span>
+        </div>
+      )}
     </div>
   )
 }
