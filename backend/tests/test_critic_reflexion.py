@@ -106,8 +106,8 @@ class TestRouting:
         )
         assert route_after_critic(state) == "inject_feedback"
 
-    def test_max_retries_constant_is_1(self):
-        assert MAX_RETRIES == 1
+    def test_max_retries_constant_is_2(self):
+        assert MAX_RETRIES == 2
 
 
 # ─────────────────────────────────────────────────────────────────────────────

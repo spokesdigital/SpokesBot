@@ -41,7 +41,9 @@
       "Bash(./venv/bin/pytest tests/ -q --tb=short)",
       "Bash(./venv/bin/ruff check *)",
       "Bash(venv/bin/ruff check *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(find *)",
+      "Bash(wc *)"
     ]
   }
 }

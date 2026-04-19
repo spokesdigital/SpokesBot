@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, Database } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -55,6 +55,7 @@ type MetricCardData = {
   value: string
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
+  priorLabel: string
   tooltip: string
 }
 
@@ -454,7 +455,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           operation: 'auto' as const,
           ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
-              ? { start_date: startDateValue!, end_date: endDateValue!, date_column: activeDateColumn }
+              ? { date_preset: 'custom' as const, start_date: startDateValue!, end_date: endDateValue!, date_column: activeDateColumn }
               : datePreset
                 ? { date_preset: datePreset, date_column: activeDateColumn }
                 : {}
@@ -549,6 +550,20 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const metricTimeSeries = (result.metric_time_series ?? {}) as MetricTimeSeries
     const metricBreakdowns = (result.metric_breakdowns ?? {}) as MetricBreakdowns
     const shape = (result.shape ?? null) as { rows: number; cols: number } | null
+    const comparisonWindow = (result.comparison_window ?? null) as {
+      previous_start: string
+      previous_end: string
+    } | null
+
+    const priorLabel = (() => {
+      if (!comparisonWindow) return 'prior period'
+      try {
+        const fmt = (iso: string) => format(parseISO(iso), 'MMM d')
+        return `${fmt(comparisonWindow.previous_start)} – ${fmt(comparisonWindow.previous_end)}`
+      } catch {
+        return 'prior period'
+      }
+    })()
 
     const numericColumns = Object.keys(numericSummary)
     const storedMappings = activeDataset?.metric_mappings ?? {}
@@ -610,7 +625,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             ? delta > 0 ? 'negative' : 'positive'
             : delta > 0 ? 'positive' : 'negative'
 
-      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, tooltip: def.tooltip }
+      return { key: def.key, label: def.label, value: formatMetricValue(def.kind, value), delta, trendDirection, priorLabel, tooltip: def.tooltip }
     })
 
     // Resolve time-series data
@@ -875,6 +890,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   value={card.value}
                   trendValue={card.delta}
                   trendDirection={card.trendDirection}
+                  priorLabel={card.priorLabel}
                   tooltip={card.tooltip}
                 />
               ))}

@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Database, Info } from 'lucide-react'
+import { AlertCircle, ArrowDownRight, ArrowUpRight, Database, Info, Minus } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
@@ -50,6 +50,7 @@ type MetricCardData = {
   value: string
   delta: number | null
   trendDirection: 'positive' | 'negative' | 'neutral'
+  priorLabel: string
 }
 
 type TrendPoint = {
@@ -186,9 +187,9 @@ function titleCase(value: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-function formatDelta(delta: number | null) {
+function formatDelta(delta: number | null, priorLabel: string) {
   if (delta == null || Number.isNaN(delta)) return null
-  return `${Math.abs(delta).toFixed(1)}% vs prior`
+  return `${Math.abs(delta).toFixed(1)}% vs ${priorLabel}`
 }
 
 function renderXAxisLabel(value: string) {
@@ -225,8 +226,8 @@ function buildDashboardRequestKey(params: {
 }
 
 function MetricCard({ card }: { card: MetricCardData }) {
-  const deltaText = formatDelta(card.delta)
-  const isPositive = card.trendDirection === 'positive'
+  const deltaText = formatDelta(card.delta, card.priorLabel)
+  const dir = card.trendDirection
 
   return (
     <div className="rounded-[1.45rem] border border-[#e8e1d7] bg-white px-4 py-6 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
@@ -238,10 +239,16 @@ function MetricCard({ card }: { card: MetricCardData }) {
       {deltaText ? (
         <p
           className={`mt-3 flex items-center gap-1.5 text-[0.92rem] ${
-            card.trendDirection === 'neutral' ? 'text-[#98a1b2]' : isPositive ? 'text-[#24a261]' : 'text-[#ef4444]'
+            dir === 'positive' ? 'text-[#24a261]' : dir === 'negative' ? 'text-[#ef4444]' : 'text-[#98a1b2]'
           }`}
         >
-          {isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+          {dir === 'positive' ? (
+            <ArrowUpRight className="h-4 w-4 shrink-0" />
+          ) : dir === 'negative' ? (
+            <ArrowDownRight className="h-4 w-4 shrink-0" />
+          ) : (
+            <Minus className="h-4 w-4 shrink-0" />
+          )}
           {deltaText}
         </p>
       ) : (
@@ -615,6 +622,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
           ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? {
+                  date_preset: 'custom' as const,
                   start_date: startDateValue!,
                   end_date: endDateValue!,
                   date_column: activeDateColumn,
@@ -783,6 +791,21 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
     const comparison = (result.comparison ?? {}) as MetricComparison
     const metricTimeSeries = (result.metric_time_series ?? {}) as MetricTimeSeries
     const metricBreakdowns = (result.metric_breakdowns ?? {}) as MetricBreakdowns
+    const comparisonWindow = (result.comparison_window ?? null) as {
+      previous_start: string
+      previous_end: string
+    } | null
+
+    // Build human-readable prior period label, e.g. "Apr 5 – Apr 11"
+    const priorLabel = (() => {
+      if (!comparisonWindow) return 'prior period'
+      try {
+        const fmt = (iso: string) => format(parseISO(iso), 'MMM d')
+        return `${fmt(comparisonWindow.previous_start)} – ${fmt(comparisonWindow.previous_end)}`
+      } catch {
+        return 'prior period'
+      }
+    })()
 
     const numericColumns = Object.keys(numericSummary)
     const storedMetricMappings = activeDataset?.metric_mappings ?? {}
@@ -877,6 +900,7 @@ export function OverviewDashboard({ targetOrgId }: { targetOrgId?: string } = {}
         value: formatMetricValue(definition.kind, value),
         delta,
         trendDirection,
+        priorLabel,
       }
     })
 

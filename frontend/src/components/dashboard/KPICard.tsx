@@ -8,11 +8,12 @@ interface KPICardProps {
   value: string
   trendValue?: number | null
   trendDirection?: 'positive' | 'negative' | 'neutral'
+  priorLabel?: string
   tooltip?: string
   loading?: boolean
 }
 
-export function KPICard({ title, value, trendValue, trendDirection, tooltip, loading = false }: KPICardProps) {
+export function KPICard({ title, value, trendValue, trendDirection, priorLabel = 'prior period', tooltip, loading = false }: KPICardProps) {
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
@@ -34,7 +35,7 @@ export function KPICard({ title, value, trendValue, trendDirection, tooltip, loa
   const trendLabel =
     trendValue == null || Math.abs(trendValue) < 0.05
       ? 'No prior comparison'
-      : `${Math.abs(trendValue).toFixed(1)}% vs prior`
+      : `${Math.abs(trendValue).toFixed(1)}% vs ${priorLabel}`
 
   const colorClass =
     direction === 'positive'
