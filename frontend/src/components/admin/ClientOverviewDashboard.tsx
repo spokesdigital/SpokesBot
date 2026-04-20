@@ -358,7 +358,7 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
         else formattedValue = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(data.current)
       }
 
-      const trendDirection =
+      const trendDirection: 'positive' | 'negative' | 'neutral' =
         delta == null || Math.abs(delta) < 0.05
           ? 'neutral'
           : INVERTED_TREND_KEYS.has(def.key)
