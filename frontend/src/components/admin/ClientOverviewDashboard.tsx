@@ -5,8 +5,9 @@ import { format, parseISO } from 'date-fns'
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
+  PieChart,
+  Pie,
+  Cell,
   CartesianGrid,
   Legend,
   ResponsiveContainer,
@@ -14,21 +15,19 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, BarChart2, RefreshCw, Share2, TrendingUp } from 'lucide-react'
+import { AlertCircle, BarChart2, RefreshCw, Share2, TrendingUp, Lightbulb } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
+import { KPICard } from '@/components/dashboard/KPICard'
+import { buildPriorLabel, buildNoDataLabel } from '@/components/dashboard/channelMetrics'
+import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type DateFilter = 'last_30_days' | 'last_90_days' | 'last_180_days' | 'all_time'
 
-type ChannelTotals = {
-  impressions: number | null
-  clicks: number | null
-  cost: number | null
-  revenue: number | null
-}
+type ChannelTotals = Record<string, { current: number | null; previous: number | null }>
 
 type TrendPoint = {
   date: string
@@ -36,23 +35,48 @@ type TrendPoint = {
   total_cost?: number
 }
 
-// ── Metric definitions (mirrors dashboard page) ───────────────────────────────
+// ── Metric definitions (matches prototype) ───────────────────────────────
 
 const METRIC_DEFS = [
   {
     key: 'impressions',
+    label: 'IMPRESSIONS',
+    kind: 'number',
     patterns: [/impression/i, /\bimpr\b/i, /\bviews?\b/i, /\breach\b/i],
+    tooltip: 'Times your ads were shown across channels.',
   },
   {
     key: 'clicks',
+    label: 'CLICKS',
+    kind: 'number',
     patterns: [/\bclick/i, /\bclicks\b/i, /\blink[\s_-]*click/i],
+    tooltip: 'Total number of ad clicks.',
+  },
+  {
+    key: 'ctr',
+    label: 'CTR',
+    kind: 'percent',
+    patterns: [/\bctr\b/i, /click[\s_-]*through[\s_-]*rate/i],
+    tooltip: 'Percentage of views that became clicks.',
+  },
+  {
+    key: 'avg_cpc',
+    label: 'AVG CPC',
+    kind: 'currency',
+    patterns: [/\bcpc\b/i, /cost[\s_-]*per[\s_-]*click/i],
+    tooltip: 'Average cost per click.',
   },
   {
     key: 'cost',
+    label: 'COST',
+    kind: 'currency',
     patterns: [/\bcost\b/i, /\bspend\b/i, /ad[\s_-]*spend/i, /amount[\s_-]*spent/i],
+    tooltip: 'Total ad spend this period.',
   },
   {
     key: 'revenue',
+    label: 'REVENUE',
+    kind: 'currency',
     patterns: [
       /\brevenue\b/i,
       /\bsales\b/i,
@@ -60,42 +84,57 @@ const METRIC_DEFS = [
       /\bpurchase[\s_-]*value/i,
       /\bconversion[\s_-]*value/i,
     ],
+    tooltip: 'Revenue from ad-driven customers.',
   },
-]
+  {
+    key: 'roas',
+    label: 'ROAS',
+    kind: 'ratio',
+    patterns: [/\broas\b/i, /return[\s_-]*on[\s_-]*ad[\s_-]*spend/i],
+    tooltip: 'Revenue earned per $1 of ad spend.',
+  },
+] as const
+
+const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
+
+const COLORS = ['#f0a500', '#22c55e'] // Yellow and Green based on prototype
 
 // ── Aggregation helpers ───────────────────────────────────────────────────────
 
 function extractTotals(result: AnalyticsResult | null, dataset: Dataset | null): ChannelTotals {
-  if (!result || !dataset || !result.result) {
-    return { impressions: null, clicks: null, cost: null, revenue: null }
+  const base = {
+    impressions: { current: null, previous: null },
+    clicks: { current: null, previous: null },
+    cost: { current: null, previous: null },
+    revenue: { current: null, previous: null },
   }
+  if (!result || !dataset || !result.result) return base
 
   const numericTotals = (result.result.numeric_totals ?? {}) as Record<string, number>
-  const comparison = (result.result.comparison ?? {}) as Record<string, { current?: number }>
+  const comparison = (result.result.comparison ?? {}) as Record<string, { current?: number; previous?: number }>
   const mappings = dataset.metric_mappings ?? {}
   const numericCols = Object.keys((result.result.numeric_summary ?? {}) as Record<string, unknown>)
 
-  const get = (key: string): number | null => {
-    // 1. Try explicit mapping
+  const get = (key: string) => {
     let col = mappings[key]
-    
-    // 2. Fallback: Try pattern matching against available numeric columns
     if (!col || !numericCols.includes(col)) {
       const def = METRIC_DEFS.find(d => d.key === key)
       if (def) {
         col = numericCols.find(c => def.patterns.some(p => p.test(c))) ?? null
       }
     }
-
-    if (!col) return null
-    return comparison[col]?.current ?? numericTotals[col] ?? null
+    if (!col) return { current: null, previous: null }
+    return {
+      current: comparison[col]?.current ?? numericTotals[col] ?? null,
+      previous: comparison[col]?.previous ?? null,
+    }
   }
 
-  return { 
-    impressions: get('impressions'), 
-    clicks: get('clicks'), 
-    cost: get('cost'), 
-    revenue: get('revenue') 
+  return {
+    impressions: get('impressions'),
+    clicks: get('clicks'),
+    cost: get('cost'),
+    revenue: get('revenue'),
   }
 }
 
@@ -155,31 +194,8 @@ function safeSum(a: number | null, b: number | null): number | null {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-const fmtNum = (n: number | null) =>
-  n === null ? '—' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)
-const fmtCur = (n: number | null) =>
-  n === null
-    ? '—'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-const fmtPct = (n: number | null) => (n === null ? '—' : `${(n * 100).toFixed(2)}%`)
-const fmtRoas = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}x`)
-const fmtCpc = (n: number | null) =>
-  n === null
-    ? '—'
-    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n)
 const fmtDate = (v: string) => {
   try { return format(parseISO(v), 'MMM d') } catch { return v }
-}
-
-// ── KPI card ──────────────────────────────────────────────────────────────────
-
-function KPI({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[1.4rem] border border-[#e8e1d7] bg-white px-4 py-5 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-      <p className="text-[0.7rem] font-semibold uppercase tracking-[0.09em] text-slate-400">{label}</p>
-      <p className="mt-3 text-[1.35rem] font-semibold tracking-tight text-slate-800">{value}</p>
-    </div>
-  )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -198,9 +214,7 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
-  // Start false — the shimmer should only show once we know we have a session
-  // and have actually kicked off a request. Starting true causes a premature
-  // "loading" flash before auth has even hydrated.
+  
   const [loadingDatasets, setLoadingDatasets] = useState(true)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
@@ -222,13 +236,8 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
     [datasets],
   )
 
-  // Load datasets for this org — only start the shimmer once we know we
-  // have an active session so there is no premature loading flash.
   useEffect(() => {
-    if (!session) {
-      // Auth not ready yet — keep loading=false so we don't flash a shimmer
-      return
-    }
+    if (!session) return
     let cancelled = false
     setLoadingDatasets(true)
     setError(null)
@@ -240,7 +249,6 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
     return () => { cancelled = true }
   }, [session, orgId])
 
-  // Fetch Google Ads analytics
   useEffect(() => {
     if (!session || !googleDataset) {
       setGoogleAnalytics(null)
@@ -266,7 +274,6 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
     return () => { cancelled = true }
   }, [session, googleDataset, dateFilter, orgId])
 
-  // Fetch Meta Ads analytics
   useEffect(() => {
     if (!session || !metaDataset) {
       setMetaAnalytics(null)
@@ -296,16 +303,78 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])
   const metaTotals = useMemo(() => extractTotals(metaAnalytics, metaDataset), [metaAnalytics, metaDataset])
 
+  const comparisonWindow = useMemo(() => {
+    return (googleAnalytics?.result?.comparison_window ?? metaAnalytics?.result?.comparison_window ?? null) as ComparisonWindow | null
+  }, [googleAnalytics, metaAnalytics])
+
+  const priorLabel = buildPriorLabel(comparisonWindow)
+  const noDataLabel = buildNoDataLabel(comparisonWindow !== null, priorLabel)
+
   const combined = useMemo(() => {
-    const impressions = safeSum(googleTotals.impressions, metaTotals.impressions)
-    const clicks = safeSum(googleTotals.clicks, metaTotals.clicks)
-    const cost = safeSum(googleTotals.cost, metaTotals.cost)
-    const revenue = safeSum(googleTotals.revenue, metaTotals.revenue)
-    const ctr = impressions && clicks ? clicks / impressions : null
-    const roas = cost && revenue ? revenue / cost : null
-    const avgCpc = clicks && cost ? cost / clicks : null
-    return { impressions, clicks, cost, revenue, ctr, roas, avgCpc }
+    const sum = (k: keyof ChannelTotals) => ({
+      current: safeSum(googleTotals[k].current, metaTotals[k].current),
+      previous: safeSum(googleTotals[k].previous, metaTotals[k].previous),
+    })
+
+    const imp = sum('impressions')
+    const clk = sum('clicks')
+    const cst = sum('cost')
+    const rev = sum('revenue')
+
+    const calcRatio = (num: {current: number|null, previous: number|null}, den: {current: number|null, previous: number|null}) => ({
+      current: num.current != null && den.current != null && den.current > 0 ? num.current / den.current : null,
+      previous: num.previous != null && den.previous != null && den.previous > 0 ? num.previous / den.previous : null,
+    })
+
+    const ctr = calcRatio(clk, imp)
+    const roas = calcRatio(rev, cst)
+    const avgCpc = calcRatio(cst, clk)
+
+    return {
+      impressions: imp,
+      clicks: clk,
+      cost: cst,
+      revenue: rev,
+      ctr,
+      roas,
+      avg_cpc: avgCpc,
+    }
   }, [googleTotals, metaTotals])
+
+  const cards = useMemo(() => {
+    return METRIC_DEFS.map((def) => {
+      const data = combined[def.key as keyof typeof combined] as { current: number | null, previous: number | null }
+      
+      let delta: number | null = null
+      if (data.current != null && data.previous != null && data.previous !== 0) {
+        delta = ((data.current - data.previous) / Math.abs(data.previous)) * 100
+      }
+
+      let formattedValue = '—'
+      if (data.current != null) {
+        if (def.kind === 'currency') formattedValue = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(data.current)
+        else if (def.kind === 'percent') formattedValue = `${(data.current * 100).toFixed(2)}%`
+        else if (def.kind === 'ratio') formattedValue = `${data.current.toFixed(2)}x`
+        else formattedValue = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(data.current)
+      }
+
+      const trendDirection =
+        delta == null || Math.abs(delta) < 0.05
+          ? 'neutral'
+          : INVERTED_TREND_KEYS.has(def.key)
+            ? delta > 0 ? 'negative' : 'positive'
+            : delta > 0 ? 'positive' : 'negative'
+
+      return {
+        key: def.key,
+        label: def.label,
+        value: formattedValue,
+        trendValue: delta,
+        trendDirection,
+        tooltip: def.tooltip,
+      }
+    })
+  }, [combined])
 
   const trendData = useMemo(() => {
     const gRev = extractTimeSeries(googleAnalytics, googleDataset, 'revenue')
@@ -315,34 +384,35 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
     return buildTrend(gRev, gCost, mRev, mCost)
   }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset])
 
-  // Grouped bar data: cost & revenue per channel
-  const channelBarData = useMemo(
-    () => [
-      { metric: 'Cost', google: googleTotals.cost ?? 0, meta: metaTotals.cost ?? 0 },
-      { metric: 'Revenue', google: googleTotals.revenue ?? 0, meta: metaTotals.revenue ?? 0 },
-    ],
-    [googleTotals, metaTotals],
-  )
+  const revenueSplitData = useMemo(() => {
+    const data = []
+    if ((googleTotals.revenue.current ?? 0) > 0) {
+      data.push({ name: 'Google Ads', value: googleTotals.revenue.current as number })
+    }
+    if ((metaTotals.revenue.current ?? 0) > 0) {
+      data.push({ name: 'Meta Ads', value: metaTotals.revenue.current as number })
+    }
+    return data
+  }, [googleTotals, metaTotals])
 
   const hasAnyData = googleDataset !== null || metaDataset !== null
   const loadingAnalytics = loadingGoogle || loadingMeta
 
-  // Show shimmer if: (1) auth hasn't hydrated yet, OR (2) we're actively fetching datasets.
-  // This prevents the instant "No channel data" flash on first render before any request fires.
   if (!session || loadingDatasets) {
     return (
       <div className="space-y-5 p-8">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="rounded-[1.4rem] border border-[#ebe4da] bg-white px-4 py-5">
-              <div className="shimmer-cool h-3 w-20 rounded" />
-              <div className="shimmer-cool mt-4 h-6 w-24 rounded" />
+            <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
+              <div className="shimmer-warm h-3 w-20 rounded" />
+              <div className="shimmer-warm mt-4 h-6 w-24 rounded" />
+              <div className="shimmer-warm mt-3 h-3 w-28 rounded" />
             </div>
           ))}
         </div>
         <div className="grid gap-6 xl:grid-cols-2">
-          <div className="shimmer-cool h-[320px] rounded-[1.7rem]" />
-          <div className="shimmer-cool h-[320px] rounded-[1.7rem]" />
+          <div className="shimmer-warm h-[320px] rounded-[1.7rem]" />
+          <div className="shimmer-warm h-[320px] rounded-[1.7rem]" />
         </div>
       </div>
     )
@@ -370,11 +440,8 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
       {/* Header + date filter */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-semibold text-slate-800">Combined Channel Performance</h2>
-            <span className="rounded bg-slate-100 px-1 py-0.5 text-[9px] font-medium text-slate-400">v1.1.2</span>
-          </div>
-          <p className="mt-0.5 text-sm text-slate-500">Aggregated across Google Ads and Meta Ads</p>
+          <h2 className="text-xl font-semibold text-slate-800">Overview</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Combined performance across all active channels</p>
         </div>
         <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {(Object.keys(DATE_LABELS) as DateFilter[]).map((key) => (
@@ -402,44 +469,20 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
 
       {/* Channel source badges */}
       <div className="flex flex-wrap gap-2">
-        <div
-          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${
-            googleDataset
-              ? 'border-blue-200 bg-blue-50 text-blue-700'
-              : 'border-slate-200 bg-slate-50 text-slate-400'
-          }`}
-        >
+        <div className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${googleDataset ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
           <BarChart2 className="h-3.5 w-3.5" />
           Google Ads
-          {loadingGoogle ? (
-            <RefreshCw className="h-3 w-3 animate-spin opacity-50" />
-          ) : (
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                googleDataset ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'
-              }`}
-            >
+          {loadingGoogle ? <RefreshCw className="h-3 w-3 animate-spin opacity-50" /> : (
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${googleDataset ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
               {googleDataset ? 'Active' : 'No data'}
             </span>
           )}
         </div>
-        <div
-          className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${
-            metaDataset
-              ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-              : 'border-slate-200 bg-slate-50 text-slate-400'
-          }`}
-        >
+        <div className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium ${metaDataset ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
           <Share2 className="h-3.5 w-3.5" />
           Meta Ads
-          {loadingMeta ? (
-            <RefreshCw className="h-3 w-3 animate-spin opacity-50" />
-          ) : (
-            <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                metaDataset ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'
-              }`}
-            >
+          {loadingMeta ? <RefreshCw className="h-3 w-3 animate-spin opacity-50" /> : (
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase ${metaDataset ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
               {metaDataset ? 'Active' : 'No data'}
             </span>
           )}
@@ -450,34 +493,36 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
       {loadingAnalytics ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="rounded-[1.4rem] border border-[#ebe4da] bg-white px-4 py-5">
-              <div className="shimmer-cool h-3 w-20 rounded" />
-              <div className="shimmer-cool mt-4 h-6 w-24 rounded" />
-            </div>
+            <KPICard key={i} title="" value="" loading={true} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
-          <KPI label="Impressions" value={fmtNum(combined.impressions)} />
-          <KPI label="Clicks" value={fmtNum(combined.clicks)} />
-          <KPI label="Total Cost" value={fmtCur(combined.cost)} />
-          <KPI label="Revenue" value={fmtCur(combined.revenue)} />
-          <KPI label="ROAS" value={fmtRoas(combined.roas)} />
-          <KPI label="CTR" value={fmtPct(combined.ctr)} />
-          <KPI label="Avg CPC" value={fmtCpc(combined.avgCpc)} />
+          {cards.map((card) => (
+            <KPICard
+              key={card.key}
+              title={card.label}
+              value={card.value}
+              trendValue={card.trendValue}
+              trendDirection={card.trendDirection}
+              priorLabel={priorLabel}
+              noDataLabel={noDataLabel}
+              tooltip={card.tooltip}
+            />
+          ))}
         </div>
       )}
 
       {/* Charts row */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)]">
         {/* Revenue vs Cost Trend */}
-        <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+        <div className="rounded-xl border border-border bg-card p-6 card-shadow">
           <div className="mb-1 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Revenue vs Cost Trend</h3>
             <span className="text-[11px] text-slate-400">Combined · {trendData.length} data points</span>
           </div>
           {loadingAnalytics ? (
-            <div className="mt-4 shimmer-cool h-[280px] rounded-[1.2rem]" />
+            <div className="mt-4 shimmer-warm h-[280px] rounded-[1.2rem]" />
           ) : trendData.length > 0 ? (
             <div className="mt-4 h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -558,153 +603,72 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
           )}
         </div>
 
-        {/* Channel split bar chart */}
-        <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-          <h3 className="mb-4 text-sm font-semibold text-slate-700">Channel Split</h3>
+        {/* Revenue Split Donut Chart */}
+        <div className="rounded-xl border border-border bg-card p-6 card-shadow flex flex-col">
+          <h3 className="mb-4 text-sm font-semibold text-slate-700">Revenue Split</h3>
           {loadingAnalytics ? (
-            <div className="shimmer-cool h-[280px] rounded-[1.2rem]" />
-          ) : googleTotals.cost !== null || metaTotals.cost !== null ? (
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={channelBarData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <CartesianGrid stroke="#e4e9f0" strokeDasharray="4 4" vertical={false} />
-                  <XAxis
-                    dataKey="metric"
-                    tick={{ fill: '#8a93a5', fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
+            <div className="shimmer-warm h-[280px] rounded-[1.2rem]" />
+          ) : revenueSplitData.length > 0 ? (
+            <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center relative">
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={revenueSplitData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={95}
+                    paddingAngle={2}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {revenueSplitData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)}
+                    contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
                   />
-                  <YAxis
-                    tick={{ fill: '#8a93a5', fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={52}
-                    tickFormatter={(v: number) =>
-                      v >= 1000
-                        ? `$${(v / 1000).toFixed(0)}k`
-                        : `$${v}`
-                    }
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: '#fff',
-                      border: '1px solid #e8e1d7',
-                      borderRadius: 14,
-                      boxShadow: '0 8px 24px rgba(15,23,42,0.1)',
-                    }}
-                    formatter={(v: number) =>
-                      `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                    }
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                  <Bar dataKey="google" name="Google Ads" fill="#4285f4" radius={[6, 6, 0, 0]} maxBarSize={44} />
-                  <Bar dataKey="meta" name="Meta Ads" fill="#1877f2" radius={[6, 6, 0, 0]} maxBarSize={44} />
-                </BarChart>
+                </PieChart>
               </ResponsiveContainer>
+
+              {/* Custom Legend */}
+              <div className="flex items-center justify-center gap-6 mt-2 pb-2">
+                {revenueSplitData.map((entry, index) => (
+                  <div key={entry.name} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                    <span className="text-xs font-medium text-slate-600">{entry.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex h-[280px] items-center justify-center rounded-[1.2rem] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
-              No spend data available
+              No revenue data available
             </div>
           )}
         </div>
       </div>
 
-      {/* Channel breakdown table */}
-      <div className="rounded-[1.7rem] border border-[#e8e1d7] bg-white p-6 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-        <h3 className="mb-4 text-sm font-semibold text-slate-700">Channel Breakdown</h3>
-        {loadingAnalytics ? (
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="shimmer-cool h-10 rounded-xl" />
-            ))}
+      {/* Overall AI Insights Placeholder */}
+      <div className="rounded-xl border border-border bg-card p-6 card-shadow flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-yellow-50 text-yellow-500">
+              <Lightbulb className="h-4 w-4" />
+            </div>
+            <h3 className="font-semibold text-slate-800">Overall AI Insights</h3>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  {['Channel', 'Impressions', 'Clicks', 'CTR', 'Cost', 'Revenue', 'ROAS', 'Avg CPC'].map((h) => (
-                    <th
-                      key={h}
-                      className={`py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${h === 'Channel' ? 'pr-6 text-left' : 'px-3 text-right'}`}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {[
-                  {
-                    name: 'Google Ads',
-                    color: '#4285f4',
-                    t: googleTotals,
-                    active: googleDataset !== null,
-                  },
-                  {
-                    name: 'Meta Ads',
-                    color: '#1877f2',
-                    t: metaTotals,
-                    active: metaDataset !== null,
-                  },
-                ].map(({ name, color, t, active }) => {
-                  const roas = t.cost && t.revenue ? t.revenue / t.cost : null
-                  const ctr = t.impressions && t.clicks ? t.clicks / t.impressions : null
-                  const avgCpc = t.clicks && t.cost ? t.cost / t.clicks : null
-                  return (
-                    <tr key={name}>
-                      <td className="py-3 pr-6">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-                          <span className="font-medium text-slate-700">{name}</span>
-                          {!active && (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-400">
-                              No data
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtNum(t.impressions)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtNum(t.clicks)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtPct(ctr)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtCur(t.cost)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtCur(t.revenue)}</td>
-                      <td className="py-3 px-3 text-right font-mono text-slate-600">{fmtRoas(roas)}</td>
-                      <td className="py-3 pl-3 text-right font-mono text-slate-600">{fmtCpc(avgCpc)}</td>
-                    </tr>
-                  )
-                })}
-                {/* Combined totals row */}
-                <tr className="border-t-2 border-slate-200 bg-slate-50/60 font-semibold">
-                  <td className="py-3 pr-6 text-slate-800">Combined</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtNum(combined.impressions)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtNum(combined.clicks)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtPct(combined.ctr)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtCur(combined.cost)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtCur(combined.revenue)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-slate-800">{fmtRoas(combined.roas)}</td>
-                  <td className="py-3 pl-3 text-right font-mono text-slate-800">{fmtCpc(combined.avgCpc)}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-bold tracking-wider text-yellow-600 uppercase">
+            AI-POWERED
           </div>
-        )}
+        </div>
+        <div className="text-sm text-slate-500 ml-11 pb-2">
+          Combined cross-channel strategic insights will be available in a future update once sufficient historical data is aggregated.
+        </div>
       </div>
 
-      {/* Dataset labels */}
-      <div className="flex flex-wrap gap-4 text-xs text-slate-400">
-        {googleDataset && (
-          <span>
-            Google: <span className="font-medium text-slate-500">{googleDataset.report_name || googleDataset.file_name}</span>
-          </span>
-        )}
-        {metaDataset && (
-          <span>
-            Meta: <span className="font-medium text-slate-500">{metaDataset.report_name || metaDataset.file_name}</span>
-          </span>
-        )}
-      </div>
     </div>
   )
 }
