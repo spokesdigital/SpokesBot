@@ -40,28 +40,64 @@ type TrendPoint = {
 // ── Metric definitions (mirrors dashboard page) ───────────────────────────────
 
 const METRIC_DEFS = [
-  { key: 'impressions', patterns: [/impression/i, /\bimpr\b/i, /\bviews?\b/i] },
-  { key: 'clicks', patterns: [/\bclick/i] },
-  { key: 'cost', patterns: [/\bcost\b/i, /\bspend\b/i, /ad[\s_-]*spend/i] },
-  { key: 'revenue', patterns: [/\brevenue\b/i, /\bsales\b/i, /\bgmv\b/i, /\bincome\b/i] },
+  {
+    key: 'impressions',
+    patterns: [/impression/i, /\bimpr\b/i, /\bviews?\b/i, /\breach\b/i],
+  },
+  {
+    key: 'clicks',
+    patterns: [/\bclick/i, /\bclicks\b/i, /\blink[\s_-]*click/i],
+  },
+  {
+    key: 'cost',
+    patterns: [/\bcost\b/i, /\bspend\b/i, /ad[\s_-]*spend/i, /amount[\s_-]*spent/i],
+  },
+  {
+    key: 'revenue',
+    patterns: [
+      /\brevenue\b/i,
+      /\bsales\b/i,
+      /\bgmv\b/i,
+      /\bpurchase[\s_-]*value/i,
+      /\bconversion[\s_-]*value/i,
+    ],
+  },
 ]
 
 // ── Aggregation helpers ───────────────────────────────────────────────────────
 
 function extractTotals(result: AnalyticsResult | null, dataset: Dataset | null): ChannelTotals {
-  if (!result || !dataset) return { impressions: null, clicks: null, cost: null, revenue: null }
-  const numericTotals = (result.result?.numeric_totals ?? {}) as Record<string, number>
-  const comparison = (result.result?.comparison ?? {}) as Record<string, { current?: number }>
+  if (!result || !dataset || !result.result) {
+    return { impressions: null, clicks: null, cost: null, revenue: null }
+  }
+
+  const numericTotals = (result.result.numeric_totals ?? {}) as Record<string, number>
+  const comparison = (result.result.comparison ?? {}) as Record<string, { current?: number }>
   const mappings = dataset.metric_mappings ?? {}
-  const numericCols = Object.keys((result.result?.numeric_summary ?? {}) as Record<string, unknown>)
-  const cols = getVerifiedMetricColumns(METRIC_DEFS, mappings, numericCols)
+  const numericCols = Object.keys((result.result.numeric_summary ?? {}) as Record<string, unknown>)
 
   const get = (key: string): number | null => {
-    const col = cols[key]
+    // 1. Try explicit mapping
+    let col = mappings[key]
+    
+    // 2. Fallback: Try pattern matching against available numeric columns
+    if (!col || !numericCols.includes(col)) {
+      const def = METRIC_DEFS.find(d => d.key === key)
+      if (def) {
+        col = numericCols.find(c => def.patterns.some(p => p.test(c))) ?? null
+      }
+    }
+
     if (!col) return null
     return comparison[col]?.current ?? numericTotals[col] ?? null
   }
-  return { impressions: get('impressions'), clicks: get('clicks'), cost: get('cost'), revenue: get('revenue') }
+
+  return { 
+    impressions: get('impressions'), 
+    clicks: get('clicks'), 
+    cost: get('cost'), 
+    revenue: get('revenue') 
+  }
 }
 
 function extractTimeSeries(
@@ -69,13 +105,25 @@ function extractTimeSeries(
   dataset: Dataset | null,
   role: string,
 ): Map<string, number> {
-  if (!result || !dataset) return new Map()
+  if (!result || !dataset || !result.result) return new Map()
+  
   const mappings = dataset.metric_mappings ?? {}
-  const numericCols = Object.keys((result.result?.numeric_summary ?? {}) as Record<string, unknown>)
-  const cols = getVerifiedMetricColumns(METRIC_DEFS, mappings, numericCols)
-  const col = cols[role]
+  const numericCols = Object.keys((result.result.numeric_summary ?? {}) as Record<string, unknown>)
+  
+  // 1. Try explicit mapping
+  let col = mappings[role]
+  
+  // 2. Fallback: Pattern matching
+  if (!col || !numericCols.includes(col)) {
+    const def = METRIC_DEFS.find(d => d.key === role)
+    if (def) {
+      col = numericCols.find(c => def.patterns.some(p => p.test(c))) ?? null
+    }
+  }
+
   if (!col) return new Map()
-  const mts = (result.result?.metric_time_series ?? {}) as Record<
+
+  const mts = (result.result.metric_time_series ?? {}) as Record<
     string,
     Record<string, Array<{ date: string; value: number }>>
   >
@@ -303,12 +351,12 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
 
   if (!hasAnyData) {
     return (
-      <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 p-8 text-center">
-        <TrendingUp className="h-12 w-12 text-slate-300" />
-        <p className="text-lg font-semibold text-slate-700">No channel data yet</p>
-        <p className="max-w-sm text-sm text-slate-500">
-          Upload Google Ads and Meta Ads CSVs from the <strong>Data Management</strong> tab to see combined
-          performance automatically here.
+      <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 p-8 text-center bg-[#fcfaf7]">
+        <TrendingUp className="h-12 w-12 text-slate-200" />
+        <h2 className="text-xl font-semibold text-slate-700">No reports ready</h2>
+        <p className="max-w-md text-sm text-slate-500">
+          We haven&apos;t found any processed Google Ads or Meta Ads datasets for your workspace yet. 
+          Performance data will appear here once your admin uploads and processes your initial CSV reports.
         </p>
       </div>
     )
