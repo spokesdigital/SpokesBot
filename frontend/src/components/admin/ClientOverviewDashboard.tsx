@@ -151,7 +151,10 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
-  const [loadingDatasets, setLoadingDatasets] = useState(true)
+  // Start false — the shimmer should only show once we know we have a session
+  // and have actually kicked off a request. Starting true causes a premature
+  // "loading" flash before auth has even hydrated.
+  const [loadingDatasets, setLoadingDatasets] = useState(false)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -172,9 +175,13 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
     [datasets],
   )
 
-  // Load datasets for this org
+  // Load datasets for this org — only start the shimmer once we know we
+  // have an active session so there is no premature loading flash.
   useEffect(() => {
-    if (!session) return
+    if (!session) {
+      // Auth not ready yet — keep loading=false so we don't flash a shimmer
+      return
+    }
     let cancelled = false
     setLoadingDatasets(true)
     setError(null)
@@ -188,7 +195,11 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
 
   // Fetch Google Ads analytics
   useEffect(() => {
-    if (!session || !googleDataset) { setGoogleAnalytics(null); return }
+    if (!session || !googleDataset) {
+      setGoogleAnalytics(null)
+      setLoadingGoogle(false)
+      return
+    }
     let cancelled = false
     setLoadingGoogle(true)
     const dateCol = googleDataset.detected_date_column
@@ -210,7 +221,11 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
 
   // Fetch Meta Ads analytics
   useEffect(() => {
-    if (!session || !metaDataset) { setMetaAnalytics(null); return }
+    if (!session || !metaDataset) {
+      setMetaAnalytics(null)
+      setLoadingMeta(false)
+      return
+    }
     let cancelled = false
     setLoadingMeta(true)
     const dateCol = metaDataset.detected_date_column
@@ -265,7 +280,9 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   const hasAnyData = googleDataset !== null || metaDataset !== null
   const loadingAnalytics = loadingGoogle || loadingMeta
 
-  if (loadingDatasets) {
+  // Show shimmer if: (1) auth hasn't hydrated yet, OR (2) we're actively fetching datasets.
+  // This prevents the instant "No channel data" flash on first render before any request fires.
+  if (!session || loadingDatasets) {
     return (
       <div className="space-y-5 p-8">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
