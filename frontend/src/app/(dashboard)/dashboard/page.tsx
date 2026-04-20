@@ -55,7 +55,7 @@ export default function DashboardPage() {
 
   return (
     <div className="bg-[#fcfaf7] min-h-full">
-      <ClientOverviewDashboard orgId={orgId} />
+      <ClientOverviewDashboard orgId={orgId} orgName={user?.organization?.name ?? undefined} />
     </div>
   )
 }

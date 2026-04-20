@@ -380,7 +380,7 @@ export default function ClientDetailPage({
 
           {/* Render the correct dashboard component for this client */}
           {clientViewTab === 'overview' && (
-            <ClientOverviewDashboard orgId={orgId} />
+            <ClientOverviewDashboard orgId={orgId} orgName={org?.name} />
           )}
           {clientViewTab === 'google-ads' && (
             <ChannelPage
