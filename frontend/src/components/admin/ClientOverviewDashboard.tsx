@@ -14,13 +14,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, Calendar, Check, ChevronDown, Lightbulb, TrendingUp } from 'lucide-react'
+import { AlertCircle, Calendar, Check, ChevronDown, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
 import { KPICard } from '@/components/dashboard/KPICard'
+import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { buildPriorLabel, buildNoDataLabel } from '@/components/dashboard/channelMetrics'
 import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
+import type { AIInsight } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -338,6 +340,9 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   const [loadingDatasets, setLoadingDatasets] = useState(true)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
+  const [loadingInsights, setLoadingInsights] = useState(false)
+  const [insights, setInsights] = useState<AIInsight[]>([])
+  const [insightsError, setInsightsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const googleDataset = useMemo(
@@ -399,6 +404,25 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
     return () => { cancelled = true }
   }, [session, metaDataset, dateSelection, orgId])
+
+  // Fetch AI insights from the primary available dataset (Google first, then Meta)
+  const insightsDataset = googleDataset ?? metaDataset
+  useEffect(() => {
+    if (!session || !insightsDataset) { setInsights([]); setLoadingInsights(false); return }
+    let cancelled = false
+    setLoadingInsights(true)
+    setInsightsError(null)
+    api.analytics
+      .getInsights(
+        { dataset_id: insightsDataset.id, ...buildAnalyticsParams(dateSelection, insightsDataset.detected_date_column) },
+        session.access_token,
+        orgId,
+      )
+      .then(r => { if (!cancelled) setInsights(Array.isArray(r.insights) ? r.insights : []) })
+      .catch(e => { if (!cancelled) setInsightsError(e instanceof Error ? e.message : 'Failed to load insights') })
+      .finally(() => { if (!cancelled) setLoadingInsights(false) })
+    return () => { cancelled = true }
+  }, [session, insightsDataset, dateSelection, orgId])
 
   // Derived combined metrics
   const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])
@@ -465,12 +489,21 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     return buildTrend(gRev, gCost, mRev, mCost)
   }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset])
 
-  const revenueSplitData = useMemo(() => {
-    const rows = [
+  // Revenue split — fall back to cost (spend) if neither channel has revenue data
+  const { splitData, splitLabel } = useMemo(() => {
+    const revRows = [
       { name: 'Google Ads', value: googleTotals.revenue.current },
       { name: 'Meta Ads', value: metaTotals.revenue.current },
-    ]
-    return rows.filter(r => r.value != null && r.value > 0) as { name: string; value: number }[]
+    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number }[]
+
+    if (revRows.length > 0) return { splitData: revRows, splitLabel: 'Revenue Split' }
+
+    const costRows = [
+      { name: 'Google Ads', value: googleTotals.cost.current },
+      { name: 'Meta Ads', value: metaTotals.cost.current },
+    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number }[]
+
+    return { splitData: costRows, splitLabel: 'Spend Split' }
   }, [googleTotals, metaTotals])
 
   const hasAnyData = googleDataset !== null || metaDataset !== null
@@ -610,17 +643,17 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           )}
         </div>
 
-        {/* Revenue Split donut */}
+        {/* Revenue / Spend Split donut */}
         <div className="rounded-xl border border-border bg-card p-6 card-shadow flex flex-col">
-          <h3 className="mb-4 text-sm font-semibold text-slate-700">Revenue Split</h3>
+          <h3 className="mb-4 text-sm font-semibold text-slate-700">{splitLabel}</h3>
           {loadingAnalytics ? (
             <div className="shimmer-warm flex-1 min-h-[280px] rounded-xl" />
-          ) : revenueSplitData.length > 0 ? (
+          ) : splitData.length > 0 ? (
             <div className="flex flex-col items-center justify-center flex-1">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={revenueSplitData} cx="50%" cy="50%" innerRadius={65} outerRadius={90} paddingAngle={3} dataKey="value" stroke="none">
-                    {revenueSplitData.map(entry => (
+                  <Pie data={splitData} cx="50%" cy="50%" innerRadius={65} outerRadius={90} paddingAngle={3} dataKey="value" stroke="none">
+                    {splitData.map(entry => (
                       <Cell key={entry.name} fill={CHANNEL_COLORS[entry.name] ?? '#94a3b8'} />
                     ))}
                   </Pie>
@@ -631,7 +664,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex items-center justify-center gap-6 mt-3">
-                {revenueSplitData.map(entry => (
+                {splitData.map(entry => (
                   <div key={entry.name} className="flex items-center gap-2">
                     <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: CHANNEL_COLORS[entry.name] ?? '#94a3b8' }} />
                     <span className="text-xs font-medium text-slate-600">{entry.name}</span>
@@ -641,29 +674,21 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
             </div>
           ) : (
             <div className="flex flex-1 min-h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
-              No revenue data available
+              No channel data available
             </div>
           )}
         </div>
       </div>
 
       {/* Overall AI Insights */}
-      <div className="rounded-xl border border-border bg-card p-6 card-shadow">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50">
-              <Lightbulb className="h-4 w-4 text-amber-500" />
-            </div>
-            <h3 className="font-semibold text-slate-800">Overall AI Insights</h3>
-          </div>
-          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold tracking-wider text-amber-600 uppercase">
-            AI-POWERED
-          </span>
-        </div>
-        <p className="ml-11 text-sm text-slate-500">
-          Combined cross-channel strategic insights will be available once sufficient historical data is aggregated.
-        </p>
-      </div>
+      <OverallInsights
+        title="Overall AI Insights"
+        subtitle={insightsDataset ? `Based on ${insightsDataset.report_type === 'google_ads' ? 'Google Ads' : 'Meta Ads'} data` : undefined}
+        insights={insights}
+        loading={loadingInsights}
+        error={insightsError}
+        emptyMessage="Insights will appear once your channel data is ready for AI analysis."
+      />
 
     </div>
   )
