@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   Area,
@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, Calendar, ChevronDown, Lightbulb, TrendingUp } from 'lucide-react'
+import { AlertCircle, Calendar, Check, ChevronDown, Lightbulb, TrendingUp } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
@@ -24,7 +24,11 @@ import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DateFilter = 'last_30_days' | 'last_90_days' | 'last_180_days' | 'all_time'
+type PresetFilter = 'last_30_days' | 'last_90_days' | 'last_180_days' | 'all_time' | 'custom'
+
+type DateSelection =
+  | { preset: Exclude<PresetFilter, 'custom'> }
+  | { preset: 'custom'; startDate: string; endDate: string }
 
 type ChannelTotals = Record<string, { current: number | null; previous: number | null }>
 
@@ -96,17 +100,123 @@ const METRIC_DEFS = [
 
 const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
 
-// Donut chart colors: Google Ads = amber, Meta Ads = green (matches prototype palette)
 const CHANNEL_COLORS: Record<string, string> = {
   'Google Ads': '#f0a500',
   'Meta Ads': '#22c55e',
 }
 
-const DATE_LABELS: Record<DateFilter, string> = {
+const PRESET_LABELS: Record<Exclude<PresetFilter, 'custom'>, string> = {
   last_30_days: 'Last 30 Days',
   last_90_days: 'Last 90 Days',
   last_180_days: 'Last 180 Days',
   all_time: 'All Time',
+}
+
+// ── Date filter dropdown ──────────────────────────────────────────────────────
+
+function DateFilterDropdown({
+  value,
+  onChange,
+}: {
+  value: DateSelection
+  onChange: (v: DateSelection) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const label =
+    value.preset === 'custom'
+      ? `${value.startDate} → ${value.endDate}`
+      : PRESET_LABELS[value.preset]
+
+  function applyCustom() {
+    if (!customStart || !customEnd || customStart > customEnd) return
+    onChange({ preset: 'custom', startDate: customStart, endDate: customEnd })
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+      >
+        <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+        <span className="whitespace-nowrap">{label}</span>
+        <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+          {/* Preset options */}
+          <div className="p-1.5">
+            {(Object.entries(PRESET_LABELS) as [Exclude<PresetFilter, 'custom'>, string][]).map(([key, lbl]) => (
+              <button
+                key={key}
+                onClick={() => { onChange({ preset: key }); setOpen(false) }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition ${
+                  value.preset === key
+                    ? 'bg-amber-50 font-semibold text-amber-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {lbl}
+                {value.preset === key && <Check className="h-3.5 w-3.5 text-amber-500" />}
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-100" />
+
+          {/* Custom date range */}
+          <div className="p-3 space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Custom Range</p>
+            <div className="space-y-1.5">
+              <div>
+                <label className="text-[11px] text-slate-500 mb-0.5 block">Start</label>
+                <input
+                  type="date"
+                  value={customStart}
+                  onChange={e => setCustomStart(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-500 mb-0.5 block">End</label>
+                <input
+                  type="date"
+                  value={customEnd}
+                  onChange={e => setCustomEnd(e.target.value)}
+                  min={customStart}
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30"
+                />
+              </div>
+            </div>
+            <button
+              onClick={applyCustom}
+              disabled={!customStart || !customEnd || customStart > customEnd}
+              className="w-full rounded-lg bg-amber-500 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Aggregation helpers ───────────────────────────────────────────────────────
@@ -202,12 +312,26 @@ const fmtDate = (v: string) => {
   try { return format(parseISO(v), 'MMM d') } catch { return v }
 }
 
+// Build analytics params for a dataset given the current date selection
+function buildAnalyticsParams(dateSelection: DateSelection, dateCol: string | null) {
+  if (dateSelection.preset === 'all_time' || !dateCol) return {}
+  if (dateSelection.preset === 'custom') {
+    return {
+      date_preset: 'custom',
+      date_column: dateCol,
+      start_date: dateSelection.startDate,
+      end_date: dateSelection.endDate,
+    }
+  }
+  return { date_preset: dateSelection.preset, date_column: dateCol }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; orgName?: string }) {
   const { session } = useAuth()
 
-  const [dateFilter, setDateFilter] = useState<DateFilter>('last_30_days')
+  const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_30_days' })
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
@@ -248,14 +372,9 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     if (!session || !googleDataset) { setGoogleAnalytics(null); setLoadingGoogle(false); return }
     let cancelled = false
     setLoadingGoogle(true)
-    const dateCol = googleDataset.detected_date_column
     api.analytics
       .compute(
-        {
-          dataset_id: googleDataset.id,
-          operation: 'auto',
-          ...(dateCol && dateFilter !== 'all_time' ? { date_preset: dateFilter, date_column: dateCol } : {}),
-        },
+        { dataset_id: googleDataset.id, operation: 'auto', ...buildAnalyticsParams(dateSelection, googleDataset.detected_date_column) },
         session.access_token,
         orgId,
       )
@@ -263,20 +382,15 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       .catch(e => { if (!cancelled) { setGoogleAnalytics(null); setError(e instanceof Error ? `Google Ads: ${e.message}` : 'Google Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingGoogle(false) })
     return () => { cancelled = true }
-  }, [session, googleDataset, dateFilter, orgId])
+  }, [session, googleDataset, dateSelection, orgId])
 
   useEffect(() => {
     if (!session || !metaDataset) { setMetaAnalytics(null); setLoadingMeta(false); return }
     let cancelled = false
     setLoadingMeta(true)
-    const dateCol = metaDataset.detected_date_column
     api.analytics
       .compute(
-        {
-          dataset_id: metaDataset.id,
-          operation: 'auto',
-          ...(dateCol && dateFilter !== 'all_time' ? { date_preset: dateFilter, date_column: dateCol } : {}),
-        },
+        { dataset_id: metaDataset.id, operation: 'auto', ...buildAnalyticsParams(dateSelection, metaDataset.detected_date_column) },
         session.access_token,
         orgId,
       )
@@ -284,7 +398,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       .catch(e => { if (!cancelled) { setMetaAnalytics(null); setError(e instanceof Error ? `Meta Ads: ${e.message}` : 'Meta Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
     return () => { cancelled = true }
-  }, [session, metaDataset, dateFilter, orgId])
+  }, [session, metaDataset, dateSelection, orgId])
 
   // Derived combined metrics
   const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])
@@ -362,11 +476,17 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   const hasAnyData = googleDataset !== null || metaDataset !== null
   const loadingAnalytics = loadingGoogle || loadingMeta
 
-  // ── Shimmer (auth not ready or datasets loading) ──────────────────────────
+  // ── Shimmer ───────────────────────────────────────────────────────────────
   if (!session || loadingDatasets) {
     return (
       <div className="space-y-5 p-6 md:p-8">
-        <div className="shimmer-warm h-7 w-48 rounded-lg" />
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div className="shimmer-warm h-4 w-36 rounded" />
+            <div className="shimmer-warm h-7 w-28 rounded-lg" />
+          </div>
+          <div className="shimmer-warm h-10 w-36 rounded-xl" />
+        </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
@@ -376,7 +496,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
             </div>
           ))}
         </div>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
           <div className="shimmer-warm h-[320px] rounded-xl" />
           <div className="shimmer-warm h-[320px] rounded-xl" />
         </div>
@@ -384,7 +504,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     )
   }
 
-  // ── No data state ─────────────────────────────────────────────────────────
+  // ── No data ───────────────────────────────────────────────────────────────
   if (!hasAnyData) {
     return (
       <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 p-8 text-center">
@@ -394,45 +514,29 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           <p className="max-w-md text-sm text-red-500">{error}</p>
         ) : (
           <p className="max-w-md text-sm text-slate-500">
-            No processed Google Ads or Meta Ads datasets found yet. Performance data will appear
-            here once your admin uploads and processes your channel CSV reports.
+            No processed Google Ads or Meta Ads datasets found. Performance data will appear here
+            once your admin uploads and processes your channel CSV reports.
           </p>
         )}
       </div>
     )
   }
 
-  // ── Main dashboard ────────────────────────────────────────────────────────
+  // ── Dashboard ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
-      {/* Page header: org name + date filter */}
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {orgName && (
-            <p className="text-sm font-medium text-slate-500 mb-1">{orgName}</p>
-          )}
+          {orgName && <p className="text-sm font-medium text-slate-500 mb-1">{orgName}</p>}
           <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
           <p className="mt-0.5 text-sm text-slate-500">Combined performance across all active channels</p>
         </div>
-
-        {/* Date filter dropdown — matches prototype style */}
-        <div className="relative flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value as DateFilter)}
-            className="appearance-none bg-transparent pr-5 text-sm font-medium text-slate-700 outline-none cursor-pointer"
-          >
-            {(Object.keys(DATE_LABELS) as DateFilter[]).map(k => (
-              <option key={k} value={k}>{DATE_LABELS[k]}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 h-4 w-4 text-slate-400" />
-        </div>
+        <DateFilterDropdown value={dateSelection} onChange={setDateSelection} />
       </div>
 
-      {/* Error banner */}
+      {/* Error */}
       {error && (
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -440,7 +544,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         </div>
       )}
 
-      {/* 7 KPI cards */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
         {loadingAnalytics
           ? Array.from({ length: 7 }).map((_, i) => <KPICard key={i} title="" value="" loading={true} />)
@@ -458,7 +562,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
             ))}
       </div>
 
-      {/* Charts row */}
+      {/* Charts */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,1fr)]">
 
         {/* Revenue vs Cost Trend */}
@@ -484,22 +588,8 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={fmtDate}
-                    interval={Math.max(0, Math.ceil(trendData.length / 7) - 1)}
-                    minTickGap={40}
-                  />
-                  <YAxis
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                    tickLine={false}
-                    axisLine={false}
-                    width={56}
-                    tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`}
-                  />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={40} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`} />
                   <Tooltip
                     contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 4px 16px rgba(15,23,42,0.08)' }}
                     formatter={(v: number) => `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
@@ -529,29 +619,17 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
             <div className="flex flex-col items-center justify-center flex-1">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie
-                    data={revenueSplitData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={65}
-                    outerRadius={90}
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                  >
+                  <Pie data={revenueSplitData} cx="50%" cy="50%" innerRadius={65} outerRadius={90} paddingAngle={3} dataKey="value" stroke="none">
                     {revenueSplitData.map(entry => (
                       <Cell key={entry.name} fill={CHANNEL_COLORS[entry.name] ?? '#94a3b8'} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) =>
-                      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
-                    }
+                    formatter={(value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)}
                     contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              {/* Legend */}
               <div className="flex items-center justify-center gap-6 mt-3">
                 {revenueSplitData.map(entry => (
                   <div key={entry.name} className="flex items-center gap-2">
