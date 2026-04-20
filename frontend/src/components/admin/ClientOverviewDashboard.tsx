@@ -643,30 +643,48 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           )}
         </div>
 
-        {/* Revenue / Spend Split donut */}
+        {/* Revenue / Spend Split donut — matches Lovable prototype */}
         <div className="rounded-xl border border-border bg-card p-6 card-shadow flex flex-col">
-          <h3 className="mb-4 text-sm font-semibold text-slate-700">{splitLabel}</h3>
+          <h3 className="text-sm font-semibold text-slate-700">{splitLabel}</h3>
           {loadingAnalytics ? (
-            <div className="shimmer-warm flex-1 min-h-[280px] rounded-xl" />
+            <div className="shimmer-warm mt-3 flex-1 min-h-[300px] rounded-xl" />
           ) : splitData.length > 0 ? (
-            <div className="flex flex-col items-center justify-center flex-1">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={splitData} cx="50%" cy="50%" innerRadius={65} outerRadius={90} paddingAngle={3} dataKey="value" stroke="none">
+            <div className="flex flex-col items-center justify-center flex-1 -mt-2">
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart margin={{ top: 20, right: 20, bottom: 0, left: 20 }}>
+                  <Pie
+                    data={splitData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={118}
+                    paddingAngle={splitData.length > 1 ? 4 : 0}
+                    dataKey="value"
+                    stroke="none"
+                    startAngle={90}
+                    endAngle={-270}
+                  >
                     {splitData.map(entry => (
                       <Cell key={entry.name} fill={CHANNEL_COLORS[entry.name] ?? '#94a3b8'} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)}
-                    contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                    formatter={(value: number, name: string) => [
+                      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value),
+                      name,
+                    ]}
+                    contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', fontSize: 12 }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="flex items-center justify-center gap-6 mt-3">
+              {/* Legend — square icons, horizontal, with percentage — matching prototype */}
+              <div className="flex items-center justify-center gap-6 -mt-2 pb-2">
                 {splitData.map(entry => (
                   <div key={entry.name} className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: CHANNEL_COLORS[entry.name] ?? '#94a3b8' }} />
+                    <div
+                      className="h-2.5 w-2.5 rounded-sm flex-shrink-0"
+                      style={{ backgroundColor: CHANNEL_COLORS[entry.name] ?? '#94a3b8' }}
+                    />
                     <span className="text-xs font-medium text-slate-600">{entry.name}</span>
                   </div>
                 ))}
