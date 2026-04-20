@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import { UploadZone } from '@/components/upload/UploadZone'
 import { useToast } from '@/components/ui/Toast'
-import { OverviewDashboard } from '@/app/(dashboard)/dashboard/page'
+import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashboard'
 import { ChannelPage } from '@/components/dashboard/ChannelPage'
 import { AdminCSVUpload } from '@/components/admin/AdminCSVUpload'
 import type { Dataset, Organization, UploadStatus } from '@/types'
@@ -493,7 +493,7 @@ export default function ClientDetailPage({
 
           {/* Render the correct dashboard component for this client */}
           {clientViewTab === 'overview' && (
-            <OverviewDashboard targetOrgId={orgId} />
+            <ClientOverviewDashboard orgId={orgId} />
           )}
           {clientViewTab === 'google-ads' && (
             <ChannelPage
