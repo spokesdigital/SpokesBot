@@ -192,14 +192,26 @@ export default function ClientsPage() {
     if (!session || !editingOrg || !editName.trim()) return
     setEditing(true)
     setEditError(null)
+    const trimmed = editName.trim()
+    // Optimistic update
+    setOrgs(prev =>
+      prev.map(o => o.id === editingOrg.id ? { ...o, name: trimmed } : o)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    )
     try {
-      // Optimistic update — rename locally; no dedicated PATCH endpoint yet so we just refetch
+      const updated = await api.organizations.update(editingOrg.id, { name: trimmed }, session.access_token)
+      // Sync with server response (id/created_at confirmed)
       setOrgs(prev =>
-        prev.map(o => o.id === editingOrg.id ? { ...o, name: editName.trim() } : o)
+        prev.map(o => o.id === updated.id ? updated : o)
           .sort((a, b) => a.name.localeCompare(b.name)),
       )
       setEditingOrg(null)
     } catch (e) {
+      // Roll back optimistic update on failure
+      setOrgs(prev =>
+        prev.map(o => o.id === editingOrg.id ? editingOrg : o)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
       setEditError(e instanceof Error ? e.message : 'Failed to rename client.')
     } finally {
       setEditing(false)

@@ -8,7 +8,7 @@ from app.dependencies import (
     get_current_role,
     get_service_client,
 )
-from app.schemas import OrganizationCreate, OrganizationResponse
+from app.schemas import OrganizationCreate, OrganizationResponse, OrganizationUpdate
 from supabase import Client
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
@@ -43,6 +43,34 @@ def create_organization(
 
     response = service_client.table("organizations").insert({"name": body.name.strip()}).execute()
     return response.data[0]
+
+
+@router.patch("/{org_id}", response_model=OrganizationResponse)
+def update_organization(
+    org_id: UUID,
+    body: OrganizationUpdate,
+    service_client: Client = Depends(get_service_client),
+    caller_org_id: str = Depends(get_current_org_id),
+    role: str = Depends(get_current_role),
+):
+    if role != ROLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can update organizations.",
+        )
+    org_id_str = str(org_id)
+    result = (
+        service_client.table("organizations")
+        .update({"name": body.name.strip()})
+        .eq("id", org_id_str)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Organization '{org_id_str}' not found.",
+        )
+    return result.data[0]
 
 
 @router.delete("/{org_id}", status_code=status.HTTP_204_NO_CONTENT)

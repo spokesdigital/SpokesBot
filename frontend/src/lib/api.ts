@@ -124,6 +124,14 @@ export const api = {
         timeoutMs: 10_000,
       }),
 
+    update: (id: string, body: { name: string }, token: string) =>
+      apiFetch<Organization>(`/organizations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+        token,
+        timeoutMs: 10_000,
+      }),
+
     delete: (id: string, token: string) =>
       apiFetch<void>(`/organizations/${id}`, { method: 'DELETE', token, timeoutMs: 10_000 }),
   },

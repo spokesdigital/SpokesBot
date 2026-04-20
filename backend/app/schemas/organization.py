@@ -14,6 +14,10 @@ class OrganizationCreate(BaseModel):
     admin_email: str | None = None
 
 
+class OrganizationUpdate(BaseModel):
+    name: str
+
+
 class OrganizationMembershipResponse(BaseModel):
     organization: OrganizationResponse
     user_id: UUID

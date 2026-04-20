@@ -11,6 +11,7 @@ from .organization import (
     OrganizationCreate,
     OrganizationMembershipResponse,
     OrganizationResponse,
+    OrganizationUpdate,
 )
 from .support import SupportMessageCreate, SupportMessageResponse
 from .thread import (
@@ -36,6 +37,7 @@ __all__ = [
     "EventCreate",
     "OrganizationResponse",
     "OrganizationCreate",
+    "OrganizationUpdate",
     "OrganizationMembershipResponse",
     "SupportMessageCreate",
     "SupportMessageResponse",
