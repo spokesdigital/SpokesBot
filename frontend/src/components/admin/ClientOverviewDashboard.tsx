@@ -18,7 +18,6 @@ import { AlertCircle, BarChart2, RefreshCw, Share2, TrendingUp } from 'lucide-re
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
-import { getVerifiedMetricColumns } from '@/components/dashboard/verifiedMetrics'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -202,7 +201,7 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   // Start false — the shimmer should only show once we know we have a session
   // and have actually kicked off a request. Starting true causes a premature
   // "loading" flash before auth has even hydrated.
-  const [loadingDatasets, setLoadingDatasets] = useState(false)
+  const [loadingDatasets, setLoadingDatasets] = useState(true)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -354,10 +353,14 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
       <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 p-8 text-center bg-[#fcfaf7]">
         <TrendingUp className="h-12 w-12 text-slate-200" />
         <h2 className="text-xl font-semibold text-slate-700">No reports ready</h2>
-        <p className="max-w-md text-sm text-slate-500">
-          We haven&apos;t found any processed Google Ads or Meta Ads datasets for your workspace yet. 
-          Performance data will appear here once your admin uploads and processes your initial CSV reports.
-        </p>
+        {error ? (
+          <p className="max-w-md text-sm text-red-500">{error}</p>
+        ) : (
+          <p className="max-w-md text-sm text-slate-500">
+            We haven&apos;t found any processed Google Ads or Meta Ads datasets for your workspace yet.
+            Performance data will appear here once your admin uploads and processes your initial CSV reports.
+          </p>
+        )}
       </div>
     )
   }

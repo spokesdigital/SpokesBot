@@ -30,14 +30,14 @@ function PageSkeleton() {
 
 export default function DashboardPage() {
   const { user, loading } = useAuth()
-  const { setOrganizationId } = useDashboardStore()
+  const { setOrganization } = useDashboardStore()
 
   const orgId = user?.organization?.id
 
   // Keep store in sync once org is known
   useEffect(() => {
-    if (orgId) setOrganizationId(orgId)
-  }, [orgId, setOrganizationId])
+    if (orgId) setOrganization(orgId)
+  }, [orgId, setOrganization])
 
   // While auth is still hydrating, show a skeleton that matches the
   // ClientOverviewDashboard layout so there is zero layout shift.

@@ -443,6 +443,12 @@ def resolve_date_range(
     elif preset == "last_30_days":
         start = datetime.combine(today - timedelta(days=29), time.min, tzinfo=UTC)
         end = now
+    elif preset == "last_90_days":
+        start = datetime.combine(today - timedelta(days=89), time.min, tzinfo=UTC)
+        end = now
+    elif preset == "last_180_days":
+        start = datetime.combine(today - timedelta(days=179), time.min, tzinfo=UTC)
+        end = now
     elif preset == "this_month":
         start = datetime.combine(today.replace(day=1), time.min, tzinfo=UTC)
         end = now

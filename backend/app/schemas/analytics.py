@@ -11,6 +11,8 @@ class DatePreset(StrEnum):
     yesterday = "yesterday"
     last_7_days = "last_7_days"
     last_30_days = "last_30_days"
+    last_90_days = "last_90_days"
+    last_180_days = "last_180_days"
     this_month = "this_month"
     ytd = "ytd"
     custom = "custom"
