@@ -195,7 +195,7 @@ const DATE_LABELS: Record<DateFilter, string> = {
 export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
   const { session } = useAuth()
 
-  const [dateFilter, setDateFilter] = useState<DateFilter>('last_30_days')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all_time')
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
@@ -262,7 +262,7 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
         orgId,
       )
       .then((r) => { if (!cancelled) setGoogleAnalytics(r) })
-      .catch(() => { if (!cancelled) setGoogleAnalytics(null) })
+      .catch((e) => { if (!cancelled) { setGoogleAnalytics(null); setError(e instanceof Error ? `Google Ads: ${e.message}` : 'Google Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingGoogle(false) })
     return () => { cancelled = true }
   }, [session, googleDataset, dateFilter, orgId])
@@ -288,7 +288,7 @@ export function ClientOverviewDashboard({ orgId }: { orgId: string }) {
         orgId,
       )
       .then((r) => { if (!cancelled) setMetaAnalytics(r) })
-      .catch(() => { if (!cancelled) setMetaAnalytics(null) })
+      .catch((e) => { if (!cancelled) { setMetaAnalytics(null); setError(e instanceof Error ? `Meta Ads: ${e.message}` : 'Meta Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
     return () => { cancelled = true }
   }, [session, metaDataset, dateFilter, orgId])
