@@ -200,7 +200,7 @@ export default function ReportsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/50 bg-white/20">
-                  {['CLIENT', 'REPORT TYPE', 'STATUS', 'GENERATED ON', 'LAST UPDATED', 'ACTIONS'].map(col => (
+                  {['CLIENT', 'REPORT TYPE', 'DATE RANGE', 'STATUS', 'GENERATED ON', 'LAST UPDATED', 'ACTIONS'].map(col => (
                     <th key={col} className="px-6 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                       {col}
                     </th>
@@ -222,6 +222,9 @@ export default function ReportsPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {REPORT_TYPE_LABELS[ds.report_type] ?? ds.report_type}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      All Time
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={ds.status} />

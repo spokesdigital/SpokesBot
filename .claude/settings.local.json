@@ -43,7 +43,8 @@
       "Bash(venv/bin/ruff check *)",
       "Bash(npx next *)",
       "Bash(find *)",
-      "Bash(wc *)"
+      "Bash(wc *)",
+      "WebFetch(domain:spokes-reporting.lovable.app)"
     ]
   }
 }

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { format, parseISO, isAfter, isBefore } from 'date-fns'
 
-type ActionType = 'upload' | 'report' | 'support'
+type ActionType = 'upload' | 'report' | 'support' | 'login'
 type StatusType = 'success' | 'failed' | 'processing'
 
 interface ActivityEntry {
@@ -37,6 +37,7 @@ const ACTION_CONFIG: Record<ActionType, { label: string; icon: React.ElementType
   upload:  { label: 'Upload',           icon: Upload,        color: 'text-amber-700',   bg: 'bg-amber-50' },
   report:  { label: 'Report Generated', icon: FileBarChart,  color: 'text-emerald-700', bg: 'bg-emerald-50' },
   support: { label: 'Support',          icon: MessageSquare, color: 'text-blue-700',    bg: 'bg-blue-50' },
+  login:   { label: 'Login',            icon: Activity,      color: 'text-purple-700',  bg: 'bg-purple-50' },
 }
 
 const STATUS_BADGE: Record<StatusType, { label: string; className: string; icon: React.ElementType }> = {
@@ -157,6 +158,7 @@ export default function ActivityPage() {
     { key: 'all', label: 'All' },
     { key: 'upload', label: 'Upload' },
     { key: 'report', label: 'Report' },
+    { key: 'login', label: 'Login' },
     { key: 'support', label: 'Support' },
   ]
 

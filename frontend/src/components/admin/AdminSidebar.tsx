@@ -41,23 +41,26 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
 
   return (
     <aside
-      className={`glass-panel m-4 mr-0 flex flex-col rounded-[1.75rem] transition-all duration-200 ${
+      className={`sidebar-dark m-4 mr-0 flex flex-col rounded-[1.75rem] transition-all duration-200 bg-[#161b26] text-slate-300 shadow-[0_8px_32px_rgba(0,0,0,0.2)] border border-white/5 ${
         sidebarCollapsed ? 'w-16' : 'w-56'
       }`}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 border-b border-white/50 px-4 py-5">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#ffe48a] via-[#f9c51b] to-[#ecab00] shadow-[0_12px_30px_rgba(240,165,0,0.25)]">
+      <div className="flex items-center gap-3 border-b border-white/10 px-4 py-5">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#2e3446] border border-white/10">
           <Image
             src="/spokes-digital-logo.png"
             alt="Spokes Digital"
             width={22}
             height={22}
-            className="h-[22px] w-[22px] object-contain"
+            className="h-[22px] w-[22px] object-contain opacity-90 brightness-[2]"
           />
         </div>
         {!sidebarCollapsed && (
-          <span className="text-sm font-bold tracking-wide text-slate-800">SpokesBot</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold tracking-wide text-white">Spokes Digital</span>
+            <span className="text-[9px] font-medium text-slate-400 mt-0.5" style={{ lineHeight: '1' }}>AI Marketing Analytics</span>
+          </div>
         )}
       </div>
 
@@ -75,11 +78,11 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
                 isActive
                   ? isEscalations
-                    ? 'border border-red-200/70 bg-red-50/80 text-red-600 shadow-[0_10px_24px_rgba(239,68,68,0.12)]'
-                    : 'border border-white/70 bg-white/75 text-[#d99600] shadow-[0_10px_24px_rgba(240,165,0,0.15)]'
+                    ? 'border border-red-500/30 bg-red-500/10 text-red-400'
+                    : 'border border-white/10 bg-white/5 text-white shadow-sm'
                   : isEscalations
-                    ? 'text-red-400 hover:bg-red-50/60 hover:text-red-600'
-                    : 'text-slate-500 hover:bg-white/55 hover:text-slate-800'
+                    ? 'text-red-400/70 hover:bg-red-500/10 hover:text-red-400'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
               }`}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
@@ -90,17 +93,17 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
       </nav>
 
       {/* User + collapse */}
-      <div className="space-y-1 border-t border-white/50 p-2">
+      <div className="space-y-1 border-t border-white/10 p-2">
         {!sidebarCollapsed && user && (
           <div className="px-3 py-2">
-            <p className="truncate text-xs font-medium text-slate-800">{user.email}</p>
+            <p className="truncate text-xs font-medium text-white">{user.email}</p>
             <p className="text-xs capitalize text-slate-500">{user.role}</p>
           </div>
         )}
         <button
           onClick={handleSignOut}
           title="Sign out"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-500 transition-colors hover:bg-white/55 hover:text-red-500"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-red-400"
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />
           {!sidebarCollapsed && <span>Sign out</span>}
@@ -108,7 +111,7 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
         <button
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-500 transition-colors hover:bg-white/55 hover:text-slate-800"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
         >
           {sidebarCollapsed ? (
             <ChevronRight className="w-5 h-5 flex-shrink-0" />
