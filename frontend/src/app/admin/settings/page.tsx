@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { createClient } from '@/lib/supabase'
 import { User, Lock, Settings, RefreshCw, Check } from 'lucide-react'
@@ -43,16 +43,20 @@ function readPref(key: string, fallback: boolean): boolean {
   return val === null ? fallback : val === 'true'
 }
 
+function savePref(key: string, value: boolean) {
+  localStorage.setItem(key, String(value))
+}
+
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const supabase = createClient()
+  const supabaseRef = useRef(supabase)
 
   // ── Profile ───────────────────────────────────────────────────────────────
   const [profileName, setProfileName] = useState('')
   const [profileEmail, setProfileEmail] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
-  const [profileSuccess, setProfileSuccess] = useState(false)
-  const [profileError, setProfileError] = useState<string | null>(null)
+  const [profileMsg, setProfileMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   // ── Password ──────────────────────────────────────────────────────────────
   const [currentPw, setCurrentPw] = useState('')
@@ -67,34 +71,49 @@ export default function SettingsPage() {
   const [autoGenerateReports, setAutoGenerateReports] = useState(true)
   const [darkMode, setDarkMode] = useState(false)
 
-  // Initialise from user + localStorage
+  // Initialise from user + localStorage; apply dark mode class immediately
   useEffect(() => {
     if (user) {
       setProfileEmail(user.email ?? '')
-      setProfileName(user.email?.split('@')[0] ?? 'Admin User')
+      // Prefer saved full_name from user_metadata, fall back to email prefix
+      const savedName = session?.user.user_metadata?.full_name as string | undefined
+      setProfileName(savedName || user.email?.split('@')[0] || 'Admin User')
     }
+    const savedDark = readPref(PREF_KEYS.darkMode, false)
+    setDarkMode(savedDark)
+    document.documentElement.classList.toggle('dark', savedDark)
+
     setEmailNotifications(readPref(PREF_KEYS.emailNotifications, true))
     setAutoGenerateReports(readPref(PREF_KEYS.autoGenerateReports, true))
-    setDarkMode(readPref(PREF_KEYS.darkMode, false))
   }, [user])
 
-  function savePref(key: string, value: boolean) {
-    localStorage.setItem(key, String(value))
+  function handleDarkMode(v: boolean) {
+    setDarkMode(v)
+    savePref(PREF_KEYS.darkMode, v)
+    document.documentElement.classList.toggle('dark', v)
   }
 
   // ── Save profile ──────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault()
     setSavingProfile(true)
-    setProfileError(null)
-    setProfileSuccess(false)
+    setProfileMsg(null)
+    const emailChanged = profileEmail.trim() !== (user?.email ?? '')
     try {
-      const { error } = await supabase.auth.updateUser({ email: profileEmail })
+      const { error } = await supabaseRef.current.auth.updateUser({
+        ...(emailChanged ? { email: profileEmail.trim() } : {}),
+        data: { full_name: profileName.trim() },
+      })
       if (error) throw error
-      setProfileSuccess(true)
-      setTimeout(() => setProfileSuccess(false), 3000)
+      setProfileMsg({
+        text: emailChanged
+          ? 'Confirmation email sent — check your inbox to confirm the new address.'
+          : 'Profile saved successfully.',
+        ok: true,
+      })
+      setTimeout(() => setProfileMsg(null), 5000)
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : 'Failed to save profile.')
+      setProfileMsg({ text: e instanceof Error ? e.message : 'Failed to save profile.', ok: false })
     } finally {
       setSavingProfile(false)
     }
@@ -105,11 +124,19 @@ export default function SettingsPage() {
     e.preventDefault()
     setPwError(null)
     setPwSuccess(false)
-    if (newPw.length < 8) { setPwError('Password must be at least 8 characters.'); return }
+    if (!currentPw) { setPwError('Enter your current password.'); return }
+    if (newPw.length < 8) { setPwError('New password must be at least 8 characters.'); return }
     if (newPw !== confirmPw) { setPwError('Passwords do not match.'); return }
     setSavingPw(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPw })
+      // Re-authenticate with the current password first to verify it
+      const { error: signInError } = await supabaseRef.current.auth.signInWithPassword({
+        email: user!.email!,
+        password: currentPw,
+      })
+      if (signInError) throw new Error('Current password is incorrect.')
+
+      const { error } = await supabaseRef.current.auth.updateUser({ password: newPw })
       if (error) throw error
       setPwSuccess(true)
       setCurrentPw('')
@@ -159,10 +186,10 @@ export default function SettingsPage() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#f0a500] focus:ring-2 focus:ring-[#f0a500]/20"
               />
             </div>
-            {profileError && <p className="text-xs text-red-500">{profileError}</p>}
-            {profileSuccess && (
-              <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                <Check className="h-3.5 w-3.5" /> Changes saved successfully.
+            {profileMsg && (
+              <p className={`flex items-start gap-1.5 text-xs font-medium ${profileMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                {profileMsg.ok && <Check className="mt-px h-3.5 w-3.5 shrink-0" />}
+                {profileMsg.text}
               </p>
             )}
             <button
@@ -206,7 +233,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Confirm Password</label>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Confirm New Password</label>
               <input
                 type="password"
                 value={confirmPw}
@@ -223,7 +250,7 @@ export default function SettingsPage() {
             )}
             <button
               type="submit"
-              disabled={savingPw || !newPw}
+              disabled={savingPw || !newPw || !currentPw}
               className="flex items-center gap-2 rounded-xl bg-[#f0a500] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d99600] disabled:opacity-60"
             >
               {savingPw && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
@@ -267,10 +294,7 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-slate-800">Dark Mode</p>
               <p className="text-xs text-slate-500">Use dark theme across the dashboard</p>
             </div>
-            <Toggle
-              checked={darkMode}
-              onChange={v => { setDarkMode(v); savePref(PREF_KEYS.darkMode, v) }}
-            />
+            <Toggle checked={darkMode} onChange={handleDarkMode} />
           </div>
         </div>
       </div>
