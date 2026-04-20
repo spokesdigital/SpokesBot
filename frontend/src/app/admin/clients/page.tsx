@@ -9,7 +9,6 @@ import {
   Users,
   Plus,
   Trash2,
-  AlertTriangle,
   X,
   RefreshCw,
   Search,
@@ -20,7 +19,7 @@ import {
   Settings2,
   ChevronRight,
 } from 'lucide-react'
-import { formatDistanceToNow, format, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,8 +121,8 @@ export default function ClientsPage() {
   const [editing, setEditing] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
-  // ── Delete confirmation ───────────────────────────────────────────────────
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  // ── Delete confirmation modal ─────────────────────────────────────────────
+  const [confirmDelete, setConfirmDelete] = useState<Organization | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const fetchData = useCallback(async (token: string) => {
@@ -219,78 +218,57 @@ export default function ClientsPage() {
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  async function handleDelete(orgId: string) {
+  async function handleDelete(org: Organization) {
     if (!session) return
     setConfirmDelete(null)
-    setDeleting(orgId)
-    const removed = orgs.find(o => o.id === orgId)
-    setOrgs(prev => prev.filter(o => o.id !== orgId))
+    setDeleting(org.id)
+    setOrgs(prev => prev.filter(o => o.id !== org.id))
     try {
-      await api.organizations.delete(orgId, session.access_token)
+      await api.organizations.delete(org.id, session.access_token)
     } catch (e) {
-      if (removed) setOrgs(prev => [...prev, removed].sort((a, b) => a.name.localeCompare(b.name)))
+      setOrgs(prev => [...prev, org].sort((a, b) => a.name.localeCompare(b.name)))
       setError(e instanceof Error ? e.message : 'Failed to remove client.')
     } finally {
       setDeleting(null)
     }
   }
 
-  // ── Shared action button strip (plain function, not a component, to avoid remounting) ──
+  // ── Shared action button strip ────────────────────────────────────────────
   function renderActions(org: Organization) {
     const isDeleting = deleting === org.id
-    const isConfirming = confirmDelete === org.id
     return (
       <div className="flex items-center gap-1">
-        {isConfirming ? (
-          <div className="flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-            <span className="text-xs font-medium text-red-600">Remove?</span>
-            <button
-              onClick={() => handleDelete(org.id)}
-              className="ml-1 rounded-lg bg-red-500 px-2 py-0.5 text-xs font-semibold text-white hover:bg-red-600"
-            >
-              Yes
-            </button>
-            <button
-              onClick={() => setConfirmDelete(null)}
-              className="rounded-lg p-0.5 text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <>
-            <Link
-              href={`/admin/clients/${org.id}`}
-              title="View dashboard"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Link>
-            <button
-              onClick={() => openEdit(org)}
-              title="Rename client"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <Link
-              href={`/admin/clients/${org.id}`}
-              title="Manage client"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Settings2 className="h-4 w-4" />
-            </Link>
-            <button
-              onClick={() => setConfirmDelete(org.id)}
-              disabled={isDeleting}
-              title="Delete client"
-              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </>
-        )}
+        <Link
+          href={`/admin/clients/${org.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open client dashboard in new tab"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </Link>
+        <button
+          onClick={() => openEdit(org)}
+          title="Rename client"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <Link
+          href={`/admin/clients/${org.id}`}
+          title="Manage client"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+        >
+          <Settings2 className="h-4 w-4" />
+        </Link>
+        <button
+          onClick={() => setConfirmDelete(org)}
+          disabled={isDeleting}
+          title="Delete client"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+        >
+          {isDeleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </button>
       </div>
     )
   }
@@ -444,6 +422,44 @@ export default function ClientsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(null) }}
+        >
+          <div className="w-full max-w-sm rounded-[1.75rem] border border-white/60 bg-white p-7 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-800">Delete Client</h2>
+                <p className="text-xs text-slate-500">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="mb-6 text-sm text-slate-600">
+              Are you sure you want to remove <span className="font-semibold text-slate-800">{confirmDelete.name}</span>? All associated data will be permanently deleted.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDelete)}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white transition hover:bg-red-600"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
