@@ -18,7 +18,7 @@ import {
   X,
   Plus,
 } from 'lucide-react'
-import { format, parseISO, formatDistanceToNow } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   overview: 'Overview',

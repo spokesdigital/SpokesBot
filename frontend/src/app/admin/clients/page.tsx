@@ -235,8 +235,8 @@ export default function ClientsPage() {
     }
   }
 
-  // ── Shared action button strip ────────────────────────────────────────────
-  function ActionButtons({ org }: { org: Organization }) {
+  // ── Shared action button strip (plain function, not a component, to avoid remounting) ──
+  function renderActions(org: Organization) {
     const isDeleting = deleting === org.id
     const isConfirming = confirmDelete === org.id
     return (
@@ -518,7 +518,7 @@ export default function ClientsPage() {
                         {format(parseISO(org.created_at), 'MMM d, yyyy')}
                       </td>
                       <td className="px-6 py-4">
-                        <ActionButtons org={org} />
+                        {renderActions(org)}
                       </td>
                     </tr>
                   )
@@ -565,7 +565,7 @@ export default function ClientsPage() {
                 </div>
 
                 <div className="flex items-center justify-between border-t border-white/50 pt-3">
-                  <ActionButtons org={org} />
+                  {renderActions(org)}
                   <Link
                     href={`/admin/clients/${org.id}`}
                     className="flex items-center gap-1 text-sm font-medium text-[#d99600] hover:underline"

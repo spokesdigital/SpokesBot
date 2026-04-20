@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
@@ -156,6 +156,7 @@ export default function AdminOverviewPage() {
 
   const [rangeDays, setRangeDays] = useState(7)
   const [showRangeMenu, setShowRangeMenu] = useState(false)
+  const rangeMenuRef = useRef<HTMLDivElement>(null)
   const [clientFilter, setClientFilter] = useState<ClientFilter>('all')
   const [search, setSearch] = useState('')
 
@@ -258,6 +259,18 @@ export default function AdminOverviewPage() {
       }))
   }, [datasets, orgs])
 
+  // Close date-range dropdown on outside click
+  useEffect(() => {
+    if (!showRangeMenu) return
+    const handler = (e: MouseEvent) => {
+      if (rangeMenuRef.current && !rangeMenuRef.current.contains(e.target as Node)) {
+        setShowRangeMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showRangeMenu])
+
   const selectedRangeLabel =
     DATE_RANGE_OPTIONS.find(o => o.days === rangeDays)?.label ?? 'Last 7 days'
 
@@ -271,7 +284,7 @@ export default function AdminOverviewPage() {
         </div>
 
         {/* Date range selector */}
-        <div className="relative">
+        <div className="relative" ref={rangeMenuRef}>
           <button
             onClick={() => setShowRangeMenu(v => !v)}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"

@@ -61,7 +61,7 @@ function StatusBadge({ status }: { status: Dataset['status'] }) {
 }
 
 export default function UploadsPage() {
-  const { session, user } = useAuth()
+  const { session } = useAuth()
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── Data ─────────────────────────────────────────────────────────────────
