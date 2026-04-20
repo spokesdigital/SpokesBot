@@ -1,16 +1,15 @@
 'use client'
 
-import { use, useCallback, useEffect, useRef, useState } from 'react'
+import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { UploadZone } from '@/components/upload/UploadZone'
 import { useToast } from '@/components/ui/Toast'
 import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashboard'
 import { ChannelPage } from '@/components/dashboard/ChannelPage'
 import { AdminCSVUpload } from '@/components/admin/AdminCSVUpload'
-import type { Dataset, Organization, UploadStatus } from '@/types'
+import type { Dataset, Organization } from '@/types'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -25,8 +24,7 @@ import {
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
-const POLL_INTERVAL_MS = 2000
-const POLL_MAX_ATTEMPTS = 30
+
 
 type MainTab = 'data' | 'client-view'
 type ClientViewTab = 'overview' | 'google-ads' | 'meta-ads'
@@ -45,20 +43,12 @@ export default function ClientDetailPage({
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus | undefined>(undefined)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [reportName, setReportName] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [removingOrg, setRemovingOrg] = useState(false)
   const [confirmRemoveOrg, setConfirmRemoveOrg] = useState(false)
   const [mainTab, setMainTab] = useState<MainTab>('data')
   const [clientViewTab, setClientViewTab] = useState<ClientViewTab>('overview')
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [])
 
   const loadData = useCallback(async () => {
     if (!session) return
@@ -83,75 +73,7 @@ export default function ClientDetailPage({
     void loadData()
   }, [session, orgId, loadData])
 
-  async function handleUpload(file: File, reportType: 'overview' | 'google_ads' | 'meta_ads') {
-    if (!session) return
-    const normalizedReportName = reportName.trim() || file.name.replace(/\.[^.]+$/, '')
-    setIsSubmitting(true)
-    setUploadStatus({ status: 'uploading', message: 'Uploading file…' })
 
-    try {
-      const { dataset_id } = await api.datasets.upload(
-        file,
-        orgId,
-        session.access_token,
-        normalizedReportName,
-        reportType,
-      )
-      api.events
-        .log(
-          { event_type: 'dataset_uploaded', event_metadata: { dataset_id, org_id: orgId } },
-          session.access_token,
-        )
-        .catch(() => {})
-      setUploadStatus({ status: 'processing', dataset_id, message: 'Processing CSV…' })
-
-      let attempts = 0
-      pollRef.current = setInterval(async () => {
-        attempts++
-        try {
-          const data = await api.datasets.get(dataset_id, session.access_token)
-          if (data.status === 'completed') {
-            clearInterval(pollRef.current!); pollRef.current = null
-            setUploadStatus({ status: 'done', dataset_id, message: 'Dataset ready!' })
-            setIsSubmitting(false)
-            setReportName('')
-            void loadData()
-            toastSuccess('Dataset uploaded and ready.')
-            setTimeout(() => setUploadStatus(undefined), 2000)
-          } else if (data.status === 'failed') {
-            clearInterval(pollRef.current!); pollRef.current = null
-            setUploadStatus({
-              status: 'error',
-              message: data.error_message ?? 'Processing failed. Check your CSV and try again.',
-            })
-            setIsSubmitting(false)
-          } else {
-            setUploadStatus({
-              status: 'processing',
-              dataset_id,
-              message: data.status === 'queued' ? 'Queued…' : 'Processing CSV…',
-            })
-          }
-        } catch {
-          // Transient poll error — keep trying
-        }
-        if (attempts >= POLL_MAX_ATTEMPTS) {
-          clearInterval(pollRef.current!); pollRef.current = null
-          setUploadStatus({
-            status: 'error',
-            message: 'Processing timed out. Check the Datasets list in a moment.',
-          })
-          setIsSubmitting(false)
-        }
-      }, POLL_INTERVAL_MS)
-    } catch (e: unknown) {
-      setUploadStatus({
-        status: 'error',
-        message: e instanceof Error ? e.message : 'Upload failed.',
-      })
-      setIsSubmitting(false)
-    }
-  }
 
   async function handleDelete(id: string) {
     if (!session || deleting === id) return
@@ -296,42 +218,7 @@ export default function ClientDetailPage({
             <AdminCSVUpload orgId={orgId} onUploadComplete={loadData} />
           </section>
 
-          {/* ── Overview upload (divider + separate section) ── */}
-          <section>
-            <div className="mb-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-slate-200" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">Overview Report</span>
-              <div className="h-px flex-1 bg-slate-200" />
-            </div>
-            <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-slate-700">General / Overview CSV</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Cross-channel summary data shown on the client&apos;s Overview page.
-                </p>
-              </div>
-              <div className="mb-4">
-                <label htmlFor="client-report-name" className="text-sm font-medium text-slate-700">
-                  Report name <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <input
-                  id="client-report-name"
-                  type="text"
-                  value={reportName}
-                  onChange={(e) => setReportName(e.target.value)}
-                  placeholder="e.g. Monthly Overview — April 2026"
-                  disabled={isSubmitting}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#f0a500] focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
-                />
-              </div>
-              <UploadZone
-                onFileSelected={handleUpload}
-                onRetry={() => { setUploadStatus(undefined); setIsSubmitting(false) }}
-                disabled={isSubmitting}
-                status={uploadStatus}
-              />
-            </div>
-          </section>
+
 
           {/* Dataset list */}
           <section>
