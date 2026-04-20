@@ -107,6 +107,29 @@ const CHANNEL_COLORS: Record<string, string> = {
   'Meta Ads': '#22c55e',
 }
 
+const STATUS_PATTERNS = [
+  /\bdelivered\b/i,
+  /\bin[\s_-]?stock\b/i,
+  /\bshipped\b/i,
+  /\bpending\b/i,
+  /\bprocessing\b/i,
+  /\bcancell?ed\b/i,
+  /\bcompleted?\b/i,
+  /\bfulfill?ed?\b/i,
+  /\breturned?\b/i,
+  /\bout[\s_-]?of[\s_-]?stock\b/i,
+]
+
+const STATUS_COLORS = [
+  '#22c55e', // green — Delivered / In Stock
+  '#f0a500', // amber — Pending / Processing
+  '#3b82f6', // blue  — Shipped / Completed
+  '#f97316', // orange — Returned
+  '#ef4444', // red   — Cancelled / Out of Stock
+  '#a855f7', // purple — fallback
+  '#06b6d4', // cyan   — fallback
+]
+
 const PRESET_LABELS: Record<Exclude<PresetFilter, 'custom'>, string> = {
   last_30_days: 'Last 30 Days',
   last_90_days: 'Last 90 Days',
@@ -286,6 +309,32 @@ function extractTimeSeries(
   const dateKey = dataset.detected_date_column ?? Object.keys(mts)[0]
   if (!dateKey) return new Map()
   return new Map((mts[dateKey]?.[col] ?? []).map(pt => [pt.date, pt.value]))
+}
+
+function extractStatusData(
+  results: (AnalyticsResult | null)[],
+): { name: string; value: number; color: string }[] | null {
+  for (const result of results) {
+    if (!result?.result) continue
+    const charts = result.result.categorical_charts as Record<string, Record<string, number>> | undefined
+    if (!charts) continue
+
+    for (const [col, valueCounts] of Object.entries(charts)) {
+      const colLower = col.toLowerCase()
+      const isStatusCol = /status|delivery|fulfil|ship|stock|order[\s_-]?state/i.test(colLower)
+      const entries = Object.entries(valueCounts)
+      const matchingEntries = entries.filter(([k]) => STATUS_PATTERNS.some(p => p.test(k)))
+
+      if (isStatusCol || matchingEntries.length >= 2) {
+        const rows = (matchingEntries.length >= 2 ? matchingEntries : entries)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 7)
+          .map(([name, value], i) => ({ name, value, color: STATUS_COLORS[i % STATUS_COLORS.length] }))
+        if (rows.length > 0) return rows
+      }
+    }
+  }
+  return null
 }
 
 function buildTrend(
@@ -489,22 +538,28 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     return buildTrend(gRev, gCost, mRev, mCost)
   }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset])
 
-  // Revenue split — fall back to cost (spend) if neither channel has revenue data
-  const { splitData, splitLabel } = useMemo(() => {
+  // Revenue/status split — prefer order-status data, then revenue, then cost
+  const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
+    // 1. Try to find delivery/inventory status data from categorical_charts
+    const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+    if (statusRows && statusRows.length > 0) {
+      return { splitData: statusRows, splitLabel: 'Order Status', splitIsStatus: true }
+    }
+
+    // 2. Revenue split (Google vs Meta)
     const revRows = [
-      { name: 'Google Ads', value: googleTotals.revenue.current },
-      { name: 'Meta Ads', value: metaTotals.revenue.current },
-    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number }[]
+      { name: 'Google Ads', value: googleTotals.revenue.current, color: CHANNEL_COLORS['Google Ads'] },
+      { name: 'Meta Ads', value: metaTotals.revenue.current, color: CHANNEL_COLORS['Meta Ads'] },
+    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number; color: string }[]
+    if (revRows.length > 0) return { splitData: revRows, splitLabel: 'Revenue Split', splitIsStatus: false }
 
-    if (revRows.length > 0) return { splitData: revRows, splitLabel: 'Revenue Split' }
-
+    // 3. Spend split fallback
     const costRows = [
-      { name: 'Google Ads', value: googleTotals.cost.current },
-      { name: 'Meta Ads', value: metaTotals.cost.current },
-    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number }[]
-
-    return { splitData: costRows, splitLabel: 'Spend Split' }
-  }, [googleTotals, metaTotals])
+      { name: 'Google Ads', value: googleTotals.cost.current, color: CHANNEL_COLORS['Google Ads'] },
+      { name: 'Meta Ads', value: metaTotals.cost.current, color: CHANNEL_COLORS['Meta Ads'] },
+    ].filter(r => r.value != null && r.value > 0) as { name: string; value: number; color: string }[]
+    return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
+  }, [googleAnalytics, metaAnalytics, googleTotals, metaTotals])
 
   const hasAnyData = googleDataset !== null || metaDataset !== null
   const loadingAnalytics = loadingGoogle || loadingMeta
@@ -665,29 +720,32 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
                     endAngle={-270}
                   >
                     {splitData.map(entry => (
-                      <Cell key={entry.name} fill={CHANNEL_COLORS[entry.name] ?? '#94a3b8'} />
+                      <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [
-                      new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value),
-                      name,
-                    ]}
+                    formatter={(value: number, name: string) =>
+                      splitIsStatus
+                        ? [new Intl.NumberFormat('en-US').format(value) + ' orders', name]
+                        : [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value), name]
+                    }
                     contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', fontSize: 12 }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              {/* Legend — square icons, horizontal, with percentage — matching prototype */}
-              <div className="flex items-center justify-center gap-6 -mt-2 pb-2">
-                {splitData.map(entry => (
-                  <div key={entry.name} className="flex items-center gap-2">
-                    <div
-                      className="h-2.5 w-2.5 rounded-sm flex-shrink-0"
-                      style={{ backgroundColor: CHANNEL_COLORS[entry.name] ?? '#94a3b8' }}
-                    />
-                    <span className="text-xs font-medium text-slate-600">{entry.name}</span>
-                  </div>
-                ))}
+              {/* Legend */}
+              <div className={`flex flex-wrap items-center justify-center gap-x-5 gap-y-2 -mt-2 pb-2 ${splitIsStatus ? 'px-2' : ''}`}>
+                {splitData.map(entry => {
+                  const total = splitData.reduce((s, r) => s + r.value, 0)
+                  const pct = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0'
+                  return (
+                    <div key={entry.name} className="flex items-center gap-1.5">
+                      <div className="h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                      <span className="text-xs font-medium text-slate-600">{entry.name}</span>
+                      <span className="text-[11px] text-slate-400">({pct}%)</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ) : (
