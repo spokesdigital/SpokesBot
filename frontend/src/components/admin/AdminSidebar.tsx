@@ -7,17 +7,25 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import {
   Users,
-  Database,
-  Headphones,
+  Upload,
+  FileBarChart,
+  Activity,
   LogOut,
   ChevronLeft,
   ChevronRight,
+  AlertOctagon,
+  LayoutDashboard,
+  Settings,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/admin/clients', icon: Users, label: 'Clients Console' },
-  { href: '/admin/datasets', icon: Database, label: 'Global Datasets' },
-  { href: '/admin/support', icon: Headphones, label: 'Support Inbox' },
+  { href: '/admin/overview',    icon: LayoutDashboard, label: 'Overview' },
+  { href: '/admin/clients',     icon: Users,           label: 'Clients' },
+  { href: '/admin/uploads',     icon: Upload,          label: 'Data Uploads' },
+  { href: '/admin/reports',     icon: FileBarChart,    label: 'Reports' },
+  { href: '/admin/activity',    icon: Activity,        label: 'Activity Logs' },
+  { href: '/admin/escalations', icon: AlertOctagon,    label: 'Escalations' },
+  { href: '/admin/settings',    icon: Settings,        label: 'Settings' },
 ]
 
 export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
@@ -57,6 +65,7 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
       <nav className="flex-1 p-2 space-y-1">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
+          const isEscalations = href === '/admin/escalations'
           return (
             <Link
               key={href}
@@ -65,8 +74,12 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
               onClick={onClose}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
                 isActive
-                  ? 'border border-white/70 bg-white/75 text-[#d99600] shadow-[0_10px_24px_rgba(240,165,0,0.15)]'
-                  : 'text-slate-500 hover:bg-white/55 hover:text-slate-800'
+                  ? isEscalations
+                    ? 'border border-red-200/70 bg-red-50/80 text-red-600 shadow-[0_10px_24px_rgba(239,68,68,0.12)]'
+                    : 'border border-white/70 bg-white/75 text-[#d99600] shadow-[0_10px_24px_rgba(240,165,0,0.15)]'
+                  : isEscalations
+                    ? 'text-red-400 hover:bg-red-50/60 hover:text-red-600'
+                    : 'text-slate-500 hover:bg-white/55 hover:text-slate-800'
               }`}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />

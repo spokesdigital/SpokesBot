@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { SupportMessage } from '@/types'
-import { Headphones, CheckCircle, Clock, Mail } from 'lucide-react'
+import { Headphones, CheckCircle, Clock, Mail, AlertOctagon } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import Link from 'next/link'
 
 export default function SupportInboxPage() {
   const { session } = useAuth()
@@ -58,7 +59,7 @@ export default function SupportInboxPage() {
   return (
     <div className="space-y-6 px-8 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Support Inbox</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -67,20 +68,31 @@ export default function SupportInboxPage() {
               : 'No open messages'}
           </p>
         </div>
-        <div className="flex gap-1 rounded-xl bg-white/60 p-1 border border-white/70">
-          {(['all', 'open', 'resolved'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition-all ${
-                filter === f
-                  ? 'bg-white text-[#d99600] shadow-sm border border-white/70'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+        <div className="flex items-center gap-3">
+          {openCount > 0 && (
+            <Link
+              href="/admin/escalations"
+              className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-semibold text-red-600 transition-all hover:bg-red-100"
             >
-              {f}
-            </button>
-          ))}
+              <AlertOctagon className="h-4 w-4" />
+              View Escalations
+            </Link>
+          )}
+          <div className="flex gap-1 rounded-xl bg-white/60 p-1 border border-white/70">
+            {(['all', 'open', 'resolved'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`rounded-lg px-3.5 py-1.5 text-xs font-medium capitalize transition-all ${
+                  filter === f
+                    ? 'bg-white text-[#d99600] shadow-sm border border-white/70'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -134,16 +146,26 @@ export default function SupportInboxPage() {
                 </p>
               </div>
 
-              {/* Resolve button */}
-              {msg.status === 'open' && (
-                <button
-                  onClick={() => handleResolve(msg.id)}
-                  disabled={resolving === msg.id}
-                  className="flex-shrink-0 rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-semibold text-green-700 transition-all hover:bg-green-100 hover:border-green-300 disabled:opacity-50"
+              {/* Actions */}
+              <div className="flex flex-shrink-0 flex-col gap-2">
+                <a
+                  href={`mailto:${msg.email}?subject=Re: Your support request`}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/80 px-3.5 py-2 text-xs font-semibold text-slate-700 transition-all hover:bg-slate-50"
                 >
-                  {resolving === msg.id ? 'Resolving...' : 'Mark Resolved'}
-                </button>
-              )}
+                  <Mail className="h-3.5 w-3.5" />
+                  Reply
+                </a>
+                {msg.status === 'open' && (
+                  <button
+                    onClick={() => handleResolve(msg.id)}
+                    disabled={resolving === msg.id}
+                    className="flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3.5 py-2 text-xs font-semibold text-green-700 transition-all hover:bg-green-100 hover:border-green-300 disabled:opacity-50"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    {resolving === msg.id ? 'Resolving…' : 'Resolve'}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
