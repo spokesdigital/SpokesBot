@@ -4,8 +4,6 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
@@ -88,11 +86,6 @@ function resolveDatasetId(datasets: Dataset[], activeDatasetId: string | null) {
   return datasets.find((dataset) => dataset.status === 'completed')?.id ?? null
 }
 
-function normalizeMarkdownMath(content: string) {
-  return content
-    .replace(/\\\[((?:.|\n)*?)\\\]/g, (_, expr: string) => `$$${expr.trim()}$$`)
-    .replace(/\\\(((?:.|\n)*?)\\\)/g, (_, expr: string) => `$${expr.trim()}$`)
-}
 
 function inferChartSeries(data: ChartDataPoint[], xKey: string) {
   const firstRow = data[0] ?? {}
@@ -267,8 +260,7 @@ function InlineChart({ chart }: { chart: ChatChartPayload }) {
 function MarkdownBlock({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={[remarkGfm]}
       components={{
         p: ({ children }) => <p className="leading-7 [&:not(:first-child)]:mt-3">{children}</p>,
         strong: ({ children }) => <strong className="font-semibold text-[#1f1a17]">{children}</strong>,
@@ -297,7 +289,7 @@ function MarkdownBlock({ content }: { content: string }) {
         ),
       }}
     >
-      {normalizeMarkdownMath(content)}
+      {content}
     </ReactMarkdown>
   )
 }
