@@ -1,0 +1,89 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/app/admin/settings/page.tsx
+  88:6  warning  React Hook useEffect has a missing dependency: 'session?.user.user_metadata?.full_name'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/app/admin/uploads/page.tsx
+  13:3  warning  'AlertTriangle' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx
+  419:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:419:5
+  417 |     // though for loading states this is often acceptable. We'll keep it but add the eslint-disable
+  418 |     // if the rule is too strict, or ensure we only set it if not already loading.
+> 419 |     setLoadingDatasets(prev => (prev ? prev : true))
+      |     ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  420 |     setError(null)
+  421 |     api.datasets
+  422 |       .list(session.access_token, orgId)  react-hooks/set-state-in-effect
+  431:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:431:7
+  429 |   useEffect(() => {
+  430 |     if (!session || !googleDataset) { 
+> 431 |       setGoogleAnalytics(null)
+      |       ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  432 |       setLoadingGoogle(false)
+  433 |       return 
+  434 |     }                                                                                                                                                                             react-hooks/set-state-in-effect
+  451:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:451:7
+  449 |   useEffect(() => {
+  450 |     if (!session || !metaDataset) { 
+> 451 |       setMetaAnalytics(null)
+      |       ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  452 |       setLoadingMeta(false)
+  453 |       return 
+  454 |     }                                                                                                                                                                                     react-hooks/set-state-in-effect
+  473:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:473:7
+  471 |   useEffect(() => {
+  472 |     if (!session || !insightsDataset) { 
+> 473 |       setInsights([])
+      |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  474 |       setLoadingInsights(false)
+  475 |       return 
+  476 |     }                                                                                                                                                                                         react-hooks/set-state-in-effect
+  578:6  warning  React Hook useMemo has missing dependencies: 'googleTotals.cost', 'googleTotals.revenue', 'metaTotals.cost', and 'metaTotals.revenue'. Either include them or remove the dependency array. Mutable values like 'googleTotals.revenue.current' aren't valid dependencies because mutating them doesn't re-render the component                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/dashboard/ChannelPage.tsx
+  66:6  warning  'TrendPoint' is defined but never used      @typescript-eslint/no-unused-vars
+  72:6  warning  'ClicksCtrPoint' is defined but never used  @typescript-eslint/no-unused-vars
+  78:6  warning  'ClicksCpcPoint' is defined but never used  @typescript-eslint/no-unused-vars
+  84:6  warning  'RoasPoint' is defined but never used       @typescript-eslint/no-unused-vars
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/dashboard/channelMetrics.ts
+  55:10  warning  'getSortedDates' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 12 problems (4 errors, 8 warnings)
+

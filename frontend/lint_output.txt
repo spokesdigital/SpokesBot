@@ -1,0 +1,174 @@
+
+> frontend@0.1.0 lint
+> eslint
+
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/app/admin/settings/page.tsx
+  88:6  warning  React Hook useEffect has a missing dependency: 'session?.user.user_metadata?.full_name'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/app/admin/uploads/page.tsx
+  13:3  warning  'AlertTriangle' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx
+  415:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:415:5
+  413 |     if (!session) return
+  414 |     let cancelled = false
+> 415 |     setLoadingDatasets(true)
+      |     ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  416 |     setError(null)
+  417 |     api.datasets
+  418 |       .list(session.access_token, orgId)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/set-state-in-effect
+  426:39  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:426:39
+  424 |
+  425 |   useEffect(() => {
+> 426 |     if (!session || !googleDataset) { setGoogleAnalytics(null); setLoadingGoogle(false); return }
+      |                                       ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  427 |     let cancelled = false
+  428 |     setLoadingGoogle(true)
+  429 |     api.analytics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    react-hooks/set-state-in-effect
+  442:37  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:442:37
+  440 |
+  441 |   useEffect(() => {
+> 442 |     if (!session || !metaDataset) { setMetaAnalytics(null); setLoadingMeta(false); return }
+      |                                     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  443 |     let cancelled = false
+  444 |     setLoadingMeta(true)
+  445 |     api.analytics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/set-state-in-effect
+  460:41  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:460:41
+  458 |   const insightsDataset = googleDataset ?? metaDataset
+  459 |   useEffect(() => {
+> 460 |     if (!session || !insightsDataset) { setInsights([]); setLoadingInsights(false); return }
+      |                                         ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  461 |     let cancelled = false
+  462 |     setLoadingInsights(true)
+  463 |     setInsightsError(null)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/set-state-in-effect
+  542:60  error  Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `googleTotals.revenue.current`, but the source dependencies were [googleAnalytics, metaAnalytics, googleTotals, metaTotals]. Differences in ref.current access.
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:542:60
+  540 |
+  541 |   // Revenue/status split — prefer order-status data, then revenue, then cost
+> 542 |   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
+      |                                                            ^^^^^^^
+> 543 |     // 1. Try to find delivery/inventory status data from categorical_charts
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 544 |     const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |     return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |   }, [googleAnalytics, metaAnalytics, googleTotals, metaTotals])
+      | ^^^^ Could not preserve existing manual memoization
+  563 |
+  564 |   const hasAnyData = googleDataset !== null || metaDataset !== null
+  565 |   const loadingAnalytics = loadingGoogle || loadingMeta  react-hooks/preserve-manual-memoization
+  542:60  error  Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `metaTotals.revenue.current`, but the source dependencies were [googleAnalytics, metaAnalytics, googleTotals, metaTotals]. Differences in ref.current access.
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:542:60
+  540 |
+  541 |   // Revenue/status split — prefer order-status data, then revenue, then cost
+> 542 |   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
+      |                                                            ^^^^^^^
+> 543 |     // 1. Try to find delivery/inventory status data from categorical_charts
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 544 |     const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |     return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |   }, [googleAnalytics, metaAnalytics, googleTotals, metaTotals])
+      | ^^^^ Could not preserve existing manual memoization
+  563 |
+  564 |   const hasAnyData = googleDataset !== null || metaDataset !== null
+  565 |   const loadingAnalytics = loadingGoogle || loadingMeta    react-hooks/preserve-manual-memoization
+  542:60  error  Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `googleTotals.cost.current`, but the source dependencies were [googleAnalytics, metaAnalytics, googleTotals, metaTotals]. Differences in ref.current access.
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:542:60
+  540 |
+  541 |   // Revenue/status split — prefer order-status data, then revenue, then cost
+> 542 |   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
+      |                                                            ^^^^^^^
+> 543 |     // 1. Try to find delivery/inventory status data from categorical_charts
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 544 |     const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |     return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |   }, [googleAnalytics, metaAnalytics, googleTotals, metaTotals])
+      | ^^^^ Could not preserve existing manual memoization
+  563 |
+  564 |   const hasAnyData = googleDataset !== null || metaDataset !== null
+  565 |   const loadingAnalytics = loadingGoogle || loadingMeta     react-hooks/preserve-manual-memoization
+  542:60  error  Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `metaTotals.cost.current`, but the source dependencies were [googleAnalytics, metaAnalytics, googleTotals, metaTotals]. Differences in ref.current access.
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/admin/ClientOverviewDashboard.tsx:542:60
+  540 |
+  541 |   // Revenue/status split — prefer order-status data, then revenue, then cost
+> 542 |   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
+      |                                                            ^^^^^^^
+> 543 |     // 1. Try to find delivery/inventory status data from categorical_charts
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 544 |     const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |     return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |   }, [googleAnalytics, metaAnalytics, googleTotals, metaTotals])
+      | ^^^^ Could not preserve existing manual memoization
+  563 |
+  564 |   const hasAnyData = googleDataset !== null || metaDataset !== null
+  565 |   const loadingAnalytics = loadingGoogle || loadingMeta       react-hooks/preserve-manual-memoization
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/dashboard/ChannelPage.tsx
+   12:10  warning  'ExportButton' is defined but never used                                                                     @typescript-eslint/no-unused-vars
+   67:6   warning  'TrendPoint' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+   73:6   warning  'ClicksCtrPoint' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+   79:6   warning  'ClicksCpcPoint' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+   85:6   warning  'RoasPoint' is defined but never used                                                                        @typescript-eslint/no-unused-vars
+  806:6   warning  React Hook useMemo has a missing dependency: 'datePreset'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/adityachaubey04/Documents/SpokesBot/frontend/src/components/dashboard/channelMetrics.ts
+  55:10  warning  'getSortedDates' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 17 problems (8 errors, 9 warnings)
+

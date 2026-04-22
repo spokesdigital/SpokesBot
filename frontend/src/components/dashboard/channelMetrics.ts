@@ -52,9 +52,7 @@ export type RoasPoint = LabeledPoint & {
   roas?: number
 }
 
-function getSortedDates(...seriesMaps: Array<Map<string, number>>) {
-  return Array.from(new Set(seriesMaps.flatMap((seriesMap) => [...seriesMap.keys()]))).sort()
-}
+
 
 function isValidDateKey(value: string | null | undefined): value is string {
   if (!value) return false

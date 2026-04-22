@@ -9,7 +9,6 @@ import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
-import { ExportButton } from '@/components/dashboard/ExportButton'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { ChartCard, DualAxisComboChart, AreaTrendChart, DistributionChart } from '@/components/dashboard/ChannelChart'
 import { splitInsightsBySection } from '@/components/dashboard/channelInsights'
@@ -64,28 +63,7 @@ type MetricCardData = {
   tooltip: string
 }
 
-type TrendPoint = {
-  date: string
-  revenue?: number
-  cost?: number
-}
 
-type ClicksCtrPoint = {
-  date: string
-  clicks?: number
-  ctr?: number
-}
-
-type ClicksCpcPoint = {
-  date: string
-  clicks?: number
-  cpc?: number
-}
-
-type RoasPoint = {
-  date: string
-  roas?: number
-}
 
 type RevenueSplitDatum = {
   name: string
@@ -803,7 +781,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       campaignRows,
       dailyRows,
     }
-  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue])
+  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset])
 
   const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
 
