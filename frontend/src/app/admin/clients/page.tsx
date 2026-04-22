@@ -58,23 +58,22 @@ interface ClientRow {
   username: string
   accountStatus: AccountStatus
   reportStatus: ReportStatus
-  lastReport: Date | null
+  lastUpload: Date | null
 }
 
 function buildRows(orgs: Organization[], datasets: Dataset[]): ClientRow[] {
   return orgs.map(org => {
     const orgDatasets = datasets.filter(d => d.organization_id === org.id)
-    const completed = orgDatasets.filter(d => d.status === 'completed')
-    const lastReport =
-      completed.length > 0
-        ? new Date(Math.max(...completed.map(d => parseISO(d.uploaded_at).getTime())))
+    const lastUpload =
+      orgDatasets.length > 0
+        ? new Date(Math.max(...orgDatasets.map(d => parseISO(d.uploaded_at).getTime())))
         : null
     return {
       org,
       username: deriveUsername(org.name),
       accountStatus: deriveAccountStatus(orgDatasets),
       reportStatus: deriveReportStatus(orgDatasets),
-      lastReport,
+      lastUpload,
     }
   })
 }
@@ -279,7 +278,7 @@ export default function ClientsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Clients</h1>
-          <p className="mt-1 text-sm text-slate-500">Manage client accounts and access</p>
+          <p className="mt-1 text-sm text-slate-500">Manage client accounts, uploads, and access</p>
         </div>
         <div className="flex items-center gap-2">
           {/* List / grid toggle */}
@@ -499,7 +498,7 @@ export default function ClientsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/50 bg-white/30">
-                  {['CLIENT NAME', 'USERNAME', 'STATUS', 'LAST REPORT', 'REPORT STATUS', 'CREATED ON', 'ACTIONS'].map(col => (
+                  {['CLIENT NAME', 'USERNAME', 'STATUS', 'LAST UPLOAD', 'REPORT STATUS', 'CREATED ON', 'ACTIONS'].map(col => (
                     <th key={col} className="px-6 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                       {col}
                     </th>
@@ -507,7 +506,7 @@ export default function ClientsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/40">
-                {rows.map(({ org, username, accountStatus, reportStatus, lastReport }) => {
+                {rows.map(({ org, username, accountStatus, reportStatus, lastUpload }) => {
                   const rsCfg = REPORT_STATUS_CONFIG[reportStatus]
                   return (
                     <tr key={org.id} className="group transition hover:bg-white/40">
@@ -523,7 +522,7 @@ export default function ClientsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-500">
-                        {formatLastReport(lastReport)}
+                        {formatLastReport(lastUpload)}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${rsCfg.className}`}>
@@ -546,7 +545,7 @@ export default function ClientsPage() {
       ) : (
         /* ── Grid view ── */
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map(({ org, username, accountStatus, reportStatus, lastReport }) => {
+          {rows.map(({ org, username, accountStatus, reportStatus, lastUpload }) => {
             const rsCfg = REPORT_STATUS_CONFIG[reportStatus]
             return (
               <div
@@ -564,8 +563,8 @@ export default function ClientsPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">Last report</span>
-                  <span className="font-medium text-slate-700">{formatLastReport(lastReport)}</span>
+                  <span className="text-slate-500">Last upload</span>
+                  <span className="font-medium text-slate-700">{formatLastReport(lastUpload)}</span>
                 </div>
 
                 <div className="flex items-center justify-between text-sm">
