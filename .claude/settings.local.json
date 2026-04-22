@@ -44,7 +44,8 @@
       "Bash(npx next *)",
       "Bash(find *)",
       "Bash(wc *)",
-      "WebFetch(domain:spokes-reporting.lovable.app)"
+      "WebFetch(domain:spokes-reporting.lovable.app)",
+      "WebFetch(domain:spokes-bot.lovable.app)"
     ]
   }
 }
