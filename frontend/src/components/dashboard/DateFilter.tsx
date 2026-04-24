@@ -50,17 +50,19 @@ const presets: Preset[] = [
 const DEFAULT_PRESET_KEY = 'last_30_days'
 
 export function DateFilter() {
-  const { datePreset, dateRange, setDateRange } = useDashboardStore()
+  const { datePreset, dateRange, setDateRange, clearDateRange } = useDashboardStore()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Seed store with default preset on first mount
+  // Seed store with default preset on first mount only when truly uninitialized
+  // (datePreset === null). 'all_data' is a non-null sentinel set by clearDateRange()
+  // so it won't be overwritten here when user has explicitly chosen "All Data".
   useEffect(() => {
-    if (datePreset) return
+    if (datePreset !== null) return
     const preset = presets.find((p) => p.key === DEFAULT_PRESET_KEY)!
     const { start, end } = preset.getValue()
     setDateRange(start, end, preset.key)
-  }, [datePreset, setDateRange])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Controlled values for the two date inputs
   const [customStart, setCustomStart] = useState(
@@ -82,13 +84,23 @@ export function DateFilter() {
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [open])
 
-  const activeLabel =
-    datePreset === 'custom'
+  const isAllData = datePreset === null || datePreset === 'all_data'
+
+  const activeLabel = isAllData
+    ? 'All Data'
+    : datePreset === 'custom'
       ? customStart && customEnd
         ? `${customStart} → ${customEnd}`
         : 'Custom Range'
       : presets.find((p) => p.key === datePreset)?.label ??
         presets.find((p) => p.key === DEFAULT_PRESET_KEY)!.label
+
+  function applyAllData() {
+    clearDateRange()
+    setCustomStart('')
+    setCustomEnd('')
+    setOpen(false)
+  }
 
   function applyPreset(preset: Preset) {
     const { start, end } = preset.getValue()
@@ -141,6 +153,18 @@ export function DateFilter() {
 
       {open && (
         <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-[1.2rem] border border-[#e5dfd6] bg-white py-2 shadow-[0_22px_60px_rgba(15,23,42,0.12)]">
+
+          {/* All Data option */}
+          <button
+            type="button"
+            onClick={applyAllData}
+            className={`w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#faf6eb] ${
+              isAllData ? 'font-semibold text-[#c48d00]' : 'text-[#4b5563]'
+            }`}
+          >
+            All Data
+          </button>
+          <div className="mx-3 mb-1 border-t border-[#eee7dd]" />
 
           {/* Preset options */}
           {presets.map((preset) => (

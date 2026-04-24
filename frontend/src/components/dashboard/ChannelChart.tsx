@@ -20,6 +20,10 @@ import {
   YAxis,
 } from 'recharts'
 
+// Minimum pixels per data point — ensures bars/lines are never squished when
+// there is a lot of data. The chart scrolls horizontally beyond this threshold.
+const MIN_PX_PER_POINT = 52
+
 // ─── Zoom hook ────────────────────────────────────────────────────────────────
 
 function useZoom(dataLength: number) {
@@ -223,7 +227,11 @@ export function DualAxisComboChart({
   const visibleData = data.slice(range[0], range[1] + 1)
   const hasRight = series.some((s) => s.axis === 'r')
   const xAxisKey = getXAxisKey(visibleData)
-  const shouldRotateTicks = visibleData.length > 10
+
+  // With horizontal scrolling each point gets at least MIN_PX_PER_POINT px, so
+  // labels are never squished — rotation is not needed.
+  const chartMinPx = visibleData.length * MIN_PX_PER_POINT
+
   const tooltipLabelMap = new Map(
     visibleData.map((row) => [
       String(row[xAxisKey] ?? row.date ?? ''),
@@ -234,96 +242,104 @@ export function DualAxisComboChart({
           : String(row[xAxisKey] ?? row.date ?? ''),
     ]),
   )
-  // At ~6 labels max visible: every N-th tick. Recharts interval is 0-based index step.
+  // Show ~6-8 tick labels across the visible range
   const tickInterval = visibleData.length > 60 ? Math.ceil(visibleData.length / 8)
     : visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
     : visibleData.length > 14 ? Math.ceil(visibleData.length / 6)
     : visibleData.length > 7  ? Math.ceil(visibleData.length / 5)
     : 0
-  const barSize = visibleData.length > 60 ? 4 : visibleData.length > 30 ? 8 : visibleData.length > 14 ? 14 : 20
+  const barSize = visibleData.length > 60 ? 6 : visibleData.length > 30 ? 10 : visibleData.length > 14 ? 16 : 22
 
   return (
     <div className="relative flex flex-col h-full">
-      <ResponsiveContainer width="100%" height={height - 32}>
-        <ComposedChart data={visibleData} margin={{ top: 8, right: hasRight ? 8 : 4, left: -20, bottom: 4 }}>
-          <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
-          <XAxis
-            dataKey={xAxisKey}
-            interval={tickInterval}
-            minTickGap={40}
-            tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
-            tick={{ fill: '#7a8292', fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            angle={shouldRotateTicks ? -45 : 0}
-            textAnchor={shouldRotateTicks ? 'end' : 'middle'}
-            height={shouldRotateTicks ? 55 : 32}
-            padding={{ left: 12, right: 12 }}
-          />
-          <YAxis
-            yAxisId="l"
-            tick={{ fill: '#7a8292', fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={leftTickFormatter}
-            width={52}
-          />
-          {hasRight && (
-            <YAxis
-              yAxisId="r"
-              orientation="right"
-              tick={{ fill: '#7a8292', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={rightTickFormatter}
-              width={52}
-            />
-          )}
-          <Tooltip
-            contentStyle={TOOLTIP_STYLE}
-            labelFormatter={(label) =>
-              tooltipLabelMap.get(String(label))
-              ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
-            }
-            formatter={
-              tooltipFormatter
-                ? (value: number | string, name: string) => tooltipFormatter(Number(value), name)
-                : undefined
-            }
-          />
-          <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
-          {series.map((s) => {
-            const axis = s.axis ?? 'l'
-            if (s.type === 'bar') {
-              return (
-                <Bar
-                  key={s.dataKey}
-                  yAxisId={axis}
-                  dataKey={s.dataKey}
-                  name={s.name}
-                  fill={s.color}
-                  radius={[4, 4, 0, 0]}
-                  opacity={0.85}
-                  barSize={barSize}
-                />
-              )
-            }
-            return (
-              <Line
-                key={s.dataKey}
-                connectNulls={connectNulls}
-                yAxisId={axis}
-                dataKey={s.dataKey}
-                name={s.name}
-                stroke={s.color}
-                strokeWidth={2.5}
-                dot={false}
-                strokeDasharray={s.dashed ? '5 3' : undefined}
+      {/* Horizontally scrollable chart area — zoom buttons stay outside and fixed */}
+      <div
+        className="overflow-x-auto overflow-y-hidden chart-scrollbar"
+        style={{ height: height - 32 }}
+      >
+        {/* CSS max() ensures the chart fills the container when data is sparse,
+            and expands wider than the container when data is dense → scroll kicks in */}
+        <div style={{ width: `max(${chartMinPx}px, 100%)`, height: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={visibleData} margin={{ top: 8, right: hasRight ? 8 : 4, left: -20, bottom: 4 }}>
+              <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
+              <XAxis
+                dataKey={xAxisKey}
+                interval={tickInterval}
+                minTickGap={36}
+                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
+                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                height={32}
+                padding={{ left: 50, right: 50 }}
               />
-            )
-          })}
-        </ComposedChart>
-      </ResponsiveContainer>
+              <YAxis
+                yAxisId="l"
+                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={leftTickFormatter}
+                width={52}
+              />
+              {hasRight && (
+                <YAxis
+                  yAxisId="r"
+                  orientation="right"
+                  tick={{ fill: '#7a8292', fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={rightTickFormatter}
+                  width={52}
+                />
+              )}
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelFormatter={(label) =>
+                  tooltipLabelMap.get(String(label))
+                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+                }
+                formatter={
+                  tooltipFormatter
+                    ? (value: number | string, name: string) => tooltipFormatter(Number(value), name)
+                    : undefined
+                }
+              />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
+              {series.map((s) => {
+                const axis = s.axis ?? 'l'
+                if (s.type === 'bar') {
+                  return (
+                    <Bar
+                      key={s.dataKey}
+                      yAxisId={axis}
+                      dataKey={s.dataKey}
+                      name={s.name}
+                      fill={s.color}
+                      radius={[4, 4, 0, 0]}
+                      opacity={0.85}
+                      barSize={barSize}
+                    />
+                  )
+                }
+                return (
+                  <Line
+                    key={s.dataKey}
+                    connectNulls={connectNulls}
+                    yAxisId={axis}
+                    dataKey={s.dataKey}
+                    name={s.name}
+                    stroke={s.color}
+                    strokeWidth={2.5}
+                    dot={false}
+                    strokeDasharray={s.dashed ? '5 3' : undefined}
+                  />
+                )
+              })}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       {data.length > 0 && (
         <div className="flex justify-center mt-auto pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
@@ -372,7 +388,8 @@ export function AreaTrendChart({
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
   const xAxisKey = getXAxisKey(visibleData)
-  const shouldRotateTicks = visibleData.length > 10
+  const chartMinPx = visibleData.length * MIN_PX_PER_POINT
+
   const tooltipLabelMap = new Map(
     visibleData.map((row) => [
       String(row[xAxisKey] ?? row.date ?? ''),
@@ -384,67 +401,78 @@ export function AreaTrendChart({
     ]),
   )
 
+  const tickInterval = visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
+    : visibleData.length > 14 ? Math.ceil(visibleData.length / 6)
+    : 0
+
   return (
     <div className="relative flex flex-col h-full">
-      <ResponsiveContainer width="100%" height={height - 32}>
-        <AreaChart data={visibleData} margin={{ top: 8, right: 4, left: -20, bottom: 4 }}>
-          <defs>
-            {series.map((s) => (
-              <linearGradient key={s.gradientId} id={s.gradientId} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={s.color} stopOpacity={s.gradientOpacity ?? 0.24} />
-                <stop offset="100%" stopColor={s.color} stopOpacity={0.01} />
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
-          <XAxis
-            dataKey={xAxisKey}
-            interval={visibleData.length > 30 ? Math.ceil(visibleData.length / 7) : visibleData.length > 14 ? Math.ceil(visibleData.length / 6) : 0}
-            minTickGap={40}
-            tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
-            tick={{ fill: '#7a8292', fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            angle={shouldRotateTicks ? -45 : 0}
-            textAnchor={shouldRotateTicks ? 'end' : 'middle'}
-            height={shouldRotateTicks ? 55 : 32}
-          />
-          <YAxis
-            tick={{ fill: '#7a8292', fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={tickFormatter}
-            width={60}
-          />
-          <Tooltip
-            contentStyle={TOOLTIP_STYLE}
-            labelFormatter={(label) =>
-              tooltipLabelMap.get(String(label))
-              ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
-            }
-            formatter={
-              tooltipFormatter
-                ? (v: number | string) => [tooltipFormatter(Number(v))]
-                : undefined
-            }
-          />
-          <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
-          {series.map((s) => (
-            <Area
-              key={s.dataKey}
-              connectNulls={connectNulls}
-              type={curveType}
-              dataKey={s.dataKey}
-              name={s.name}
-              stroke={s.color}
-              fill={`url(#${s.gradientId})`}
-              strokeWidth={2.5}
-              dot={false}
-              activeDot={{ r: 4 }}
-            />
-          ))}
-        </AreaChart>
-      </ResponsiveContainer>
+      {/* Horizontally scrollable chart area — zoom buttons stay outside and fixed */}
+      <div
+        className="overflow-x-auto overflow-y-hidden chart-scrollbar"
+        style={{ height: height - 32 }}
+      >
+        <div style={{ width: `max(${chartMinPx}px, 100%)`, height: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={visibleData} margin={{ top: 8, right: 4, left: -20, bottom: 4 }}>
+              <defs>
+                {series.map((s) => (
+                  <linearGradient key={s.gradientId} id={s.gradientId} x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={s.color} stopOpacity={s.gradientOpacity ?? 0.24} />
+                    <stop offset="100%" stopColor={s.color} stopOpacity={0.01} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
+              <XAxis
+                dataKey={xAxisKey}
+                interval={tickInterval}
+                minTickGap={36}
+                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
+                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                height={32}
+                padding={{ left: 50, right: 50 }}
+              />
+              <YAxis
+                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={tickFormatter}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelFormatter={(label) =>
+                  tooltipLabelMap.get(String(label))
+                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+                }
+                formatter={
+                  tooltipFormatter
+                    ? (v: number | string) => [tooltipFormatter(Number(v))]
+                    : undefined
+                }
+              />
+              <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
+              {series.map((s) => (
+                <Area
+                  key={s.dataKey}
+                  connectNulls={connectNulls}
+                  type={curveType}
+                  dataKey={s.dataKey}
+                  name={s.name}
+                  stroke={s.color}
+                  fill={`url(#${s.gradientId})`}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       {data.length > 0 && (
         <div className="flex justify-center mt-auto pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">

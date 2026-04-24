@@ -272,6 +272,12 @@
   animation: shimmer-sweep 2.8s ease-in-out infinite;
 }
 
+/* Thin scrollbar for horizontally-scrollable chart areas */
+.chart-scrollbar::-webkit-scrollbar { height: 4px; }
+.chart-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.chart-scrollbar::-webkit-scrollbar-thumb { background: #d4c8b8; border-radius: 4px; }
+.chart-scrollbar { scrollbar-width: thin; scrollbar-color: #d4c8b8 transparent; }
+
 @keyframes chat-launcher-idle {
   0%, 100% {
     transform: translateY(0) scale(1);

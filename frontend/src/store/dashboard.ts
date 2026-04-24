@@ -39,7 +39,7 @@ export const useDashboardStore = create<DashboardState>()(
       setOrganization: (id) => set({ organizationId: id, activeDatasetId: null, activeThreadId: null }),
       setActiveDataset: (id) => set({ activeDatasetId: id }),
       setDateRange: (start, end, preset) => set({ dateRange: { start, end }, datePreset: preset ?? null }),
-      clearDateRange: () => set({ dateRange: { start: null, end: null }, datePreset: null }),
+      clearDateRange: () => set({ dateRange: { start: null, end: null }, datePreset: 'all_data' }),
       setActiveThread: (id) => set({ activeThreadId: id }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),

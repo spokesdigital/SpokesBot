@@ -486,7 +486,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? { date_preset: 'custom' as const, start_date: startDateValue!, end_date: endDateValue!, date_column: activeDateColumn }
-              : datePreset
+              : datePreset && datePreset !== 'all_data'
                 ? { date_preset: datePreset, date_column: activeDateColumn }
                 : {}
             : {}),
@@ -547,7 +547,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? { start_date: startDateValue!, end_date: endDateValue!, date_column: activeDateColumn }
-              : datePreset ? { date_preset: datePreset, date_column: activeDateColumn } : {}
+              : datePreset && datePreset !== 'all_data' ? { date_preset: datePreset, date_column: activeDateColumn } : {}
             : {}),
         }
         const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
