@@ -34,7 +34,6 @@ function Toggle({
 const PREF_KEYS = {
   emailNotifications: 'admin_pref_email_notifications',
   autoGenerateReports: 'admin_pref_auto_generate_reports',
-  darkMode: 'admin_pref_dark_mode',
 }
 
 function readPref(key: string, fallback: boolean): boolean {
@@ -69,29 +68,16 @@ export default function SettingsPage() {
   // ── Preferences ───────────────────────────────────────────────────────────
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [autoGenerateReports, setAutoGenerateReports] = useState(true)
-  const [darkMode, setDarkMode] = useState(false)
 
-  // Initialise from user + localStorage; apply dark mode class immediately
   useEffect(() => {
     if (user) {
       setProfileEmail(user.email ?? '')
-      // Prefer saved full_name from user_metadata, fall back to email prefix
       const savedName = session?.user.user_metadata?.full_name as string | undefined
       setProfileName(savedName || user.email?.split('@')[0] || 'Admin User')
     }
-    const savedDark = readPref(PREF_KEYS.darkMode, false)
-    setDarkMode(savedDark)
-    document.documentElement.classList.toggle('dark', savedDark)
-
     setEmailNotifications(readPref(PREF_KEYS.emailNotifications, true))
     setAutoGenerateReports(readPref(PREF_KEYS.autoGenerateReports, true))
   }, [user])
-
-  function handleDarkMode(v: boolean) {
-    setDarkMode(v)
-    savePref(PREF_KEYS.darkMode, v)
-    document.documentElement.classList.toggle('dark', v)
-  }
 
   // ── Save profile ──────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
@@ -288,13 +274,6 @@ export default function SettingsPage() {
               checked={autoGenerateReports}
               onChange={v => { setAutoGenerateReports(v); savePref(PREF_KEYS.autoGenerateReports, v) }}
             />
-          </div>
-          <div className="flex items-center justify-between py-4">
-            <div>
-              <p className="text-sm font-medium text-slate-800">Dark Mode</p>
-              <p className="text-xs text-slate-500">Use dark theme across the dashboard</p>
-            </div>
-            <Toggle checked={darkMode} onChange={handleDarkMode} />
           </div>
         </div>
       </div>
