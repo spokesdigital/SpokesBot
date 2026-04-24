@@ -110,7 +110,7 @@ function withQuery(path: string, params: Record<string, string | undefined>) {
 export const api = {
   auth: {
     me: (token: string) =>
-      apiFetch<UserProfile>('/auth/me', { token, timeoutMs: 35_000 }),
+      apiFetch<UserProfile>('/auth/me', { token, timeoutMs: 60_000 }),
   },
 
   organizations: {
