@@ -1283,20 +1283,22 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   </span>
                 )}
               </div>
-              <div className="rounded-xl border border-border bg-card card-shadow overflow-x-auto">
+              <div className="rounded-xl border border-border bg-card card-shadow">
                 {sortedDailyRows.length === 0 ? (
                   <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No daily data available. Upload a dataset with a date column to enable this table.
                   </div>
                 ) : (
                   <>
+                  {/* Scrollable table body — header stays pinned, rows scroll */}
+                  <div className="overflow-auto max-h-[520px]">
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
-                      <tr className="bg-muted/50 border-b border-border">
+                      <tr className="border-b border-border">
                         {/* Date column — sortable */}
                         <th
                           onClick={() => { setCampaignSort((s) => s); setDailySort((s) => toggleSort(s, 'date')); setDailyPage(0) }}
-                          className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
+                          className="sticky top-0 z-10 bg-[hsl(var(--card))] cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
                         >
                           <span className="inline-flex items-center gap-0.5">
                             Date
@@ -1325,7 +1327,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                             <th
                               key={key}
                               onClick={() => { setDailySort((s) => toggleSort(s, key)); setDailyPage(0) }}
-                              className="cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
+                              className="sticky top-0 z-10 bg-[hsl(var(--card))] cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
                             >
                               <span className="inline-flex items-center justify-end gap-0.5">
                                 {label}
@@ -1374,6 +1376,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       ))}
                     </tbody>
                   </table>
+                  </div>{/* end scrollable wrapper */}
                   {/* Pagination */}
                   {dailyPageCount > 1 && (
                     <div className="flex items-center justify-between border-t border-border px-4 py-3">
