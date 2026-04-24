@@ -128,17 +128,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     )
 
-    // Hydrate session on mount
+    // Hydrate session on mount.
+    // Set loading=false as soon as we know the session state (fast, from local
+    // storage) so the login page can redirect immediately instead of waiting up
+    // to 35 s for /auth/me to respond. The profile loads in the background;
+    // layouts that need it already guard on `user` and show a skeleton.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return
       initialHydrationDone = true
       setSession(session)
+      setLoading(false)
       if (session) {
-        loadProfile(session.access_token).finally(() => {
-          if (mounted) setLoading(false)
+        loadProfile(session.access_token).catch(() => {
+          // Error already handled inside loadProfile (signs out, clears state).
+          // Dashboard will redirect to /login when it sees session=null.
         })
-      } else {
-        setLoading(false)
       }
     })
 
@@ -149,7 +153,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadProfile, resetDashboard])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    console.log('[AuthContext] Attempting signIn for:', email)
     // Set flag BEFORE signInWithPassword so that when Supabase fires the SIGNED_IN
     // event (which happens as a microtask during the same Promise resolution), the
     // onAuthStateChange handler skips it and doesn't launch a racing loadProfile call.
@@ -158,23 +161,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const supabase = createClient()
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-      if (error) {
-        console.error('[AuthContext] Supabase signIn error:', error)
-        throw error
-      }
+      if (error) throw error
 
       if (!data.session) {
-        console.error('[AuthContext] Sign-in successful but no session returned')
         throw new Error('No session returned after sign-in. Please verify your email.')
       }
 
-      console.log('[AuthContext] Supabase sign-in successful, hydrating session')
-      // Hold loading=true while we fetch the profile so layouts that guard on
-      // `loading` don't see a momentary (session=set, user=null) state and
-      // redirect back to /login before the profile arrives.
-      setLoading(true)
       setSession(data.session)
-      await loadProfile(data.session.access_token)
+      // Fire profile load in background — don't block the login page from
+      // redirecting. The dashboard layout guards on `user` and shows a skeleton
+      // while the profile is in-flight. If loadProfile fails it signs out
+      // internally; the dashboard will redirect back to /login automatically.
+      loadProfile(data.session.access_token).catch(() => {})
     } finally {
       signInInProgressRef.current = false
       setLoading(false)

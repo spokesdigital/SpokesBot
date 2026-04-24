@@ -13,35 +13,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  // Redirect already-authenticated users without showing a flash of the form.
-  useEffect(() => {
-    if (!authLoading && session) {
-      router.replace('/dashboard')
-    }
-  }, [authLoading, session, router])
-
-  // While we're checking the session, show a shimmer that matches the page layout
-  // so there's no jarring flash of the login form before a redirect.
-  if (authLoading || session) {
-    return (
-      <main className="min-h-screen bg-[#f7f7f5]">
-        <div className="grid min-h-screen lg:grid-cols-[0.95fr_1fr]">
-          <div className="bg-[#16233b]" />
-          <div className="flex items-center justify-center px-6 py-10">
-            <div className="w-full max-w-[29rem] space-y-6">
-              <div className="shimmer-warm h-10 w-40 rounded-xl" />
-              <div className="shimmer-warm h-5 w-56 rounded-lg" />
-              <div className="space-y-4 pt-4">
-                <div className="shimmer-warm h-14 rounded-[1rem]" />
-                <div className="shimmer-warm h-14 rounded-[1rem]" />
-                <div className="shimmer-warm h-14 rounded-[1rem] opacity-70" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
-  }
+  // Removed client-side session checks and shimmer logic because we now handle
+  // auth state via middleware.ts, which redirects authenticated users before
+  // this page ever renders, ensuring a fast, shimmer-free experience for unauthenticated users.
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -54,10 +28,8 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password)
-      // We do NOT call router.push('/dashboard') here.
-      // Modifying the auth context state (specifically session) triggers
-      // the useEffect above, which will reliably handle the redirect
-      // without causing a push/replace collision bug in the Next.js router.
+      // Use window.location.href or router.replace to handle the redirect and let the middleware do its job.
+      router.replace('/dashboard')
     } catch (err: unknown) {
       console.error('[LoginPage] Sign-in submission failed:', err)
       const msg = err instanceof Error ? err.message : 'Login failed.'

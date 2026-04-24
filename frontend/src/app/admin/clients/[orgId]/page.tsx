@@ -213,7 +213,7 @@ export default function ClientDetailPage({
           <section>
             <h2 className="mb-1 text-lg font-semibold text-slate-800">Upload Datasets</h2>
             <p className="mb-5 text-sm text-slate-500">
-              CSVs are processed and immediately reflected in the client&apos;s dashboard.
+              CSV and Excel files are processed and immediately reflected in the client&apos;s dashboard.
             </p>
             <AdminCSVUpload orgId={orgId} onUploadComplete={loadData} />
           </section>
@@ -244,7 +244,7 @@ export default function ClientDetailPage({
             ) : datasets.length === 0 ? (
               <div className="glass-panel flex flex-col items-center justify-center space-y-2 rounded-[2rem] py-16 text-slate-500">
                 <Database className="w-10 h-10 opacity-30" />
-                <p className="text-sm">No datasets yet — upload a CSV above.</p>
+                <p className="text-sm">No datasets yet — upload a file above.</p>
               </div>
             ) : (
               <div className="space-y-3">

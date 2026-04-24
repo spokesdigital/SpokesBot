@@ -172,10 +172,10 @@ export default function UploadsPage() {
   const canUpload = !!selectedOrgId && !!stagedFile && uploadState === 'idle'
 
   return (
-    <div className="space-y-8 px-8 py-8">
+    <div className="space-y-8 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-800">Data Uploads</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Data Uploads</h1>
         <p className="mt-1 text-sm text-slate-500">Upload and manage client data files</p>
       </div>
 
@@ -276,7 +276,7 @@ export default function UploadsPage() {
             <div className="flex flex-col items-center gap-2">
               <RefreshCw className="h-8 w-8 animate-spin text-[#f0a500]" />
               <p className="text-sm font-medium text-slate-700">
-                {uploadState === 'uploading' ? 'Uploading…' : 'Processing CSV…'}
+                {uploadState === 'uploading' ? 'Uploading…' : 'Processing file…'}
               </p>
             </div>
           ) : stagedFile ? (

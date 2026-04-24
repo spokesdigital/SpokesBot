@@ -30,27 +30,32 @@ router = APIRouter(prefix="/upload", tags=["admin_upload"])
 SUPABASE_BUCKET = "datasets"
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB hard limit
 
-# Rows read from the CSV for schema/metric inference (fast, low-RAM)
+ACCEPTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+
+# Rows read for schema/metric inference (fast, low-RAM)
 PROFILE_SAMPLE_ROWS = 10_000
-# Rows per chunk when streaming the full CSV → Parquet
-STREAM_CHUNK_ROWS   = 50_000
+# Rows per chunk when streaming CSV → Parquet
+STREAM_CHUNK_ROWS = 50_000
 
 
 # ── Background worker ───────────────────────────────────────────────────────
 
 
-def _process_csv(
+def _is_excel(file_path: str) -> bool:
+    return Path(file_path).suffix.lower() in {".xlsx", ".xls"}
+
+
+def _process_file(
     dataset_id: str,
     file_path: str,
     organization_id: str,
 ) -> None:
     """
     Runs in a background task. Full lifecycle:
-      queued (set by endpoint) → processing → completed | failed
+      queued → processing → completed | failed
 
-    Uses the service client so processing is not bound to the request's
-    JWT lifetime. Any crash writes 'failed' + error_message so the UI
-    never hangs on a stuck status.
+    Supports both CSV (streaming chunks) and Excel (full read).
+    Any crash writes 'failed' + error_message so the UI never hangs.
     """
     supabase = get_service_client()
 
@@ -63,54 +68,58 @@ def _process_csv(
         supabase.table("datasets").update(payload).eq("id", dataset_id).execute()
 
     try:
-        # ── Mark as processing ──────────────────────────────────────────────
         _set_status("processing")
 
-        # ── Phase 1: Sample read for schema / metric inference ───────────────
-        # Only load PROFILE_SAMPLE_ROWS rows to determine column types, date
-        # columns, metric mappings, etc.  This keeps peak RAM proportional to
-        # the sample size (≤ 10k rows) regardless of how large the file is.
-        sample_df = pd.read_csv(file_path, nrows=PROFILE_SAMPLE_ROWS)
+        excel = _is_excel(file_path)
+
+        # ── Phase 1: Sample read for schema / metric inference ──────────────
+        if excel:
+            sample_df = pd.read_excel(file_path, nrows=PROFILE_SAMPLE_ROWS, engine="openpyxl")
+        else:
+            sample_df = pd.read_csv(file_path, nrows=PROFILE_SAMPLE_ROWS)
+
         if sample_df.empty:
-            raise ValueError("CSV file contained no rows.")
+            raise ValueError("File contained no rows.")
 
         _, profile = analytics_service.build_dataset_profile(sample_df)
         column_headers = list(sample_df.columns)
-        # Which columns were coerced from string → numeric during profiling.
-        # We replicate those same coercions on every streaming chunk below.
         coerced_columns: list[str] = profile["schema_profile"].get(
             "coerced_numeric_columns", []
         )
 
-        # ── Phase 2: Stream full CSV → Parquet without loading it all into RAM ─
-        # Each STREAM_CHUNK_ROWS chunk is normalised and appended to the Parquet
-        # writer.  Peak RAM ≈ one chunk + the growing Parquet buffer — roughly
-        # half of the old approach which kept both the full DataFrame and the
-        # full Parquet bytes alive simultaneously.
+        # ── Phase 2: Convert full file → Parquet ────────────────────────────
         buf = io.BytesIO()
         pq_writer: pq.ParquetWriter | None = None
         arrow_schema: pa.Schema | None = None
         row_count = 0
 
-        for chunk_df in pd.read_csv(file_path, chunksize=STREAM_CHUNK_ROWS):
-            chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns)
-            table = pa.Table.from_pandas(chunk_df, preserve_index=False)
-
-            if pq_writer is None:
-                # First chunk establishes the canonical Arrow schema.
-                arrow_schema = table.schema
-                pq_writer = pq.ParquetWriter(buf, arrow_schema)
-            elif table.schema != arrow_schema:
-                # Later chunks may differ slightly (e.g. int64 vs float64 when
-                # a nullable int column happens to have no nulls in chunk 1 but
-                # gains one in chunk 2).  safe=False allows lossless promotions.
-                table = table.cast(arrow_schema, safe=False)
-
+        if excel:
+            # Excel doesn't support chunked reads — load the full sheet at once.
+            # Excel files are binary (compressed) so a 100 MB .xlsx typically
+            # expands to 2–5× in memory; acceptable for our 100 MB file limit.
+            full_df = pd.read_excel(file_path, engine="openpyxl")
+            full_df = analytics_service.normalize_chunk(full_df, coerced_columns)
+            table = pa.Table.from_pandas(full_df, preserve_index=False)
+            arrow_schema = table.schema
+            pq_writer = pq.ParquetWriter(buf, arrow_schema)
             pq_writer.write_table(table)
-            row_count += len(chunk_df)
+            row_count = len(full_df)
+        else:
+            for chunk_df in pd.read_csv(file_path, chunksize=STREAM_CHUNK_ROWS):
+                chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns)
+                table = pa.Table.from_pandas(chunk_df, preserve_index=False)
+
+                if pq_writer is None:
+                    arrow_schema = table.schema
+                    pq_writer = pq.ParquetWriter(buf, arrow_schema)
+                elif table.schema != arrow_schema:
+                    table = table.cast(arrow_schema, safe=False)
+
+                pq_writer.write_table(table)
+                row_count += len(chunk_df)
 
         if pq_writer is None or row_count == 0:
-            raise ValueError("CSV file contained no rows.")
+            raise ValueError("File contained no rows.")
         pq_writer.close()
 
         parquet_bytes = buf.getvalue()
@@ -138,10 +147,8 @@ def _process_csv(
         )
 
     except Exception as exc:
-        # ── Persist failure — UI will show 'failed' instead of hanging ──────
         _set_status("failed", error=str(exc))
     finally:
-        # ── Housekeeping ────────────────────────────────────────────────────
         if os.path.exists(file_path):
             os.remove(file_path)
 
@@ -151,7 +158,7 @@ def _process_csv(
 
 @router.post("/", status_code=202)
 @limiter.limit("10/minute")
-async def upload_csv(
+async def upload_file(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -163,7 +170,8 @@ async def upload_csv(
     _admin: None = Depends(require_admin),
 ):
     """
-    Admin-only endpoint. Assigns the uploaded CSV to the specified client org.
+    Admin-only endpoint. Assigns the uploaded file to the specified client org.
+    Accepts CSV (.csv) and Excel (.xlsx, .xls) files up to 100 MB.
 
     1. Validates file type and size.
     2. Confirms the target org exists.
@@ -172,10 +180,16 @@ async def upload_csv(
     5. Background task converts to Parquet, uploads to Storage, updates status.
     """
     # ── Validate file type ───────────────────────────────────────────────────
-    if not file.filename or not file.filename.lower().endswith(".csv"):
+    if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .csv files are accepted.",
+            detail="No filename provided.",
+        )
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ACCEPTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .csv, .xlsx, and .xls files are accepted.",
         )
 
     # ── Validate report_type ────────────────────────────────────────────────
@@ -187,13 +201,12 @@ async def upload_csv(
         )
 
     # ── Stream content to disk + validate size ───────────────────────────────
-    # We use a temp file to avoid OOM for large concurrent uploads.
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
     tmp_path = tmp.name
     total_size = 0
 
     try:
-        while chunk := await file.read(1024 * 1024):  # 1MB chunks
+        while chunk := await file.read(1024 * 1024):  # 1 MB chunks
             total_size += len(chunk)
             if total_size > MAX_FILE_SIZE_BYTES:
                 tmp.close()
@@ -224,7 +237,6 @@ async def upload_csv(
         )
 
     # ── Confirm target org exists ────────────────────────────────────────────
-    # Uses service client: the admin's RLS scope is their own org, not client orgs.
     org_id_str = str(org_id)
     org_check = (
         service_client.table("organizations")
@@ -240,8 +252,6 @@ async def upload_csv(
         )
 
     # ── Create the dataset row immediately (status = queued) ─────────────────
-    # Uses service client: INSERT RLS requires organization_id = get_my_org_id(),
-    # which would reject a client org id under the admin's JWT.
     dataset_id = str(uuid_lib.uuid4())
     normalized_report_name = (report_name or "").strip() or Path(file.filename).stem
     service_client.table("datasets").insert(
@@ -261,7 +271,7 @@ async def upload_csv(
 
     # ── Offload heavy work ───────────────────────────────────────────────────
     background_tasks.add_task(
-        _process_csv,
+        _process_file,
         dataset_id,
         tmp_path,
         org_id_str,

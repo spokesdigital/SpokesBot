@@ -22,9 +22,10 @@ import {
 import { formatDistanceToNow, subDays, isAfter, parseISO, isWithinInterval } from 'date-fns'
 
 const DATE_RANGE_OPTIONS = [
-  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 7 days',  days: 7  },
   { label: 'Last 30 days', days: 30 },
   { label: 'Last 90 days', days: 90 },
+  { label: 'All Time',     days: 0  },
 ]
 
 type ClientFilter = 'all' | 'active' | 'issues' | 'inactive'
@@ -61,19 +62,23 @@ function deriveClientRows(orgs: Organization[], datasets: Dataset[]): ClientRow[
   })
 }
 
-function computeTrend(current: number, previous: number): { value: string; positive: boolean } | null {
+function computeTrend(
+  current: number,
+  previous: number,
+  label?: string,
+): { value: string; positive: boolean; label?: string } | null {
   if (previous === 0 && current === 0) return null
-  if (previous === 0) return { value: '+100%', positive: true }
+  if (previous === 0) return { value: '+100%', positive: true, label }
   const pct = ((current - previous) / previous) * 100
   const sign = pct >= 0 ? '+' : ''
-  return { value: `${sign}${Math.round(pct)}%`, positive: pct >= 0 }
+  return { value: `${sign}${Math.round(pct)}%`, positive: pct >= 0, label }
 }
 
 interface KpiCardProps {
   label: string
   value: string | number
   icon: React.ElementType
-  trend?: { value: string; positive: boolean } | null
+  trend?: { value: string; positive: boolean; label?: string } | null
   iconColor: string
   iconBg: string
   loading?: boolean
@@ -92,7 +97,7 @@ function KpiCard({ label, value, icon: Icon, trend, iconColor, iconBg, loading }
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-400">{label}</p>
-            <p className="mt-1.5 text-3xl font-bold text-slate-800">{value}</p>
+            <p className="mt-1.5 text-2xl sm:text-3xl font-bold text-slate-800">{value}</p>
             {trend ? (
               <div
                 className={`mt-1 flex items-center gap-1 text-xs font-medium ${
@@ -104,7 +109,7 @@ function KpiCard({ label, value, icon: Icon, trend, iconColor, iconBg, loading }
                 ) : (
                   <TrendingDown className="h-3 w-3 flex-shrink-0" />
                 )}
-                <span>{trend.value} vs last week</span>
+                <span>{trend.value} {trend.label ?? ''}</span>
               </div>
             ) : (
               <div className="mt-1 h-4" />
@@ -185,11 +190,15 @@ export default function AdminOverviewPage() {
   // ── KPI computation ──────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const now = new Date()
-    const periodStart = subDays(now, rangeDays)
-    const prevPeriodStart = subDays(now, rangeDays * 2)
+    const allTime = rangeDays === 0
 
-    const inPeriod = (d: Dataset) => isAfter(parseISO(d.uploaded_at), periodStart)
+    const periodStart = allTime ? new Date(0) : subDays(now, rangeDays)
+    const prevPeriodStart = allTime ? new Date(0) : subDays(now, rangeDays * 2)
+
+    const inPeriod = (d: Dataset) =>
+      allTime || isAfter(parseISO(d.uploaded_at), periodStart)
     const inPrevPeriod = (d: Dataset) =>
+      !allTime &&
       isWithinInterval(parseISO(d.uploaded_at), { start: prevPeriodStart, end: periodStart })
 
     const periodDatasets = datasets.filter(inPeriod)
@@ -208,16 +217,25 @@ export default function AdminOverviewPage() {
           )
         : null
 
+    // Count only orgs that have at least one completed dataset
+    const activeClients = orgs.filter(org =>
+      datasets.some(d => d.organization_id === org.id && d.status === 'completed'),
+    ).length
+
+    const trendLabel = allTime ? null : `vs prev. ${rangeDays}d`
+
     return {
-      activeClients: orgs.length,
+      activeClients,
+      totalClients: orgs.length,
       reportsGenerated: completed.length,
-      reportsTrend: computeTrend(completed.length, prevCompleted.length),
+      reportsTrend: allTime ? null : computeTrend(completed.length, prevCompleted.length, trendLabel ?? undefined),
       failedUploads: failed.length,
-      failedTrend: computeTrend(failed.length, prevFailed.length),
+      failedTrend: allTime ? null : computeTrend(failed.length, prevFailed.length, trendLabel ?? undefined),
       pendingReports: pending.length,
       lastUpload: mostRecent
         ? formatDistanceToNow(parseISO(mostRecent.uploaded_at), { addSuffix: false })
         : 'Never',
+      trendLabel,
     }
   }, [orgs, datasets, rangeDays])
 
@@ -275,11 +293,11 @@ export default function AdminOverviewPage() {
     DATE_RANGE_OPTIONS.find(o => o.days === rangeDays)?.label ?? 'Last 7 days'
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Admin Overview</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Admin Overview</h1>
           <p className="mt-1 text-sm text-slate-500">Monitor system health and client activity</p>
         </div>
 
@@ -330,7 +348,7 @@ export default function AdminOverviewPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard
           label="Active Clients"
-          value={kpis.activeClients}
+          value={loading ? '—' : `${kpis.activeClients} / ${kpis.totalClients}`}
           icon={Users}
           iconColor="text-[#d99600]"
           iconBg="bg-amber-50"

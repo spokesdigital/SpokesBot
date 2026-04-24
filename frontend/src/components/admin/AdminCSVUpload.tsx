@@ -47,7 +47,7 @@ const CHANNELS: ChannelConfig[] = [
   {
     reportType: 'google_ads',
     label: 'Google Ads',
-    description: 'Campaign performance, clicks, impressions, CPC, and ROAS data',
+    description: 'CSV or Excel — campaign performance, clicks, impressions, CPC, and ROAS',
     accentColor: '#4285f4',
     accentBg: 'bg-[#e8f0fe]',
     accentBorder: 'border-[#4285f4]/30',
@@ -56,7 +56,7 @@ const CHANNELS: ChannelConfig[] = [
   {
     reportType: 'meta_ads',
     label: 'Meta Ads',
-    description: 'Facebook / Instagram ad spend, reach, CTR, and conversion metrics',
+    description: 'CSV or Excel — Facebook / Instagram spend, reach, CTR, and conversions',
     accentColor: '#1877f2',
     accentBg: 'bg-[#e7f0fd]',
     accentBorder: 'border-[#1877f2]/30',
@@ -66,10 +66,12 @@ const CHANNELS: ChannelConfig[] = [
 
 // ─── File validation ──────────────────────────────────────────────────────────
 
+const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.xls']
+
 function validateFile(file: File): string | null {
-  const name = file.name.toLowerCase()
-  if (!name.endsWith('.csv')) {
-    return 'Only .csv files are accepted. Please export your report as a CSV first.'
+  const ext = '.' + (file.name.split('.').pop() ?? '').toLowerCase()
+  if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+    return 'Only CSV or Excel (.xlsx / .xls) files are accepted.'
   }
   if (file.size > MAX_FILE_SIZE_BYTES) {
     const sizeMB = (file.size / 1024 / 1024).toFixed(1)
@@ -168,7 +170,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
         )
         .catch(() => {})
 
-      setSlot((s) => ({ ...s, phase: 'processing', datasetId: dataset_id, message: 'Processing CSV…' }))
+      setSlot((s) => ({ ...s, phase: 'processing', datasetId: dataset_id, message: 'Processing…' }))
 
       let attempts = 0
       pollRef.current = setInterval(async () => {
@@ -192,7 +194,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
             setSlot((s) => ({
               ...s,
               phase: 'processing',
-              message: data.status === 'queued' ? 'Queued…' : 'Processing CSV…',
+              message: data.status === 'queued' ? 'Queued…' : 'Processing…',
             }))
           }
         } catch {
@@ -271,7 +273,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
         <input
           ref={inputRef}
           type="file"
-          accept=".csv"
+          accept=".csv,.xlsx,.xls"
           className="hidden"
           onChange={handleInputChange}
           disabled={isBusy}
@@ -312,7 +314,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
           )}
           {!isBusy && !isDone && !isError && !hasFile && (
             <>
-              <p className="text-sm font-medium text-slate-700">Drop CSV here</p>
+              <p className="text-sm font-medium text-slate-700">Drop file here</p>
               <p className="mt-0.5 text-xs text-slate-500">or click to browse</p>
             </>
           )}
@@ -332,7 +334,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
 
       {/* Size hint */}
       {!isBusy && !isDone && !isError && !hasFile && (
-        <p className="text-center text-[11px] text-slate-400">CSV only · max 100 MB</p>
+        <p className="text-center text-[11px] text-slate-400">CSV or Excel · max 100 MB</p>
       )}
 
       {/* Upload / Retry CTA */}
@@ -342,7 +344,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
           className="w-full rounded-xl py-2.5 text-sm font-semibold text-white transition-all hover:brightness-105 active:scale-[0.98]"
           style={{ backgroundColor: channel.accentColor }}
         >
-          Upload {channel.label} CSV
+          Upload {channel.label} File
         </button>
       )}
       {isError && (

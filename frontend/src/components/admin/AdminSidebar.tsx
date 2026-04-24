@@ -16,6 +16,7 @@ import {
   AlertOctagon,
   LayoutDashboard,
   Settings,
+  BookOpen,
 } from 'lucide-react'
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { href: '/admin/reports',     icon: FileBarChart,    label: 'Reports' },
   { href: '/admin/activity',    icon: Activity,        label: 'Activity Logs' },
   { href: '/admin/escalations', icon: AlertOctagon,    label: 'Escalations' },
+  { href: '/admin/help',        icon: BookOpen,        label: 'Help Articles' },
   { href: '/admin/settings',    icon: Settings,        label: 'Settings' },
 ]
 

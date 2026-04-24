@@ -57,11 +57,11 @@ export default function SupportInboxPage() {
   }
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Support Inbox</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Support Inbox</h1>
           <p className="mt-1 text-sm text-slate-500">
             {openCount > 0
               ? `${openCount} open message${openCount !== 1 ? 's' : ''}`

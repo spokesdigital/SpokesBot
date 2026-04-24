@@ -94,6 +94,17 @@ export interface UploadStatus {
   message?: string
 }
 
+export interface HelpArticle {
+  id: string
+  title: string
+  body: string
+  category: string
+  sort_order: number
+  is_published: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface SupportMessage {
   id: string
   user_id: string

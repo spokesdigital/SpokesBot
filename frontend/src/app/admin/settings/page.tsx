@@ -151,10 +151,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-800">Settings</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">Manage your account and preferences</p>
       </div>
 

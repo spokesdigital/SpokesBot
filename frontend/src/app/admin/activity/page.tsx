@@ -14,10 +14,11 @@ import {
   XCircle,
   RefreshCw,
   ChevronDown,
+  AlertCircle,
 } from 'lucide-react'
 import { format, parseISO, isAfter, isBefore } from 'date-fns'
 
-type ActionType = 'upload' | 'report' | 'support' | 'login'
+type ActionType = 'upload' | 'report' | 'support'
 type StatusType = 'success' | 'failed' | 'processing'
 
 interface ActivityEntry {
@@ -37,7 +38,6 @@ const ACTION_CONFIG: Record<ActionType, { label: string; icon: React.ElementType
   upload:  { label: 'Upload',           icon: Upload,        color: 'text-amber-700',   bg: 'bg-amber-50' },
   report:  { label: 'Report Generated', icon: FileBarChart,  color: 'text-emerald-700', bg: 'bg-emerald-50' },
   support: { label: 'Support',          icon: MessageSquare, color: 'text-blue-700',    bg: 'bg-blue-50' },
-  login:   { label: 'Login',            icon: Activity,      color: 'text-purple-700',  bg: 'bg-purple-50' },
 }
 
 const STATUS_BADGE: Record<StatusType, { label: string; className: string; icon: React.ElementType }> = {
@@ -109,6 +109,7 @@ export default function ActivityPage() {
   const [orgs, setOrgs] = useState<Organization[]>([])
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [selectedOrg, setSelectedOrg] = useState<string>('all')
@@ -119,6 +120,7 @@ export default function ActivityPage() {
 
   useEffect(() => {
     if (!session) return
+    setError(null)
     Promise.all([
       api.datasets.list(session.access_token, undefined, true),
       api.organizations.list(session.access_token),
@@ -129,7 +131,7 @@ export default function ActivityPage() {
         setOrgs(os)
         setMessages(msgs as SupportMessage[])
       })
-      .catch(() => {})
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load activity.'))
       .finally(() => setLoading(false))
   }, [session])
 
@@ -158,17 +160,24 @@ export default function ActivityPage() {
     { key: 'all', label: 'All' },
     { key: 'upload', label: 'Upload' },
     { key: 'report', label: 'Report' },
-    { key: 'login', label: 'Login' },
     { key: 'support', label: 'Support' },
   ]
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-800">Activity Logs</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Activity Logs</h1>
         <p className="mt-1 text-sm text-slate-500">Track all system actions and events</p>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Filters bar */}
       <div className="flex flex-wrap items-center gap-3">

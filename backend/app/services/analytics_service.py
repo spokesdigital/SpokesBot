@@ -543,14 +543,23 @@ def compute(
 
     elif operation == "value_counts":
         if not column or column not in df.columns:
-            raise ValueError(f"Column '{column}' not found for value_counts.")
+            available = list(df.columns)
+            raise ValueError(
+                f"Column '{column}' not found. Available columns: {available}. "
+                "Call get_dataset_schema to see exact column names."
+            )
         result = _sanitize(df[column].value_counts().head(20).to_dict())
 
     elif operation == "groupby":
         if not column or not group_by:
             raise ValueError("Both 'column' and 'group_by' are required for groupby.")
-        if column not in df.columns or group_by not in df.columns:
-            raise ValueError("Specified columns not found in dataset.")
+        missing = [c for c in [column, group_by] if c not in df.columns]
+        if missing:
+            available = list(df.columns)
+            raise ValueError(
+                f"Column(s) not found: {missing}. Available columns: {available}. "
+                "Call get_dataset_schema to see exact column names."
+            )
         # Rate/ratio columns (CTR, ROAS, CPC…) must be averaged across groups;
         # additive metrics (revenue, spend, conversions…) must be summed.
         # Using mean() for revenue gives the average revenue per row — not the

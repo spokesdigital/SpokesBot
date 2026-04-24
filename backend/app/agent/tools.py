@@ -3,7 +3,44 @@ import json
 import pandas as pd
 from langchain_core.tools import tool
 
-from app.services.analytics_service import _sanitize
+from app.services.analytics_service import _sanitize, infer_metric_mappings
+
+
+def _resolve_column(df: pd.DataFrame, name: str) -> str:
+    """
+    Return the exact DataFrame column that best matches `name`.
+
+    Resolution order:
+    1. Exact match (case-sensitive)
+    2. Case-insensitive exact match
+    3. Metric alias match via infer_metric_mappings (e.g. "revenue" → "Purchase conversion value")
+    4. Substring match (first column whose lower-cased name contains `name`)
+
+    Returns the original `name` unchanged if no match is found — the caller
+    will surface a clear error with available columns.
+    """
+    if name in df.columns:
+        return name
+
+    lowered = name.strip().lower()
+
+    # Case-insensitive exact
+    for col in df.columns:
+        if col.strip().lower() == lowered:
+            return col
+
+    # Metric alias (handles "revenue", "clicks", "cost", etc.)
+    mappings = infer_metric_mappings(df)
+    for metric_key, mapped_col in mappings.items():
+        if mapped_col and lowered in (metric_key, metric_key.replace("_", " ")):
+            return mapped_col
+
+    # Substring fallback
+    for col in df.columns:
+        if lowered in col.strip().lower():
+            return col
+
+    return name  # unresolved — let compute() raise the informative error
 
 
 def make_tools(df: pd.DataFrame):
@@ -60,12 +97,14 @@ def make_tools(df: pd.DataFrame):
         """
         from app.services.analytics_service import compute
 
+        resolved_column = _resolve_column(df, column) if column else None
+        resolved_group_by = _resolve_column(df, group_by) if group_by else None
         try:
             result = compute(
                 df,
                 operation=operation,
-                column=column or None,
-                group_by=group_by or None,
+                column=resolved_column,
+                group_by=resolved_group_by,
             )
             if operation == "auto" and isinstance(result, dict):
                 # The agent doesn't need thousands of daily data points, which blow past the 128k token limit.
@@ -85,8 +124,10 @@ def make_tools(df: pd.DataFrame):
             filter_column: Column to filter on.
             filter_value: Value to match (string comparison, case-insensitive).
         """
+        filter_column = _resolve_column(df, filter_column)
         if filter_column not in df.columns:
-            return f"Error: Column '{filter_column}' not found."
+            available = list(df.columns)
+            return f"Error: Column '{filter_column}' not found. Available columns: {available}. Call get_dataset_schema to see exact column names."
         mask = df[filter_column].astype(str).str.lower() == filter_value.lower()
         subset = df[mask]
         if subset.empty:

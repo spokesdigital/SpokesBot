@@ -273,14 +273,14 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Clients</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Clients</h1>
           <p className="mt-1 text-sm text-slate-500">Manage client accounts, uploads, and access</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {/* List / grid toggle */}
           <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             <button
@@ -342,7 +342,7 @@ export default function ClientsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) setShowCreate(false) }}
         >
-          <div className="w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white p-7 shadow-2xl">
+          <div className="w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white p-5 sm:p-7 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-800">New Client</h2>
               <button onClick={() => setShowCreate(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -387,7 +387,7 @@ export default function ClientsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) setEditingOrg(null) }}
         >
-          <div className="w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white p-7 shadow-2xl">
+          <div className="w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white p-5 sm:p-7 shadow-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-800">Rename Client</h2>
               <button onClick={() => setEditingOrg(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -431,7 +431,7 @@ export default function ClientsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
           onClick={e => { if (e.target === e.currentTarget) setConfirmDelete(null) }}
         >
-          <div className="w-full max-w-sm rounded-[1.75rem] border border-white/60 bg-white p-7 shadow-2xl">
+          <div className="w-full max-w-sm rounded-[1.75rem] border border-white/60 bg-white p-5 sm:p-7 shadow-2xl">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50">
                 <Trash2 className="h-5 w-5 text-red-500" />

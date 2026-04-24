@@ -113,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <button
         onClick={() => setChatOpen((o) => !o)}
         aria-label={chatOpen ? 'Close chat assistant' : 'Open chat assistant'}
-        className={`chat-launcher fixed right-7 bottom-7 z-20 flex h-[58px] w-[58px] items-center justify-center rounded-full border border-white/45 bg-[radial-gradient(circle_at_30%_28%,#ffe48a_0%,#f9c51b_38%,#ecab00_100%)] text-[#1f2530] transition-all duration-200 ease-out hover:brightness-105 ${
+        className={`chat-launcher chat-fab-bottom fixed right-5 sm:right-7 z-20 flex h-[58px] w-[58px] items-center justify-center rounded-full border border-white/45 bg-[radial-gradient(circle_at_30%_28%,#ffe48a_0%,#f9c51b_38%,#ecab00_100%)] text-[#1f2530] transition-all duration-200 ease-out hover:brightness-105 ${
           chatOpen
             ? 'scale-105 shadow-[0_24px_44px_rgba(245,184,0,0.4)]'
             : 'chat-launcher-idle scale-100'

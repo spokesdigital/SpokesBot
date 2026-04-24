@@ -137,6 +137,16 @@
   }
 }
 
+/* iOS safe-area utilities — used by chat FAB and other fixed elements */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom, 0px); }
+.chat-fab-bottom {
+  bottom: calc(1.75rem + env(safe-area-inset-bottom, 0px));
+}
+.chat-widget-bottom {
+  bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
 @layer components {
   .chat-launcher {
     box-shadow:

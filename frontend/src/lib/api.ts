@@ -1,5 +1,6 @@
 import type {
   Dataset,
+  HelpArticle,
   Thread,
   Message,
   AnalyticsRequest,
@@ -266,6 +267,40 @@ export const api = {
         token,
         timeoutMs: 10_000,
       }),
+  },
+
+  help: {
+    listPublished: () =>
+      apiFetch<HelpArticle[]>('/help/articles', { timeoutMs: 10_000 }),
+
+    listAll: (token: string) =>
+      apiFetch<HelpArticle[]>('/help/articles/all', { token, timeoutMs: 10_000 }),
+
+    create: (
+      body: { title: string; body: string; category: string; sort_order: number; is_published: boolean },
+      token: string,
+    ) =>
+      apiFetch<HelpArticle>('/help/articles', {
+        method: 'POST',
+        body: JSON.stringify(body),
+        token,
+        timeoutMs: 10_000,
+      }),
+
+    update: (
+      id: string,
+      body: Partial<{ title: string; body: string; category: string; sort_order: number; is_published: boolean }>,
+      token: string,
+    ) =>
+      apiFetch<HelpArticle>(`/help/articles/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+        token,
+        timeoutMs: 10_000,
+      }),
+
+    delete: (id: string, token: string) =>
+      apiFetch<void>(`/help/articles/${id}`, { method: 'DELETE', token, timeoutMs: 10_000 }),
   },
 }
 

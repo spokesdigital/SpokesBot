@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { SupportMessage } from '@/types'
-import { AlertOctagon, CheckCircle2, Mail, RefreshCw } from 'lucide-react'
+import { AlertOctagon, CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 
 type TabFilter = 'all' | 'open' | 'resolved'
@@ -29,18 +29,22 @@ export default function EscalationsPage() {
   const { session } = useAuth()
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabFilter>('all')
   const [resolving, setResolving] = useState<string | null>(null)
 
-  useEffect(() => {
+  function load() {
     if (!session) return
     setLoading(true)
+    setError(null)
     api.support
       .list(session.access_token)
       .then(data => setMessages(data as SupportMessage[]))
-      .catch(() => {})
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load escalations.'))
       .finally(() => setLoading(false))
-  }, [session])
+  }
+
+  useEffect(() => { load() }, [session])  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleResolve(id: string) {
     if (!session) return
@@ -69,11 +73,11 @@ export default function EscalationsPage() {
   ]
 
   return (
-    <div className="space-y-6 px-8 py-8">
+    <div className="space-y-6 px-4 py-5 sm:px-6 md:px-8 md:py-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-slate-800">Escalations</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Escalations</h1>
           <p className="mt-1 text-sm text-slate-500">Client support requests and issues</p>
         </div>
         {counts.open > 0 && (
@@ -102,6 +106,16 @@ export default function EscalationsPage() {
           </button>
         ))}
       </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500">
+          <span className="flex items-center gap-2"><XCircle className="h-4 w-4" />{error}</span>
+          <button onClick={load} className="flex items-center gap-1.5 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-200">
+            <RefreshCw className="h-3 w-3" /> Retry
+          </button>
+        </div>
+      )}
 
       {/* Tickets */}
       {loading ? (
