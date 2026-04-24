@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
-import { AlertCircle, Database } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Database } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
@@ -153,16 +153,53 @@ const metricDefinitions: MetricCardDefinition[] = [
   },
 ]
 
-// Columns that look like a campaign dimension (covers: campaign, campaign name, ad set, ad group, ad_group_name, ad set name, etc.)
-const CAMPAIGN_PATTERNS = [
-  /campaign/i,
-  /ad[\s_-]*group/i,
-  /ad[\s_-]*set/i,
-  /ad[\s_-]*name/i,
-  /ad\s*title/i,
-  /adset/i,
-  /adgroup/i,
+// Campaign dimension detection — ordered from broadest to most granular.
+// Used by the auto-picker AND for labelling the dimension selector dropdown.
+const CAMPAIGN_DIM_LEVELS: { label: string; pattern: RegExp; priority: number }[] = [
+  { label: 'Campaign', pattern: /^campaign(\s+name)?$/i, priority: 0 },
+  { label: 'Campaign', pattern: /campaign/i, priority: 1 },
+  { label: 'Ad Group', pattern: /ad[\s_-]*group|adgroup/i, priority: 2 },
+  { label: 'Ad Set', pattern: /ad[\s_-]*set|adset/i, priority: 3 },
+  { label: 'Ad', pattern: /ad[\s_-]*name|ad\s*title/i, priority: 4 },
 ]
+
+// Legacy flat patterns used in a few places that just need a boolean test.
+const CAMPAIGN_PATTERNS = CAMPAIGN_DIM_LEVELS.map((l) => l.pattern)
+
+function scoreCampaignDimension(col: string): number {
+  for (const { pattern, priority } of CAMPAIGN_DIM_LEVELS) {
+    if (pattern.test(col)) return priority
+  }
+  return 99
+}
+
+function labelForDimension(col: string): string {
+  for (const { pattern, label } of CAMPAIGN_DIM_LEVELS) {
+    if (pattern.test(col)) return label
+  }
+  return col
+}
+
+type SortState = { key: string; dir: 'asc' | 'desc' }
+
+function toggleSort(current: SortState, key: string): SortState {
+  if (current.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  return { key, dir: 'desc' }
+}
+
+function applySortToRows<T extends Record<string, unknown>>(rows: T[], sort: SortState): T[] {
+  return [...rows].sort((a, b) => {
+    const av = a[sort.key]
+    const bv = b[sort.key]
+    if (typeof av === 'string' && typeof bv === 'string') {
+      return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+    }
+    const sentinel = sort.dir === 'asc' ? Infinity : -Infinity
+    const an = (av as number | null) ?? sentinel
+    const bn = (bv as number | null) ?? sentinel
+    return sort.dir === 'asc' ? an - bn : bn - an
+  })
+}
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
@@ -297,6 +334,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [error, setError] = useState<string | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [selectedCampaignDimension, setSelectedCampaignDimension] = useState<string | null>(null)
+  const [campaignSort, setCampaignSort] = useState<SortState>({ key: 'cost', dir: 'desc' })
+  const [dailySort, setDailySort] = useState<SortState>({ key: 'date', dir: 'desc' })
+  const [dailyPage, setDailyPage] = useState(0)
 
   const orgLoadRef = useRef<string | null>(null)
 
@@ -362,6 +403,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       : organizations.find((org) => org.id === organizationId)?.name)
     ?? user?.organization?.name
     ?? 'Client Workspace'
+
+  // Reset table/sort state when the active dataset changes.
+  useEffect(() => {
+    setSelectedCampaignDimension(null)
+    setDailyPage(0)
+  }, [activeDatasetId])
 
   // Sync channel-scoped dataset selection into the global store so ChatWidget
   // creates threads against the correct report_type dataset.
@@ -666,12 +713,25 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
     // ── Campaign Breakdown ───────────────────────────────────────────────────
     const campaignRows: CampaignRow[] = (() => {
-      // Pick a campaign-like dimension from available breakdowns
-      const allBreakdownCols = Object.values(metricBreakdowns)
-        .flatMap((byCat) => Object.keys(byCat))
-      const campaignDimension = allBreakdownCols.find((col) =>
-        CAMPAIGN_PATTERNS.some((p) => p.test(col)),
+      // Collect all unique campaign-like dimension columns, sorted by priority
+      // (Campaign > Ad Group > Ad Set > Ad Name). Deduplicate since each metric
+      // repeats the same dimension keys.
+      const seenDims = new Set<string>()
+      for (const byCat of Object.values(metricBreakdowns)) {
+        for (const col of Object.keys(byCat)) {
+          if (CAMPAIGN_PATTERNS.some((p) => p.test(col))) seenDims.add(col)
+        }
+      }
+
+      // Pick the active dimension: user selection takes priority, then the
+      // highest-priority auto-detected one (lowest score = broadest level).
+      const sortedDims = Array.from(seenDims).sort(
+        (a, b) => scoreCampaignDimension(a) - scoreCampaignDimension(b),
       )
+      const campaignDimension = (selectedCampaignDimension && seenDims.has(selectedCampaignDimension))
+        ? selectedCampaignDimension
+        : sortedDims[0] ?? null
+
       if (!campaignDimension) return []
 
       const getBreakdown = (metricKey: string): Record<string, number> => {
@@ -768,6 +828,19 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       })
     })()
 
+    // Collect all available campaign dimensions for the picker dropdown.
+    const availableCampaignDimensions: string[] = (() => {
+      const seenDims = new Set<string>()
+      for (const byCat of Object.values(metricBreakdowns)) {
+        for (const col of Object.keys(byCat)) {
+          if (CAMPAIGN_PATTERNS.some((p) => p.test(col))) seenDims.add(col)
+        }
+      }
+      return Array.from(seenDims).sort(
+        (a, b) => scoreCampaignDimension(a) - scoreCampaignDimension(b),
+      )
+    })()
+
     return {
       shape,
       cards,
@@ -780,10 +853,29 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       revenueDistribution,
       campaignRows,
       dailyRows,
+      availableCampaignDimensions,
     }
-  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset])
+  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset, selectedCampaignDimension])
 
   const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
+
+  const DAILY_PAGE_SIZE = 30
+
+  const sortedCampaignRows = useMemo(
+    () => applySortToRows(viewModel.campaignRows as Record<string, unknown>[], campaignSort) as CampaignRow[],
+    [viewModel.campaignRows, campaignSort],
+  )
+
+  const sortedDailyRows = useMemo(
+    () => applySortToRows(viewModel.dailyRows as Record<string, unknown>[], dailySort) as DailyRow[],
+    [viewModel.dailyRows, dailySort],
+  )
+
+  const dailyPageCount = Math.ceil(sortedDailyRows.length / DAILY_PAGE_SIZE)
+  const pagedDailyRows = useMemo(
+    () => sortedDailyRows.slice(dailyPage * DAILY_PAGE_SIZE, (dailyPage + 1) * DAILY_PAGE_SIZE),
+    [sortedDailyRows, dailyPage],
+  )
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1087,9 +1179,27 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
             {/* ── Campaign Breakdown table ─────────────────────────────── */}
             <section className="space-y-4">
-              <h2 className="text-lg font-bold">Campaign Breakdown</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-bold">Campaign Breakdown</h2>
+                {viewModel.availableCampaignDimensions.length > 1 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Group by</span>
+                    <select
+                      value={selectedCampaignDimension ?? viewModel.availableCampaignDimensions[0]}
+                      onChange={(e) => setSelectedCampaignDimension(e.target.value)}
+                      className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      {viewModel.availableCampaignDimensions.map((dim) => (
+                        <option key={dim} value={dim}>
+                          {labelForDimension(dim)} — {dim}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
               <div className="rounded-xl border border-border bg-card card-shadow overflow-x-auto">
-                {viewModel.campaignRows.length === 0 ? (
+                {sortedCampaignRows.length === 0 ? (
                   <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No campaign dimension found. Add a &quot;Campaign&quot; or &quot;Ad Set&quot; column to enable this breakdown.
                   </div>
@@ -1097,23 +1207,49 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Campaign', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Cost', 'Conv.', 'Revenue', 'Avg Order', 'ROAS'].map((h) => (
-                          <th
-                            key={h}
-                            className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Campaign' ? 'text-left' : 'text-right'}`}
-                          >
-                            {h}
-                          </th>
-                        ))}
+                        <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                          {labelForDimension(selectedCampaignDimension ?? viewModel.availableCampaignDimensions[0] ?? 'Campaign')}
+                        </th>
+                        {([
+                          ['impressions', 'Impressions'],
+                          ['clicks', 'Clicks'],
+                          ['ctr', 'CTR'],
+                          ['cpc', 'Avg CPC'],
+                          ['cost', 'Cost'],
+                          ['conversions', 'Conv.'],
+                          ['revenue', 'Revenue'],
+                          ['atv', 'Avg Order'],
+                          ['roas', 'ROAS'],
+                        ] as [string, string][]).map(([key, label]) => {
+                          const active = campaignSort.key === key
+                          return (
+                            <th
+                              key={key}
+                              onClick={() => setCampaignSort((s) => toggleSort(s, key))}
+                              className="cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
+                            >
+                              <span className="inline-flex items-center justify-end gap-0.5">
+                                {label}
+                                {active ? (
+                                  campaignSort.dir === 'asc'
+                                    ? <ChevronUp className="h-3 w-3" />
+                                    : <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronsUpDown className="h-3 w-3 opacity-30" />
+                                )}
+                              </span>
+                            </th>
+                          )
+                        })}
                       </tr>
                     </thead>
                     <tbody>
-                      {viewModel.campaignRows.map((row, i) => (
+                      {sortedCampaignRows.map((row, i) => (
                         <tr
                           key={row.name}
-                          className={`border-b border-border/50 transition-colors hover:bg-muted/30 ${i === 0 ? 'bg-primary/5' : ''}`}
+                          className={`border-b border-border/50 transition-colors hover:bg-muted/30 ${i === 0 && campaignSort.key === 'cost' && campaignSort.dir === 'desc' ? 'bg-primary/5' : ''}`}
                         >
-                          <td className="max-w-[180px] truncate px-4 py-3 font-medium" title={row.name}>
+                          <td className="max-w-[220px] truncate px-4 py-3 font-medium" title={row.name}>
                             {row.name}
                           </td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtN(row.impressions)}</td>
@@ -1139,28 +1275,75 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
             {/* ── Daily Performance table ──────────────────────────────── */}
             <section className="space-y-4">
-              <h2 className="text-lg font-bold">Daily Performance</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-bold">Daily Performance</h2>
+                {sortedDailyRows.length > 0 && (
+                  <span className="text-sm text-muted-foreground">
+                    {sortedDailyRows.length} {sortedDailyRows.length === 1 ? 'day' : 'days'}
+                  </span>
+                )}
+              </div>
               <div className="rounded-xl border border-border bg-card card-shadow overflow-x-auto">
-                {viewModel.dailyRows.length === 0 ? (
+                {sortedDailyRows.length === 0 ? (
                   <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No daily data available. Upload a dataset with a date column to enable this table.
                   </div>
                 ) : (
+                  <>
                   <table className="w-full min-w-[640px] text-sm">
                     <thead>
                       <tr className="bg-muted/50 border-b border-border">
-                        {['Date', 'Impr.', 'Clicks', 'CTR', 'CPC', 'Cost', 'Conv.', 'Revenue', 'Avg Order', 'ROAS'].map((h) => (
-                          <th
-                            key={h}
-                            className={`px-4 py-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase ${h === 'Date' ? 'text-left' : 'text-right'}`}
-                          >
-                            {h}
-                          </th>
-                        ))}
+                        {/* Date column — sortable */}
+                        <th
+                          onClick={() => { setCampaignSort((s) => s); setDailySort((s) => toggleSort(s, 'date')); setDailyPage(0) }}
+                          className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
+                        >
+                          <span className="inline-flex items-center gap-0.5">
+                            Date
+                            {dailySort.key === 'date' ? (
+                              dailySort.dir === 'asc'
+                                ? <ChevronUp className="h-3 w-3" />
+                                : <ChevronDown className="h-3 w-3" />
+                            ) : (
+                              <ChevronsUpDown className="h-3 w-3 opacity-30" />
+                            )}
+                          </span>
+                        </th>
+                        {([
+                          ['impressions', 'Impr.'],
+                          ['clicks', 'Clicks'],
+                          ['ctr', 'CTR'],
+                          ['cpc', 'CPC'],
+                          ['cost', 'Cost'],
+                          ['conversions', 'Conv.'],
+                          ['revenue', 'Revenue'],
+                          ['atv', 'Avg Order'],
+                          ['roas', 'ROAS'],
+                        ] as [string, string][]).map(([key, label]) => {
+                          const active = dailySort.key === key
+                          return (
+                            <th
+                              key={key}
+                              onClick={() => { setDailySort((s) => toggleSort(s, key)); setDailyPage(0) }}
+                              className="cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
+                            >
+                              <span className="inline-flex items-center justify-end gap-0.5">
+                                {label}
+                                {active ? (
+                                  dailySort.dir === 'asc'
+                                    ? <ChevronUp className="h-3 w-3" />
+                                    : <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronsUpDown className="h-3 w-3 opacity-30" />
+                                )}
+                              </span>
+                            </th>
+                          )
+                        })}
                       </tr>
                     </thead>
                     <tbody>
-                      {viewModel.dailyRows.map((row) => (
+                      {pagedDailyRows.map((row) => (
                         <tr
                           key={row.date}
                           className="border-b border-border/50 transition-colors hover:bg-muted/30"
@@ -1168,7 +1351,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="whitespace-nowrap px-4 py-3 font-medium">
                             {(() => {
                               try {
-                                return new Date(row.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                return new Date(row.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                               } catch {
                                 return row.date
                               }
@@ -1191,6 +1374,34 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       ))}
                     </tbody>
                   </table>
+                  {/* Pagination */}
+                  {dailyPageCount > 1 && (
+                    <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                      <span className="text-xs text-muted-foreground">
+                        Showing {dailyPage * DAILY_PAGE_SIZE + 1}–{Math.min((dailyPage + 1) * DAILY_PAGE_SIZE, sortedDailyRows.length)} of {sortedDailyRows.length}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          disabled={dailyPage === 0}
+                          onClick={() => setDailyPage((p) => p - 1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="min-w-[4rem] text-center text-xs text-muted-foreground">
+                          {dailyPage + 1} / {dailyPageCount}
+                        </span>
+                        <button
+                          disabled={dailyPage >= dailyPageCount - 1}
+                          onClick={() => setDailyPage((p) => p + 1)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             </section>

@@ -10,12 +10,28 @@ METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
     "impressions": ("impression", "impr", "view"),
     "clicks": ("click",),
     "conversions": ("conversion", "transaction", "purchase", "order", "acquisition", "lead"),
-    "ctr": ("ctr", "click through rate"),
-    "avg_cpc": ("cpc", "cost per click"),
+    # "link click-through" preferred over the aggregate "CTR (all)" column.
+    "ctr": ("link click-through", "ctr", "click through rate"),
+    # "cost per link" preferred over the aggregate "CPC (all)" column.
+    "avg_cpc": ("cost per link", "cpc", "cost per click"),
     "cost": ("cost", "spend", "spent", "expense"),
     "revenue": ("revenue", "sales", "gmv", "income", "purchase value", "conversion value"),
     "roas": ("roas", "return on ad spend", "return on spend", "roas (", "/ spend"),
 }
+
+# Metrics are mapped sequentially in this order; once a column is claimed by
+# an earlier metric it is excluded from later ones.  This prevents ambiguous
+# columns like "CPC (cost per link click)" from being double-assigned to both
+# avg_cpc AND clicks.
+_METRIC_MAPPING_ORDER = [
+    "cost",
+    "revenue",
+    "roas",
+    "avg_cpc",
+    "ctr",
+    "impressions",
+    "clicks",
+]
 
 
 def _sanitize(obj: Any) -> Any:
@@ -203,7 +219,17 @@ def _pick_metric_mapping(columns: list[str], patterns: tuple[str, ...]) -> str |
     if not candidates:
         return None
 
-    return min(candidates)[2]
+    # Deprioritize "(all)" aggregate columns that Meta Ads exports alongside
+    # more specific ones (e.g. "Clicks (all)" vs "Link Clicks", "CTR (all)"
+    # vs "CTR (link click-through rate)").  Adding 1 to the raw score makes
+    # an "(all)" column effectively one tier worse than a same-scoring
+    # non-"(all)" column, and the boolean secondary key breaks remaining ties.
+    def _sort_key(x: tuple[int, str, str]) -> tuple[int, bool, str]:
+        is_all = "(all)" in x[1]
+        return (x[0] + int(is_all), is_all, x[1])
+
+    candidates.sort(key=_sort_key)
+    return candidates[0][2]
 
 
 def _pick_conversion_metric_mapping(columns: list[str]) -> str | None:
@@ -263,11 +289,39 @@ def infer_conversion_metric_mapping(columns: list[str]) -> str | None:
 
 def infer_metric_mappings(df: pd.DataFrame) -> dict[str, str | None]:
     numeric_columns = df.select_dtypes(include="number").columns.tolist()
-    metric_mappings = {
-        metric_key: _pick_metric_mapping(numeric_columns, patterns)
-        for metric_key, patterns in METRIC_PATTERNS.items()
-    }
-    metric_mappings["conversions"] = infer_conversion_metric_mapping(numeric_columns)
+    metric_mappings: dict[str, str | None] = {}
+    claimed: set[str] = set()
+
+    # Map metrics in priority order, excluding already-claimed columns so that
+    # an ambiguous column (e.g. "CPC (cost per link click)") is only assigned
+    # to the most-specific metric and never double-counted.
+    for metric_key in _METRIC_MAPPING_ORDER:
+        patterns = METRIC_PATTERNS.get(metric_key)
+        if patterns is None:
+            continue
+        available = [c for c in numeric_columns if c not in claimed]
+        col = _pick_metric_mapping(available, patterns)
+        metric_mappings[metric_key] = col
+        if col:
+            claimed.add(col)
+
+    # Map any remaining metrics not covered by the ordered pass.
+    # Skip "conversions" — it is handled below with a stricter heuristic.
+    for metric_key, patterns in METRIC_PATTERNS.items():
+        if metric_key in metric_mappings or metric_key == "conversions":
+            continue
+        available = [c for c in numeric_columns if c not in claimed]
+        col = _pick_metric_mapping(available, patterns)
+        metric_mappings[metric_key] = col
+        if col:
+            claimed.add(col)
+
+    # Conversions use a separate, stricter heuristic that excludes rate/value
+    # columns (Conv. rate, Conversion value, etc.) which the general matcher
+    # would incorrectly pick.  Run after all other metrics are claimed so the
+    # same column is never double-assigned.
+    available = [c for c in numeric_columns if c not in claimed]
+    metric_mappings["conversions"] = infer_conversion_metric_mapping(available)
     return metric_mappings
 
 
