@@ -1377,27 +1377,27 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     </tbody>
                   </table>
                   </div>{/* end scrollable wrapper */}
-                  {/* Pagination */}
+                  {/* Pagination — centered so it is never obscured by the chat FAB on the right */}
                   {dailyPageCount > 1 && (
-                    <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                    <div className="flex flex-col items-center gap-1 border-t border-border px-4 py-4 pb-6 sm:flex-row sm:justify-center sm:gap-3">
                       <span className="text-xs text-muted-foreground">
                         Showing {dailyPage * DAILY_PAGE_SIZE + 1}–{Math.min((dailyPage + 1) * DAILY_PAGE_SIZE, sortedDailyRows.length)} of {sortedDailyRows.length}
                       </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2">
                         <button
                           disabled={dailyPage === 0}
                           onClick={() => setDailyPage((p) => p - 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <span className="min-w-[4rem] text-center text-xs text-muted-foreground">
+                        <span className="min-w-[5rem] rounded-lg bg-muted/60 px-3 py-1 text-center text-xs font-medium text-muted-foreground">
                           {dailyPage + 1} / {dailyPageCount}
                         </span>
                         <button
                           disabled={dailyPage >= dailyPageCount - 1}
                           onClick={() => setDailyPage((p) => p + 1)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </button>
