@@ -19,6 +19,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+// Legend is still used by DistributionChart (PieChart) below
 
 // Minimum pixels per data point — ensures bars/lines are never squished when
 // there is a lot of data. The chart scrolls horizontally beyond this threshold.
@@ -255,7 +256,7 @@ export function DualAxisComboChart({
       {/* Horizontally scrollable chart area — zoom buttons stay outside and fixed */}
       <div
         className="overflow-x-auto overflow-y-hidden chart-scrollbar"
-        style={{ height: height - 32 }}
+        style={{ height: height - 52 }}
       >
         {/* CSS max() ensures the chart fills the container when data is sparse,
             and expands wider than the container when data is dense → scroll kicks in */}
@@ -305,7 +306,6 @@ export function DualAxisComboChart({
                     : undefined
                 }
               />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
               {series.map((s) => {
                 const axis = s.axis ?? 'l'
                 if (s.type === 'bar') {
@@ -340,8 +340,26 @@ export function DualAxisComboChart({
           </ResponsiveContainer>
         </div>
       </div>
+      {/* Custom centered legend — lives outside the scroll area so it is always
+          centred relative to the full card width, not the scrollable chart area */}
+      <div className="flex items-center justify-center gap-4 py-1.5">
+        {series.map((s) => (
+          <span key={s.dataKey} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {s.type === 'bar' ? (
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color, opacity: 0.85 }} />
+            ) : (
+              <span className="inline-flex items-center gap-0.5">
+                <span className="inline-block h-0.5 w-3" style={{ background: s.color }} />
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />
+                <span className="inline-block h-0.5 w-3" style={{ background: s.color }} />
+              </span>
+            )}
+            {s.name}
+          </span>
+        ))}
+      </div>
       {data.length > 0 && (
-        <div className="flex justify-center mt-auto pb-1 z-20">
+        <div className="flex justify-center pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>
@@ -410,7 +428,7 @@ export function AreaTrendChart({
       {/* Horizontally scrollable chart area — zoom buttons stay outside and fixed */}
       <div
         className="overflow-x-auto overflow-y-hidden chart-scrollbar"
-        style={{ height: height - 32 }}
+        style={{ height: height - 52 }}
       >
         <div style={{ width: `max(${chartMinPx}px, 100%)`, height: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -454,7 +472,6 @@ export function AreaTrendChart({
                     : undefined
                 }
               />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: '20px' }} />
               {series.map((s) => (
                 <Area
                   key={s.dataKey}
@@ -473,8 +490,22 @@ export function AreaTrendChart({
           </ResponsiveContainer>
         </div>
       </div>
+      {/* Custom centered legend — lives outside the scroll area so it is always
+          centred relative to the full card width, not the scrollable chart area */}
+      <div className="flex items-center justify-center gap-4 py-1.5">
+        {series.map((s) => (
+          <span key={s.dataKey} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-0.5">
+              <span className="inline-block h-0.5 w-3" style={{ background: s.color }} />
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />
+              <span className="inline-block h-0.5 w-3" style={{ background: s.color }} />
+            </span>
+            {s.name}
+          </span>
+        ))}
+      </div>
       {data.length > 0 && (
-        <div className="flex justify-center mt-auto pb-1 z-20">
+        <div className="flex justify-center pb-1 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>
