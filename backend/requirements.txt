@@ -25,7 +25,7 @@ langchain-openai==0.3.14
 # source venv/bin/activate && pip install pydantic-settings python-dotenv langgraph langchain-core langchain-openai
 
 # Logging
-structlog==24.4.0
+structlog==25.5.0
 
 # Rate limiting
 slowapi==0.1.9
