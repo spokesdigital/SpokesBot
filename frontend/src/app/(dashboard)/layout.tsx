@@ -11,12 +11,13 @@ const ChatWidget = dynamic(
 )
 import { MessageCircleMore, X, Menu } from 'lucide-react'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import Image from 'next/image'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { session, loading, user } = useAuth()
   const router = useRouter()
-  const { setMobileMenuOpen } = useDashboardStore()
+  const setMobileMenuOpen = useDashboardStore((s) => s.setMobileMenuOpen)
   const [chatOpen, setChatOpen] = useState(false)
 
   useEffect(() => {

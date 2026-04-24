@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import { api, streamChat } from '@/lib/api'
 import type { Thread, Message, Dataset } from '@/types'
 import { mergeServerMessages } from '@/components/dashboard/chatState'
@@ -500,7 +501,15 @@ const HELP_ARTICLES: HelpArticle[] = [
 
 export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const { session, user } = useAuth()
-  const { organizationId, activeDatasetId, setActiveDataset, activeThreadId, setActiveThread: persistThread } = useDashboardStore()
+  const { organizationId, activeDatasetId, setActiveDataset, activeThreadId, setActiveThread: persistThread } = useDashboardStore(
+    useShallow((s) => ({
+      organizationId: s.organizationId,
+      activeDatasetId: s.activeDatasetId,
+      setActiveDataset: s.setActiveDataset,
+      activeThreadId: s.activeThreadId,
+      setActiveThread: s.setActiveThread,
+    }))
+  )
   const pathname = usePathname()
   const pageContext = getPageContext(pathname)
   const [promptIndex, setPromptIndex] = useState(0)

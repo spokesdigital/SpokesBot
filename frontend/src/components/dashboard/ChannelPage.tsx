@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, useDeferredValue } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
@@ -8,6 +8,7 @@ import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { exportDashboardToPDF } from '@/lib/export'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
@@ -357,7 +358,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   void _accentLight
   void _accentText
   const { session, organizations, user } = useAuth()
-  const { organizationId, datePreset, dateRange, setActiveDataset } = useDashboardStore()
+  const { organizationId, datePreset, dateRange, setActiveDataset } = useDashboardStore(
+    useShallow((s) => ({ organizationId: s.organizationId, datePreset: s.datePreset, dateRange: s.dateRange, setActiveDataset: s.setActiveDataset })),
+  )
 
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null)
@@ -432,9 +435,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       })
     : null
   const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
+  // Defer the analytics result so chart re-renders are low-priority — the
+  // loading skeleton (loadingAnalytics) updates immediately while charts catch up.
+  const deferredAnalytics = useDeferredValue(analytics)
   const analyticsResultRecord = useMemo(
-    () => (analytics?.result ?? null) as Record<string, unknown> | null,
-    [analytics],
+    () => (deferredAnalytics?.result ?? null) as Record<string, unknown> | null,
+    [deferredAnalytics],
   )
   const analyticsDataQualityWarnings = useMemo(
     () => getAnalyticsDataQualityWarnings(analyticsResultRecord),

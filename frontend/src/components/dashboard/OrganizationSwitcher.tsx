@@ -4,10 +4,16 @@ import { useMemo, useState } from 'react'
 import { Building2, Check, ChevronDown, Plus, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 
 export function OrganizationSwitcher() {
   const { user, organizations, createOrganization } = useAuth()
-  const { organizationId, setOrganization } = useDashboardStore()
+  const { organizationId, setOrganization } = useDashboardStore(
+    useShallow((s) => ({
+      organizationId: s.organizationId,
+      setOrganization: s.setOrganization,
+    }))
+  )
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)

@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import {
   LayoutDashboard,
   LogOut,
@@ -39,7 +40,9 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut, organizations } = useAuth()
-  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useDashboardStore()
+  const { sidebarCollapsed, toggleSidebar, mobileMenuOpen, setMobileMenuOpen } = useDashboardStore(
+    useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, mobileMenuOpen: s.mobileMenuOpen, setMobileMenuOpen: s.setMobileMenuOpen })),
+  )
 
   const activeOrganizationName = organizations.find((org) => org.id === user?.organization?.id)?.name
     ?? user?.organization?.name

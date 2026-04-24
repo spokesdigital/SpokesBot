@@ -48,7 +48,8 @@
       "WebFetch(domain:spokes-bot.lovable.app)",
       "mcp__ide__getDiagnostics",
       "Bash(npm run *)",
-      "Bash(xargs sed *)"
+      "Bash(xargs sed *)",
+      "Bash(kill 11311)"
     ]
   }
 }

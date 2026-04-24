@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import {
   Users,
   Upload,
@@ -34,7 +35,12 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut } = useAuth()
-  const { sidebarCollapsed, toggleSidebar } = useDashboardStore()
+  const { sidebarCollapsed, toggleSidebar } = useDashboardStore(
+    useShallow((s) => ({
+      sidebarCollapsed: s.sidebarCollapsed,
+      toggleSidebar: s.toggleSidebar,
+    }))
+  )
 
   async function handleSignOut() {
     await signOut()

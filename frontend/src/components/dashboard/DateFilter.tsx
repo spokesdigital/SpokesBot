@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import { format, subDays, startOfMonth, startOfYear, startOfDay, endOfDay } from 'date-fns'
 import { Calendar, ChevronDown } from 'lucide-react'
 
@@ -50,7 +51,10 @@ const presets: Preset[] = [
 const DEFAULT_PRESET_KEY = 'last_30_days'
 
 export function DateFilter() {
-  const { datePreset, dateRange, setDateRange, clearDateRange } = useDashboardStore()
+  const { datePreset, dateRange, setDateRange, clearDateRange } = useDashboardStore(
+    useShallow((s) => ({ datePreset: s.datePreset, dateRange: s.dateRange, setDateRange: s.setDateRange, clearDateRange: s.clearDateRange })),
+  )
+  const [, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -96,19 +100,18 @@ export function DateFilter() {
         presets.find((p) => p.key === DEFAULT_PRESET_KEY)!.label
 
   function applyAllData() {
-    clearDateRange()
+    setOpen(false)
     setCustomStart('')
     setCustomEnd('')
-    setOpen(false)
+    startTransition(() => { clearDateRange() })
   }
 
   function applyPreset(preset: Preset) {
     const { start, end } = preset.getValue()
-    setDateRange(start, end, preset.key)
-    // Reset custom inputs so they don't linger when user switches back
+    setOpen(false)
     setCustomStart('')
     setCustomEnd('')
-    setOpen(false)
+    startTransition(() => { setDateRange(start, end, preset.key) })
   }
 
   function handleStartChange(value: string) {
@@ -131,8 +134,8 @@ export function DateFilter() {
     const start = startOfDay(new Date(startStr))
     const end = endOfDay(new Date(endStr))
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return
-    setDateRange(start, end, 'custom')
-    setOpen(false) // ← auto-close as soon as both dates are valid
+    setOpen(false)
+    startTransition(() => { setDateRange(start, end, 'custom') })
   }
 
   return (
