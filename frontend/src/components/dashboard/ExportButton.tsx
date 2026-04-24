@@ -40,6 +40,7 @@ export function ExportButton({
       }
 
       // Temporarily hide any elements that shouldn't appear in the PDF
+      document.body.classList.add('pdf-export-mode')
       element.querySelectorAll<HTMLElement>('[data-pdf-hide]').forEach((el) => {
         hiddenEls.push(el)
         el.style.visibility = 'hidden'
@@ -113,6 +114,7 @@ export function ExportButton({
     } catch (err) {
       console.error('[ExportButton] PDF export failed:', err)
     } finally {
+      document.body.classList.remove('pdf-export-mode')
       hiddenEls.forEach((el) => { el.style.visibility = '' })
       setExporting(false)
     }

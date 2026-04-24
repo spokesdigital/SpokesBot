@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 import {
@@ -215,7 +215,7 @@ interface DualAxisComboChartProps {
   height?: number
 }
 
-export function DualAxisComboChart({
+export const DualAxisComboChart = React.memo(function DualAxisComboChart({
   data,
   series,
   leftTickFormatter,
@@ -243,12 +243,7 @@ export function DualAxisComboChart({
           : String(row[xAxisKey] ?? row.date ?? ''),
     ]),
   )
-  // Show ~6-8 tick labels across the visible range
-  const tickInterval = visibleData.length > 60 ? Math.ceil(visibleData.length / 8)
-    : visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
-    : visibleData.length > 14 ? Math.ceil(visibleData.length / 6)
-    : visibleData.length > 7  ? Math.ceil(visibleData.length / 5)
-    : 0
+  const tickInterval = visibleData.length <= 14 ? 0 : Math.ceil(visibleData.length / 8)
   const barSize = visibleData.length > 60 ? 6 : visibleData.length > 30 ? 10 : visibleData.length > 14 ? 16 : 22
 
   return (
@@ -267,11 +262,11 @@ export function DualAxisComboChart({
               <XAxis
                 dataKey={xAxisKey}
                 interval={tickInterval}
-                minTickGap={36}
                 tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
-                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
+                tickMargin={9}
                 height={32}
                 padding={{ left: 50, right: 50 }}
               />
@@ -367,7 +362,7 @@ export function DualAxisComboChart({
       )}
     </div>
   )
-}
+})
 
 // ─── AreaTrendChart ────────────────────────────────────────────────────────────
 
@@ -394,7 +389,7 @@ interface AreaTrendChartProps {
   height?: number
 }
 
-export function AreaTrendChart({
+export const AreaTrendChart = React.memo(function AreaTrendChart({
   data,
   series,
   tickFormatter,
@@ -419,9 +414,7 @@ export function AreaTrendChart({
     ]),
   )
 
-  const tickInterval = visibleData.length > 30 ? Math.ceil(visibleData.length / 7)
-    : visibleData.length > 14 ? Math.ceil(visibleData.length / 6)
-    : 0
+  const tickInterval = visibleData.length <= 14 ? 0 : Math.ceil(visibleData.length / 8)
 
   return (
     <div className="relative flex flex-col h-full">
@@ -445,11 +438,11 @@ export function AreaTrendChart({
               <XAxis
                 dataKey={xAxisKey}
                 interval={tickInterval}
-                minTickGap={36}
                 tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
-                tick={{ fill: '#7a8292', fontSize: 11 }}
+                tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
+                tickMargin={9}
                 height={32}
                 padding={{ left: 50, right: 50 }}
               />
@@ -513,14 +506,14 @@ export function AreaTrendChart({
       )}
     </div>
   )
-}
+})
 
 interface DistributionChartProps {
   data: DistributionDatum[]
   height?: number
 }
 
-export function DistributionChart({ data, height = 260 }: DistributionChartProps) {
+export const DistributionChart = React.memo(function DistributionChart({ data, height = 260 }: DistributionChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
@@ -554,4 +547,4 @@ export function DistributionChart({ data, height = 260 }: DistributionChartProps
       </PieChart>
     </ResponsiveContainer>
   )
-}
+})

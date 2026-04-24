@@ -30,10 +30,15 @@ def main():
             return
 
     org = supa.table("organizations").select("id").eq("name", "Acme Corp QA").execute()
+    if not org.data:
+        print("Organization not found, creating...")
+        org = supa.table("organizations").insert({"name": "Acme Corp QA"}).execute()
+    
     if org.data:
         org_id = org.data[0]['id']
+        print(f"Linking user {user_id} to org {org_id}")
         try:
-            supa.table("user_organizations").insert({
+            supa.table("user_organizations").upsert({
                 "user_id": user_id,
                 "organization_id": org_id,
                 "role": "admin"

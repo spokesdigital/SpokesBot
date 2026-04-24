@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Sidebar } from '@/components/dashboard/Sidebar'
-import { ChatWidget } from '@/components/dashboard/ChatWidget'
+import dynamic from 'next/dynamic'
+const ChatWidget = dynamic(
+  () => import('@/components/dashboard/ChatWidget').then(m => ({ default: m.ChatWidget })),
+  { ssr: false },
+)
 import { MessageCircleMore, X, Menu } from 'lucide-react'
 import { useDashboardStore } from '@/store/dashboard'
 import Image from 'next/image'

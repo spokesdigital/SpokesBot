@@ -1,8 +1,10 @@
+import asyncio
 import logging
 from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import ORJSONResponse
 
 from app.agent.graph import generate_structured_insights
 from app.dependencies import (
@@ -15,7 +17,7 @@ from app.dependencies import (
 
 # limiter imported from app.main to avoid circular imports
 from app.main import limiter
-from app.schemas import AnalyticsRequest, AnalyticsResponse, InsightsRequest, InsightsResponse
+from app.schemas import AnalyticsRequest, InsightsRequest
 from app.services import analytics_service, dataset_service
 from supabase import Client
 
@@ -24,9 +26,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-@router.post("/compute", response_model=AnalyticsResponse)
+@router.post("/compute")
 @limiter.limit("60/minute")
-def compute_analytics(
+async def compute_analytics(
     request: Request,
     body: AnalyticsRequest,
     org_id: UUID | None = Query(None),
@@ -44,6 +46,10 @@ def compute_analytics(
     Date filtering: if date_preset is provided, the DataFrame is sliced to the
     requested range before any computation runs. compute() always receives an
     already-filtered DataFrame; its logic is unchanged.
+
+    Pandas work is offloaded to a thread pool via asyncio.to_thread() so the
+    FastAPI event loop is never blocked by CPU-bound DataFrame operations.
+    Response is serialized with orjson (faster than stdlib json, handles numpy types).
     """
     # ── 1. Dataset lookup with explicit org isolation ────────────────────────
     target_org_id = str(org_id) if role == ROLE_ADMIN and org_id else caller_org_id
@@ -74,12 +80,14 @@ def compute_analytics(
             ),
         )
 
-    # ── 3. Load parquet into DataFrame ───────────────────────────────────────
-    df = dataset_service.load_dataframe(dataset["storage_path"], service_client)
+    # ── 3. Load parquet into DataFrame (offloaded — blocks on I/O + pandas) ─
+    df = await asyncio.to_thread(
+        dataset_service.load_dataframe, dataset["storage_path"], service_client
+    )
     full_df = df.copy()
     start = end = None
 
-    # ── 4. Apply date filter (pre-processing step) ───────────────────────────
+    # ── 4. Apply date filter (offloaded — pd.to_datetime is CPU-bound) ──────
     if body.date_preset is not None:
         start, end = analytics_service.resolve_date_range(
             body.date_preset.value,
@@ -87,18 +95,19 @@ def compute_analytics(
             body.end_date,
         )
         try:
-            df = analytics_service.apply_date_filter(df, body.date_column, start, end)
+            df = await asyncio.to_thread(
+                analytics_service.apply_date_filter, df, body.date_column, start, end
+            )
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(e),
             ) from e
         if df.empty:
-            # Return 200 with empty result instead of 422 for a smoother UX
-            return AnalyticsResponse(
-                dataset_id=body.dataset_id,
-                operation=body.operation,
-                result={
+            return ORJSONResponse(content={
+                "dataset_id": str(body.dataset_id),
+                "operation": str(body.operation),
+                "result": {
                     "status": "empty",
                     "message": f"No rows found in the selected date range ({body.date_preset.value}).",
                     "shape": {"rows": 0, "cols": len(df.columns)},
@@ -109,11 +118,12 @@ def compute_analytics(
                     "metric_time_series": {},
                     "metric_breakdowns": {},
                 },
-            )
+            })
 
-    # ── 5. Compute analytics on the (possibly filtered) DataFrame ────────────
+    # ── 5. Compute analytics (offloaded — groupbys + aggregations) ──────────
     try:
-        result = analytics_service.compute(
+        result = await asyncio.to_thread(
+            analytics_service.compute,
             df,
             operation=body.operation,
             column=body.column,
@@ -122,12 +132,14 @@ def compute_analytics(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
+    # ── 6. Prior-period comparison (offloaded per period) ───────────────────
     if body.operation == "auto" and body.date_preset is not None and start and end:
         range_duration = end - start
         prior_end = start - timedelta(seconds=1)
         prior_start = prior_end - range_duration
         try:
-            previous_df = analytics_service.apply_date_filter(
+            previous_df = await asyncio.to_thread(
+                analytics_service.apply_date_filter,
                 full_df,
                 body.date_column,
                 prior_start,
@@ -138,11 +150,13 @@ def compute_analytics(
 
         previous_result = None
         if not previous_df.empty:
-            previous_result = analytics_service.compute(
+            previous_result = await asyncio.to_thread(
+                analytics_service.compute,
                 previous_df,
                 operation="auto",
             )
 
+        # build_auto_comparison is pure dict manipulation — no pandas, stays sync
         result["comparison"] = analytics_service.build_auto_comparison(result, previous_result)
         result["comparison_window"] = {
             "current_start": start.isoformat(),
@@ -151,14 +165,17 @@ def compute_analytics(
             "previous_end": prior_end.isoformat(),
         }
 
-    return AnalyticsResponse(
-        dataset_id=body.dataset_id,
-        operation=body.operation,
-        result=result,
-    )
+    # ── 7. Serialize with orjson (faster, handles numpy/NaN natively) ───────
+    # _sanitize() in analytics_service already converts NaN/Inf → None before
+    # this point, so orjson receives only JSON-safe Python types.
+    return ORJSONResponse(content={
+        "dataset_id": str(body.dataset_id),
+        "operation": str(body.operation),
+        "result": result,
+    })
 
 
-@router.post("/insights", response_model=InsightsResponse)
+@router.post("/insights")
 @limiter.limit("20/minute")
 async def get_overall_insights(
     request: Request,
@@ -197,7 +214,9 @@ async def get_overall_insights(
         )
 
     try:
-        df = dataset_service.load_dataframe(dataset["storage_path"], service_client)
+        df = await asyncio.to_thread(
+            dataset_service.load_dataframe, dataset["storage_path"], service_client
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -211,25 +230,26 @@ async def get_overall_insights(
             body.end_date,
         )
         try:
-            df = analytics_service.apply_date_filter(df, body.date_column, start, end)
+            df = await asyncio.to_thread(
+                analytics_service.apply_date_filter, df, body.date_column, start, end
+            )
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
         if df.empty:
-            # Return 200 with empty insights instead of 422
-            return InsightsResponse(
-                dataset_id=body.dataset_id,
-                insights={
+            return ORJSONResponse(content={
+                "dataset_id": str(body.dataset_id),
+                "insights": {
                     "status": "empty",
                     "message": f"No rows found in the selected date range ({body.date_preset.value}).",
                     "overall_summary": "No data available for the selected period.",
                     "key_takeaways": [],
                     "anomalies": [],
                     "opportunities": [],
-                }
-            )
+                },
+            })
 
     try:
         insights = await generate_structured_insights(df)
@@ -264,4 +284,7 @@ async def get_overall_insights(
             ),
         ) from exc
 
-    return InsightsResponse(dataset_id=body.dataset_id, insights=insights)
+    return ORJSONResponse(content={
+        "dataset_id": str(body.dataset_id),
+        "insights": insights,
+    })

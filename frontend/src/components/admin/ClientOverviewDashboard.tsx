@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   Area,
@@ -14,7 +14,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, Calendar, Check, ChevronDown, TrendingUp } from 'lucide-react'
+import { AlertCircle, Calendar, Check, ChevronDown, Download } from 'lucide-react'
+import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
+import { exportDashboardToPDF } from '@/lib/export'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
@@ -393,6 +395,16 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [insightsError, setInsightsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportPDF = useCallback(async () => {
+    setExporting(true)
+    try {
+      await exportDashboardToPDF('overview-pdf-content', `${(orgName ?? 'overview').toLowerCase().replace(/\s+/g, '-')}-report.pdf`)
+    } finally {
+      setExporting(false)
+    }
+  }, [orgName])
 
   const googleDataset = useMemo(
     () =>
@@ -623,24 +635,18 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   // ── No data ───────────────────────────────────────────────────────────────
   if (!hasAnyData) {
     return (
-      <div className="flex min-h-[480px] flex-col items-center justify-center gap-3 p-8 text-center">
-        <TrendingUp className="h-12 w-12 text-slate-200" />
-        <h2 className="text-xl font-semibold text-slate-700">No reports ready</h2>
-        {error ? (
-          <p className="max-w-md text-sm text-red-500">{error}</p>
-        ) : (
-          <p className="max-w-md text-sm text-slate-500">
-            No processed Google Ads or Meta Ads datasets found. Performance data will appear here
-            once your admin uploads and processes your channel CSV reports.
-          </p>
+      <div className="p-6 md:p-8">
+        {error && (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
         )}
+        <EmptyDashboardState />
       </div>
     )
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+    <div id="overview-pdf-content" className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -649,7 +655,18 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
           <p className="mt-0.5 text-sm text-slate-500">Combined performance across all active channels</p>
         </div>
-        <DateFilterDropdown value={dateSelection} onChange={setDateSelection} />
+        <div className="flex items-center gap-3">
+          <DateFilterDropdown value={dateSelection} onChange={setDateSelection} />
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={exporting || !hasAnyData}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-[#f0a500] hover:text-[#f0a500] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? 'Generating…' : 'Export PDF'}
+          </button>
+        </div>
       </div>
 
       {/* Error */}

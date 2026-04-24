@@ -36,7 +36,8 @@ class TestUploadFlow:
     """Test dataset upload lifecycle and validation."""
 
     def test_non_csv_rejected(self):
-        """Non-CSV files should be rejected with 400."""
+        """Files with unsupported extensions (.pdf, .txt, etc.) are rejected with 400.
+        Accepted types are .csv, .xlsx, and .xls only."""
         from io import BytesIO
 
         mock_supabase = _make_mock_supabase()
@@ -52,9 +53,9 @@ class TestUploadFlow:
                 "/upload/",
                 files={
                     "file": (
-                        "data.xlsx",
-                        BytesIO(b"fake"),
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "report.pdf",
+                        BytesIO(b"%PDF-1.4 fake"),
+                        "application/pdf",
                     )
                 },
                 data={"org_id": "00000000-0000-0000-0000-000000000001"},

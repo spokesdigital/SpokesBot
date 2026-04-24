@@ -1,16 +1,35 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Database } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
+import { exportDashboardToPDF } from '@/lib/export'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { api } from '@/lib/api'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { KPICard } from '@/components/dashboard/KPICard'
-import { ChartCard, DualAxisComboChart, AreaTrendChart, DistributionChart } from '@/components/dashboard/ChannelChart'
+import dynamic from 'next/dynamic'
+
+const ChartCard = dynamic(
+  () => import('@/components/dashboard/ChannelChart').then(m => ({ default: m.ChartCard })),
+  { ssr: false, loading: () => <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow" /> },
+)
+const DualAxisComboChart = dynamic(
+  () => import('@/components/dashboard/ChannelChart').then(m => ({ default: m.DualAxisComboChart })),
+  { ssr: false },
+)
+const AreaTrendChart = dynamic(
+  () => import('@/components/dashboard/ChannelChart').then(m => ({ default: m.AreaTrendChart })),
+  { ssr: false },
+)
+const DistributionChart = dynamic(
+  () => import('@/components/dashboard/ChannelChart').then(m => ({ default: m.DistributionChart })),
+  { ssr: false },
+)
 import { splitInsightsBySection } from '@/components/dashboard/channelInsights'
 import {
   buildClicksCpcData,
@@ -246,6 +265,23 @@ function formatRatio(value: number) {
   return `${value.toFixed(2)}x`
 }
 
+// Stable formatter references for memoized chart props — defined at module level
+// so they have a fixed identity across ChannelPage renders (inline arrows would break React.memo).
+const fmtCtrRight = (v: number) => `${v.toFixed(1)}%`
+const fmtCtrTooltip = (v: number, n: string): [string, string] =>
+  n === 'CTR %' ? [`${v.toFixed(2)}%`, n] : [formatCompactNumber(v), n]
+const fmtCpcRight = (v: number) => `$${v.toFixed(2)}`
+const fmtCpcTooltip = (v: number, n: string): [string, string] =>
+  n === 'Avg CPC $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n]
+const fmtCpaRight = (v: number) => `$${v.toFixed(0)}`
+const fmtCpaTooltip = (v: number, n: string): [string, string] =>
+  n === 'CPA $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n]
+const fmtConvRateTick = (v: number) => `${v.toFixed(0)}%`
+const fmtConvRateTooltip = (v: number) => `${v.toFixed(2)}%`
+const fmtRevenueTick = (v: number) => `$${Math.round(v)}`
+const fmtRoasTick = (v: number) => `${v.toFixed(1)}x`
+const fmtRoasTooltip = (v: number) => `${v.toFixed(2)}x`
+
 function formatMetricValue(kind: MetricCardDefinition['kind'], value: number | null) {
   if (value == null || Number.isNaN(value)) return '—'
   if (kind === 'currency') return formatCurrency(value)
@@ -338,6 +374,16 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [campaignSort, setCampaignSort] = useState<SortState>({ key: 'cost', dir: 'desc' })
   const [dailySort, setDailySort] = useState<SortState>({ key: 'date', dir: 'desc' })
   const [dailyPage, setDailyPage] = useState(0)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportPDF = useCallback(async () => {
+    setExporting(true)
+    try {
+      await exportDashboardToPDF('dashboard-pdf-content', `${channelName.toLowerCase().replace(/\s+/g, '-')}-report.pdf`)
+    } finally {
+      setExporting(false)
+    }
+  }, [channelName])
 
   const orgLoadRef = useRef<string | null>(null)
 
@@ -877,6 +923,55 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     [sortedDailyRows, dailyPage],
   )
 
+  // ── Stable series arrays for memoized chart props ────────────────────────
+  const clicksCtrSeries = useMemo(
+    () => [
+      { type: 'bar' as const,  dataKey: 'clicks', name: 'Clicks', color: accentColor, axis: 'l' as const },
+      { type: 'line' as const, dataKey: 'ctr',    name: 'CTR %',  color: '#f5b800',   axis: 'r' as const },
+    ],
+    [accentColor],
+  )
+  const clicksCpcSeries = useMemo(
+    () => [
+      { type: 'bar' as const,  dataKey: 'clicks', name: 'Clicks',    color: accentColor, axis: 'l' as const },
+      { type: 'line' as const, dataKey: 'cpc',    name: 'Avg CPC $', color: '#f97316',   axis: 'r' as const },
+    ],
+    [accentColor],
+  )
+  const transactionsCpaSeries = useMemo(
+    () => [
+      { type: 'bar' as const,  dataKey: 'transactions', name: 'Transactions', color: accentColor, axis: 'l' as const },
+      { type: 'line' as const, dataKey: 'cpa',          name: 'CPA $',        color: '#f5b800',   axis: 'r' as const },
+    ],
+    [accentColor],
+  )
+  const conversionRateSeries = useMemo(
+    () => [
+      {
+        type: 'area' as const,
+        dataKey: 'conversionRate',
+        name: 'Conversion Rate',
+        color: accentColor,
+        gradientId: `conversion-rate-${reportType}`,
+        gradientOpacity: 0.18,
+      },
+    ],
+    [accentColor, reportType],
+  )
+  const revenueCostSeries = useMemo(
+    () => [
+      { type: 'area' as const, dataKey: 'revenue', name: 'Revenue', color: '#f5b800', gradientId: `rev-${reportType}` },
+      { type: 'area' as const, dataKey: 'cost',    name: 'Cost',    color: '#f97316', gradientId: `cost-${reportType}`, gradientOpacity: 0.16 },
+    ],
+    [reportType],
+  )
+  const roasSeries = useMemo(
+    () => [
+      { type: 'area' as const, dataKey: 'roas', name: 'ROAS', color: accentColor, gradientId: `roas-${reportType}`, gradientOpacity: 0.2 },
+    ],
+    [accentColor, reportType],
+  )
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -907,7 +1002,15 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <DateFilter />
-
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            disabled={exporting || completedDatasets.length === 0}
+            className="flex items-center gap-2 rounded-xl border border-[#e7e1d6] bg-white px-4 py-2 text-sm font-medium text-[#252b36] shadow-sm transition hover:border-[#f0a500] hover:text-[#f0a500] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            {exporting ? 'Generating…' : 'Export PDF'}
+          </button>
         </div>
       </header>
 
@@ -934,13 +1037,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       )}
 
       {!loadingDatasets && completedDatasets.length === 0 ? (
-        <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card text-center card-shadow">
-          <Database className="h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-4 text-base font-semibold">No {channelName} reports yet</p>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-            Ask your admin to upload a {channelName} CSV dataset to populate this section.
-          </p>
-        </div>
+        <EmptyDashboardState channelName={channelName} />
       ) : (
         <>
           {/* ── KPI Cards ────────────────────────────────────────────────── */}
@@ -989,15 +1086,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCtrData as Record<string, unknown>[]}
-                      series={[
-                        { type: 'bar',  dataKey: 'clicks', name: 'Clicks', color: accentColor, axis: 'l' },
-                        { type: 'line', dataKey: 'ctr',    name: 'CTR %',  color: '#f5b800',   axis: 'r' },
-                      ]}
-                      leftTickFormatter={(v) => formatCompactNumber(v)}
-                      rightTickFormatter={(v) => `${v.toFixed(1)}%`}
-                      tooltipFormatter={(v, n) =>
-                        n === 'CTR %' ? [`${v.toFixed(2)}%`, n] : [formatCompactNumber(v), n]
-                      }
+                      series={clicksCtrSeries}
+                      leftTickFormatter={formatCompactNumber}
+                      rightTickFormatter={fmtCtrRight}
+                      tooltipFormatter={fmtCtrTooltip}
                     />
                   </ChartCard>
 
@@ -1008,15 +1100,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCpcData as Record<string, unknown>[]}
-                      series={[
-                        { type: 'bar',  dataKey: 'clicks', name: 'Clicks',   color: accentColor, axis: 'l' },
-                        { type: 'line', dataKey: 'cpc',    name: 'Avg CPC $', color: '#f97316',   axis: 'r' },
-                      ]}
-                      leftTickFormatter={(v) => formatCompactNumber(v)}
-                      rightTickFormatter={(v) => `$${v.toFixed(2)}`}
-                      tooltipFormatter={(v, n) =>
-                        n === 'Avg CPC $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n]
-                      }
+                      series={clicksCpcSeries}
+                      leftTickFormatter={formatCompactNumber}
+                      rightTickFormatter={fmtCpcRight}
+                      tooltipFormatter={fmtCpcTooltip}
                     />
                   </ChartCard>
                 </div>
@@ -1052,14 +1139,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <DualAxisComboChart
                       data={viewModel.transactionsCpaData as Record<string, unknown>[]}
-                      series={[
-                        { type: 'bar', dataKey: 'transactions', name: 'Transactions', color: accentColor, axis: 'l' },
-                        { type: 'line', dataKey: 'cpa', name: 'CPA $', color: '#f5b800', axis: 'r' },
-                      ]}
+                      series={transactionsCpaSeries}
                       connectNulls={true}
-                      leftTickFormatter={(v) => formatCompactNumber(v)}
-                      rightTickFormatter={(v) => `$${v.toFixed(0)}`}
-                      tooltipFormatter={(v, n) => (n === 'CPA $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n])}
+                      leftTickFormatter={formatCompactNumber}
+                      rightTickFormatter={fmtCpaRight}
+                      tooltipFormatter={fmtCpaTooltip}
                     />
                   </ChartCard>
 
@@ -1070,20 +1154,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <AreaTrendChart
                       data={viewModel.conversionRateData as Record<string, unknown>[]}
-                      series={[
-                        {
-                          type: 'area',
-                          dataKey: 'conversionRate',
-                          name: 'Conversion Rate',
-                          color: accentColor,
-                          gradientId: `conversion-rate-${reportType}`,
-                          gradientOpacity: 0.18,
-                        },
-                      ]}
+                      series={conversionRateSeries}
                       connectNulls={true}
                       curveType="linear"
-                      tickFormatter={(v) => `${v.toFixed(0)}%`}
-                      tooltipFormatter={(v) => `${v.toFixed(2)}%`}
+                      tickFormatter={fmtConvRateTick}
+                      tooltipFormatter={fmtConvRateTooltip}
                     />
                   </ChartCard>
                 </div>
@@ -1120,12 +1195,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <AreaTrendChart
                       data={viewModel.trendData as Record<string, unknown>[]}
-                      series={[
-                        { type: 'area', dataKey: 'revenue', name: 'Revenue', color: '#f5b800', gradientId: `rev-${reportType}` },
-                        { type: 'area', dataKey: 'cost',    name: 'Cost',    color: '#f97316', gradientId: `cost-${reportType}`, gradientOpacity: 0.16 },
-                      ]}
-                      tickFormatter={(v) => `$${Math.round(v)}`}
-                      tooltipFormatter={(v) => formatCurrency(v)}
+                      series={revenueCostSeries}
+                      tickFormatter={fmtRevenueTick}
+                      tooltipFormatter={formatCurrency}
                     />
                   </ChartCard>
 
@@ -1136,11 +1208,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   >
                     <AreaTrendChart
                       data={viewModel.roasData as Record<string, unknown>[]}
-                      series={[
-                        { type: 'area', dataKey: 'roas', name: 'ROAS', color: accentColor, gradientId: `roas-${reportType}`, gradientOpacity: 0.2 },
-                      ]}
-                      tickFormatter={(v) => `${v.toFixed(1)}x`}
-                      tooltipFormatter={(v) => `${v.toFixed(2)}x`}
+                      series={roasSeries}
+                      tickFormatter={fmtRoasTick}
+                      tooltipFormatter={fmtRoasTooltip}
                     />
                   </ChartCard>
                 </div>

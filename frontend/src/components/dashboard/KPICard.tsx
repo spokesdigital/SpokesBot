@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 
@@ -14,7 +15,7 @@ interface KPICardProps {
   loading?: boolean
 }
 
-export function KPICard({ title, value, trendValue, trendDirection, priorLabel = 'prior period', noDataLabel = 'No prior comparison', tooltip, loading = false }: KPICardProps) {
+export const KPICard = React.memo(function KPICard({ title, value, trendValue, trendDirection, priorLabel = 'prior period', noDataLabel = 'No prior comparison', tooltip, loading = false }: KPICardProps) {
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
@@ -98,4 +99,4 @@ export function KPICard({ title, value, trendValue, trendDirection, priorLabel =
       )}
     </div>
   )
-}
+})

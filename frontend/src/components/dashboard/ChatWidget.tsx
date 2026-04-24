@@ -452,6 +452,48 @@ const HELP_ARTICLES: HelpArticle[] = [
     answer:
       'Trend indicators compare current performance against a previous period. Positive movement usually means the metric improved relative to the comparison window, while negative movement highlights a decline that may need investigation.',
   },
+  {
+    id: 'cpa',
+    question: 'What is CPA and how is it calculated?',
+    answer:
+      'CPA stands for Cost Per Acquisition (or Cost Per Action). It is calculated by dividing your total ad spend by the total number of conversions. It tells you exactly how much it costs to acquire a single customer or lead.',
+  },
+  {
+    id: 'attribution-diff',
+    question: 'Why do my numbers look different in Google/Meta Ads vs. my dashboard?',
+    answer:
+      "This is usually due to different attribution models. Ad platforms often claim credit for a sale if a user simply saw an ad, while your dashboard may use a stricter 'Last Click' or 'Data-Driven' model to show more realistic performance.",
+  },
+  {
+    id: 'google-vs-meta',
+    question: 'Why is my ROAS higher on Google than on Meta?',
+    answer:
+      'Google Search often captures high-intent users looking for specific products, leading to higher ROAS. Meta is typically a discovery platform used for building awareness, which may result in a lower immediate ROAS but drives future search demand.',
+  },
+  {
+    id: 'budget-scaling',
+    question: 'When should I increase my daily budget?',
+    answer:
+      'A good rule of thumb is to scale when a campaign has a stable ROAS that is comfortably above your break-even point for at least 7 days. Increase budgets gradually (10-20% at a time) to avoid throwing the algorithm back into a learning phase.',
+  },
+  {
+    id: 'frequency',
+    question: "What does 'Ad Frequency' mean and why should I care?",
+    answer:
+      'Frequency is the average number of times each person has seen your ad. If your frequency gets too high (typically >3 or 4 for a single campaign), users may experience "ad blindness" or fatigue, causing your performance to drop.',
+  },
+  {
+    id: 'impressions-vs-reach',
+    question: 'What is the difference between Impressions and Reach?',
+    answer:
+      'Impressions are the total number of times your ad was displayed. Reach is the number of unique people who saw it. If 1 person sees your ad 3 times, your Reach is 1 and your Impressions are 3.',
+  },
+  {
+    id: 'creative-fatigue',
+    question: 'How do I know if my ads are experiencing creative fatigue?',
+    answer:
+      'Watch for a rising CPC (Cost Per Click) and a falling CTR (Click-Through Rate) over time. If the same audience is seeing the same ad too often, they stop clicking, which tells the platform the ad is less relevant.',
+  },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -944,16 +986,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                   {showWelcome && (
                     <div className="flex flex-col gap-4">
                       <div className="rounded-2xl rounded-tl-sm bg-[#f2f2f0] px-5 py-4 text-[0.97rem] leading-relaxed text-[#1a1a1a]">
-                        Hi there! 👋 I&apos;m SpokesAI, your account manager assistant.{' '}
-                        Ask me anything about your data — revenue, trends, campaigns, and more!
+                        {!hasDataset && !datasetsLoading
+                          ? "Hi there! I'm SpokesAI. I am currently waiting for your account manager to upload your data. Check back soon!"
+                          : <>Hi there! 👋 I&apos;m SpokesAI, your account manager assistant.{' '}Ask me anything about your data — revenue, trends, campaigns, and more!</>
+                        }
                       </div>
                     </div>
-                  )}
-
-                  {!hasDataset && showWelcome && (
-                    <p className="text-xs text-center text-[#a09e99] mt-1">
-                      {datasetsLoading ? 'Loading your reports…' : 'Upload a completed dataset to ask data-specific questions.'}
-                    </p>
                   )}
 
                   {messages.map((msg, index) => (
@@ -1046,11 +1084,13 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                           setInput(e.target.value)
                           if (error) setError(null)
                         }}
-                        disabled={streaming || (datasetsLoading && !hasDataset)}
+                        disabled={streaming || datasetsLoading || !hasDataset}
                         maxLength={500}
                         placeholder={
-                          datasetsLoading && !hasDataset
+                          datasetsLoading
                             ? 'Loading reports…'
+                            : !hasDataset
+                            ? 'Waiting for data upload…'
                             : ''
                         }
                         className="relative z-10 w-full rounded-full border border-[#e0deda] bg-transparent px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#b5b2ae] focus:border-[#f0a500] focus:outline-none focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
@@ -1091,7 +1131,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     ) : (
                       <button
                         type="submit"
-                        disabled={!input.trim() || (datasetsLoading && !hasDataset)}
+                        disabled={!input.trim() || datasetsLoading || !hasDataset}
                         aria-label="Send message"
                         className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#f0a500] text-white shadow-[0_6px_16px_rgba(240,165,0,0.35)] transition hover:brightness-105 disabled:opacity-40"
                       >
