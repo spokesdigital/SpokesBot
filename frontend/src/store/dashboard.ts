@@ -46,17 +46,20 @@ export const useDashboardStore = create<DashboardState>()(
     (set) => ({
       ...initialState,
 
-      setOrganization: (id) => {
-        invalidateApiCache()
-        set({ 
-          organizationId: id, 
-          activeDatasetId: null, 
-          activeThreadId: null,
-          datasets: [],
-          datasetsLoaded: false,
-          datasetsOrgId: null
-        })
-      },
+      setOrganization: (id) =>
+        set((state) => {
+          if (state.organizationId === id) return state
+
+          invalidateApiCache()
+          return {
+            organizationId: id,
+            activeDatasetId: null,
+            activeThreadId: null,
+            datasets: [],
+            datasetsLoaded: false,
+            datasetsOrgId: null,
+          }
+        }),
       setDatasets: (datasets, orgId) => set({ datasets, datasetsLoaded: true, datasetsOrgId: orgId }),
       setActiveDataset: (id) => set({ activeDatasetId: id }),
       setDateRange: (start, end, preset) => set({ dateRange: { start, end }, datePreset: preset ?? null }),

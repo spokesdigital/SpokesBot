@@ -26,8 +26,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [loading, session, user, router])
 
-  // Show a layout skeleton until we are certain the user is an authenticated admin.
-  if (loading || !session || !user || user.role !== 'admin') {
+  // Only block on the very first Supabase session hydration.
+  // Once loading=false and session exists, show the real layout immediately —
+  // the user profile loads in the background and the redirect effect handles
+  // non-admins asynchronously. Waiting for !user causes a visible shimmer after
+  // every login even though the session is already confirmed.
+  if (loading || !session) {
     return (
       <div className="flex h-screen overflow-hidden">
         {/* Sidebar skeleton — mirrors AdminSidebar dimensions */}

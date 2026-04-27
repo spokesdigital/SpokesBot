@@ -221,8 +221,17 @@ export const api = {
         timeoutMs: 12_000,
       }),
 
-    list: (token: string, orgId?: string, datasetId?: string) =>
-      apiFetch<Thread[]>(withQuery('/threads/', { org_id: orgId, dataset_id: datasetId }), { token, timeoutMs: 10_000 }),
+    list: (token: string, orgId?: string, datasetId?: string, opts?: { search?: string; limit?: number; offset?: number }) =>
+      apiFetch<Thread[]>(
+        withQuery('/threads/', {
+          org_id: orgId,
+          dataset_id: datasetId,
+          search: opts?.search || undefined,
+          limit: opts?.limit != null ? String(opts.limit) : undefined,
+          offset: opts?.offset != null ? String(opts.offset) : undefined,
+        }),
+        { token, timeoutMs: 10_000 },
+      ),
 
     get: (threadId: string, token: string) =>
       apiFetch<Thread>(`/threads/${threadId}`, { token, timeoutMs: 10_000 }),

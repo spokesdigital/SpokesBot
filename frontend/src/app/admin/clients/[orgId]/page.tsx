@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashboard'
 import { ChannelPage } from '@/components/dashboard/ChannelPage'
 import { AdminCSVUpload } from '@/components/admin/AdminCSVUpload'
+import { AdminChatHistory } from '@/components/admin/AdminChatHistory'
 import type { Dataset, Organization } from '@/types'
 import {
   ArrowLeft,
@@ -21,12 +22,13 @@ import {
   BarChart2,
   Share2,
   UserMinus,
+  MessageSquare,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 
 
-type MainTab = 'data' | 'client-view'
+type MainTab = 'data' | 'client-view' | 'chat-history'
 type ClientViewTab = 'overview' | 'google-ads' | 'meta-ads'
 
 export default function ClientDetailPage({
@@ -170,8 +172,8 @@ export default function ClientDetailPage({
       </header>
 
       {/* Main tab bar */}
-      <div className="border-b border-[#e7e1d6] bg-white px-4 sm:px-6 md:px-8">
-        <nav className="flex gap-1" role="tablist">
+      <div className="border-b border-[#e7e1d6] bg-white px-4 sm:px-6 md:px-8 overflow-x-auto">
+        <nav className="flex gap-1 min-w-max" role="tablist">
           <button
             role="tab"
             aria-selected={mainTab === 'data'}
@@ -197,6 +199,19 @@ export default function ClientDetailPage({
           >
             <LayoutDashboard className="w-4 h-4" />
             Client View
+          </button>
+          <button
+            role="tab"
+            aria-selected={mainTab === 'chat-history'}
+            onClick={() => setMainTab('chat-history')}
+            className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors ${
+              mainTab === 'chat-history'
+                ? 'border-[#f0a500] text-[#f0a500]'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            Chat History
           </button>
         </nav>
       </div>
@@ -403,6 +418,22 @@ export default function ClientDetailPage({
               targetOrgId={orgId}
             />
           )}
+        </div>
+      )}
+
+      {/* ── CHAT HISTORY TAB ── */}
+      {mainTab === 'chat-history' && (
+        <div>
+          {/* Read-only banner */}
+          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 sm:px-6 md:px-8 text-sm text-amber-700">
+            <MessageSquare className="w-4 h-4 flex-shrink-0" />
+            <span>
+              Read-only view — you are viewing <strong>{org?.name ?? orgId}</strong>&apos;s chat history. Sending messages is disabled.
+            </span>
+          </div>
+          <div className="px-0">
+            <AdminChatHistory orgId={orgId} orgName={org?.name} datasets={datasets} />
+          </div>
         </div>
       )}
     </div>

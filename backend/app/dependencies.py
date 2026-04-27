@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -42,23 +44,34 @@ def get_service_client() -> Client:
 # ── Auth helpers ─────────────────────────────────────────────────────────────
 
 
-def get_current_user_id(
+def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     supabase: Client = Depends(get_supabase_client),
+) -> Any:
+    """
+    Decodes and verifies the caller's JWT against Supabase Auth.
+    Returns the authenticated Supabase user object so callers that need
+    both the id and email do not trigger a second auth lookup.
+    """
+    try:
+        result = supabase.auth.get_user(credentials.credentials)
+        return result.user
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        ) from exc
+
+
+def get_current_user_id(
+    user: Any = Depends(get_current_user),
 ) -> str:
     """
     Decodes and verifies the caller's JWT against Supabase Auth.
     Returns the authenticated user's UUID.
     Raises 401 on any invalid or expired token.
     """
-    try:
-        result = supabase.auth.get_user(credentials.credentials)
-        return result.user.id
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token.",
-        ) from exc
+    return user.id
 
 
 def get_current_org_id(supabase: Client = Depends(get_supabase_client)) -> str:

@@ -84,6 +84,9 @@ def create_thread(
 def list_threads(
     org_id: UUID | None = Query(None),
     dataset_id: UUID | None = Query(None),
+    search: str | None = Query(None, max_length=200),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
     user_id: str = Depends(get_current_user_id),
@@ -94,6 +97,11 @@ def list_threads(
     Returns threads for the authenticated user, sorted newest first.
     Pass ?dataset_id=<uuid> to filter by a specific dataset.
     RLS enforces user_id = auth.uid() — users only see their own threads.
+
+    Admin-only params:
+      search  — case-insensitive substring match on thread title
+      limit   — page size (1–200, default 50)
+      offset  — pagination offset (default 0)
     """
     if role == ROLE_ADMIN:
         target_org_id = str(org_id) if org_id else caller_org_id
@@ -102,9 +110,12 @@ def list_threads(
             .select("*")
             .eq("organization_id", target_org_id)
             .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
         )
         if dataset_id:
             query = query.eq("dataset_id", str(dataset_id))
+        if search and search.strip():
+            query = query.ilike("title", f"%{search.strip()}%")
         return query.execute().data
 
     return thread_service.list_threads(supabase, dataset_id=str(dataset_id) if dataset_id else None)

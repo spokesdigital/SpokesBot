@@ -19,6 +19,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const setMobileMenuOpen = useDashboardStore((s) => s.setMobileMenuOpen)
   const [chatOpen, setChatOpen] = useState(false)
+  const [chatMounted, setChatMounted] = useState(false)
+
+  function handleChatToggle() {
+    if (!chatMounted) {
+      setChatMounted(true)
+      setChatOpen(true)
+      return
+    }
+    setChatOpen((open) => !open)
+  }
 
   useEffect(() => {
     if (loading) return
@@ -116,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Floating chat button */}
       <button
-        onClick={() => setChatOpen((o) => !o)}
+        onClick={handleChatToggle}
         aria-label={chatOpen ? 'Close chat assistant' : 'Open chat assistant'}
         className={`chat-launcher chat-fab-bottom fixed right-5 sm:right-7 z-20 flex h-[58px] w-[58px] items-center justify-center rounded-full border border-white/45 bg-[radial-gradient(circle_at_30%_28%,#ffe48a_0%,#f9c51b_38%,#ecab00_100%)] text-[#1f2530] transition-all duration-200 ease-out hover:brightness-105 ${
           chatOpen
@@ -141,7 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </button>
 
       {/* Floating chat widget overlay */}
-      <ChatWidget open={chatOpen} onClose={() => setChatOpen(false)} />
+      {chatMounted ? <ChatWidget open={chatOpen} onClose={() => setChatOpen(false)} /> : null}
     </div>
   )
 }

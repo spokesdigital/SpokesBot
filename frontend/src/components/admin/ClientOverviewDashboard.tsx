@@ -395,6 +395,10 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
   const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_30_days' })
   const datasets = datasetsOrgId === orgId && globalDatasetsLoaded ? globalDatasets : []
+  const hasPendingDatasets = datasetsOrgId === orgId && globalDatasetsLoaded
+    ? globalDatasets.some((dataset) => dataset.status !== 'completed')
+    : false
+  const shouldFetchDatasets = datasetsOrgId !== orgId || !globalDatasetsLoaded || hasPendingDatasets
   const [loadingDatasets, setLoadingDatasets] = useState(datasets.length === 0)
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
@@ -422,6 +426,10 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
   useEffect(() => {
     if (!session) return
+    if (!shouldFetchDatasets) {
+      setLoadingDatasets(false)
+      return
+    }
     let cancelled = false
     
     // Only show loading if we don't have datasets for this org yet
@@ -439,7 +447,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       })
       .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : 'Failed to load datasets'); setLoadingDatasets(false) } })
     return () => { cancelled = true }
-  }, [session, orgId, datasetsOrgId, globalDatasetsLoaded, setGlobalDatasets])
+  }, [session, orgId, datasetsOrgId, globalDatasetsLoaded, setGlobalDatasets, shouldFetchDatasets])
 
   useEffect(() => {
     if (!session || !googleDataset) { 

@@ -372,6 +372,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
   const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
   const isCorrectOrg = datasetsOrgId === (effectiveOrgId ?? null)
+  const hasPendingDatasets = isCorrectOrg && globalDatasetsLoaded
+    ? globalDatasets.some((dataset) => dataset.status !== 'completed')
+    : false
+  const shouldRefreshDatasets = !isCorrectOrg || !globalDatasetsLoaded || hasPendingDatasets
   
   // Filter global datasets for this channel's report type
   const datasets = useMemo(() => {
@@ -396,11 +400,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
   const orgLoadRef = useRef<string | null>(null)
 
-  // 30-second live refresh
+  // Only poll while the cache is cold or uploads are still processing.
   useEffect(() => {
+    if (!shouldRefreshDatasets) return
     const id = setInterval(() => setRefreshTick((t) => t + 1), LIVE_REFRESH_MS)
     return () => clearInterval(id)
-  }, [])
+  }, [shouldRefreshDatasets])
 
   const completedDatasets = useMemo(() => datasets.filter((d) => d.status === 'completed'), [datasets])
   const activeDataset = useMemo(
@@ -436,8 +441,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         datasetUpdatedAt: activeDataset?.updated_at ?? 'unknown',
         dateColumn: activeDateColumn,
         datePreset: datePreset ?? null,
-        startDate: startDateValue,
-        endDate: endDateValue,
+        startDate: chartStartDateValue,
+        endDate: chartEndDateValue,
       })
     : null
   const insightsRequestKey = analyticsRequestKey ? `insights::${analyticsRequestKey}` : null
@@ -495,17 +500,20 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       const token = session?.access_token
       if (!token) return
       
-      if (!isCorrectOrg || !globalDatasetsLoaded) {
+      if (shouldRefreshDatasets) {
         setLoadingDatasets(true)
       }
       
       setError(null)
       try {
-        // Fetch ALL datasets so the cache is shared with the Overview dashboard
-        const data = await api.datasets.list(token, effectiveOrgId)
+        const data = shouldRefreshDatasets
+          ? await api.datasets.list(token, effectiveOrgId)
+          : globalDatasets
         if (cancelled) return
 
-        setGlobalDatasets(data, effectiveOrgId ?? null)
+        if (shouldRefreshDatasets) {
+          setGlobalDatasets(data, effectiveOrgId ?? null)
+        }
 
         // Local sorting and filtering for this specific channel
         const filtered = data.filter(d => d.report_type === reportType)
@@ -534,7 +542,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     void load()
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, organizationId, targetOrgId, user?.role, reportType, refreshTick])
+  }, [session, organizationId, targetOrgId, user?.role, reportType, refreshTick, shouldRefreshDatasets])
 
   // Load analytics
   useEffect(() => {
@@ -543,6 +551,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       setLoadingAnalytics(false)
       return
     }
+    // Wait for DateFilter to seed the default preset before firing any request.
+    // Without this guard the first call fires with datePreset=null, which sends
+    // no date bounds and causes the backend to return all-time data; then a
+    // second call fires immediately after the preset initialises — causing a
+    // double-fetch and a flicker on every page load.
+    if (datePreset === null) return
     let cancelled = false
 
     async function load() {
@@ -562,9 +576,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           ...(activeDateColumn
             ? datePreset === 'custom' && dateRange.start && dateRange.end
               ? { date_preset: 'custom' as const, start_date: startDateValue!, end_date: endDateValue!, date_column: activeDateColumn }
-              : datePreset && datePreset !== 'all_data'
-                ? { date_preset: datePreset, date_column: activeDateColumn }
-                : {}
+              : datePreset && datePreset !== 'all_data' && chartStartDateValue && chartEndDateValue
+                ? { date_preset: datePreset, start_date: chartStartDateValue, end_date: chartEndDateValue, date_column: activeDateColumn }
+                : datePreset && datePreset !== 'all_data'
+                  ? { date_preset: datePreset, date_column: activeDateColumn }
+                  : {}
             : {}),
         }
         const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
@@ -592,7 +608,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
     void load()
     return () => { cancelled = true }
-  }, [session, activeDatasetId, analyticsRequestKey, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role])
+  }, [session, activeDatasetId, analyticsRequestKey, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, chartStartDateValue, chartEndDateValue, activeDateColumn, organizationId, targetOrgId, user?.role])
 
   // Load AI insights
   useEffect(() => {
