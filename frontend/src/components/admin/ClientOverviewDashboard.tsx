@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   Area,
@@ -18,6 +18,7 @@ import { AlertCircle, Calendar, Check, ChevronDown } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
+import { cancelIdleTask, scheduleIdleTask } from '@/lib/idle'
 import type { AnalyticsResult, Dataset } from '@/types'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
@@ -138,6 +139,36 @@ const PRESET_LABELS: Record<Exclude<PresetFilter, 'custom'>, string> = {
   last_90_days: 'Last 90 Days',
   last_180_days: 'Last 180 Days',
   all_time: 'All Time',
+}
+
+const OVERVIEW_CACHE_LIMIT = 24
+const overviewAnalyticsCache = new Map<string, AnalyticsResult>()
+const overviewInsightsCache = new Map<string, AIInsight[]>()
+
+function setOverviewCache<T>(cache: Map<string, T>, key: string, value: T) {
+  cache.set(key, value)
+  if (cache.size > OVERVIEW_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value
+    if (oldest) cache.delete(oldest)
+  }
+}
+
+function serializeDateSelection(selection: DateSelection): string {
+  if (selection.preset === 'custom') {
+    return `custom:${selection.startDate}:${selection.endDate}`
+  }
+
+  return selection.preset
+}
+
+function buildOverviewAnalyticsKey(dataset: Dataset, orgId: string, dateSelection: DateSelection): string {
+  return [
+    orgId,
+    dataset.id,
+    dataset.updated_at,
+    dataset.detected_date_column ?? 'no-date-column',
+    serializeDateSelection(dateSelection),
+  ].join('::')
 }
 
 // ── Date filter dropdown ──────────────────────────────────────────────────────
@@ -433,6 +464,14 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())[0] ?? null,
     [datasets],
   )
+  const googleAnalyticsKey = useMemo(
+    () => (googleDataset ? buildOverviewAnalyticsKey(googleDataset, orgId, dateSelection) : null),
+    [googleDataset, orgId, dateSelection],
+  )
+  const metaAnalyticsKey = useMemo(
+    () => (metaDataset ? buildOverviewAnalyticsKey(metaDataset, orgId, dateSelection) : null),
+    [metaDataset, orgId, dateSelection],
+  )
 
   useEffect(() => {
     if (!session) return
@@ -460,12 +499,32 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   }, [session, orgId, datasetsOrgId, globalDatasetsLoaded, setGlobalDatasets, shouldFetchDatasets])
 
   useEffect(() => {
+    if (!session?.access_token) return
+    if (googleDataset) {
+      api.analytics.warm(googleDataset.id, session.access_token, orgId)
+    }
+    if (metaDataset && metaDataset.id !== googleDataset?.id) {
+      api.analytics.warm(metaDataset.id, session.access_token, orgId)
+    }
+  }, [session?.access_token, googleDataset, metaDataset, orgId])
+
+  useEffect(() => {
     if (!session || !googleDataset) { 
       setGoogleAnalytics(null)
       setLoadingGoogle(false)
       return 
     }
     let cancelled = false
+    if (googleAnalyticsKey) {
+      const cached = overviewAnalyticsCache.get(googleAnalyticsKey)
+      if (cached) {
+        startTransition(() => {
+          setGoogleAnalytics(cached)
+        })
+        setLoadingGoogle(false)
+        return () => { cancelled = true }
+      }
+    }
     setLoadingGoogle(true)
     api.analytics
       .compute(
@@ -473,11 +532,20 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         session.access_token,
         orgId,
       )
-      .then(r => { if (!cancelled) setGoogleAnalytics(r) })
+      .then(r => {
+        if (googleAnalyticsKey) {
+          setOverviewCache(overviewAnalyticsCache, googleAnalyticsKey, r)
+        }
+        if (!cancelled) {
+          startTransition(() => {
+            setGoogleAnalytics(r)
+          })
+        }
+      })
       .catch(e => { if (!cancelled) { setGoogleAnalytics(null); setError(e instanceof Error ? `Google Ads: ${e.message}` : 'Google Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingGoogle(false) })
     return () => { cancelled = true }
-  }, [session, googleDataset, dateSelection, orgId])
+  }, [session, googleDataset, dateSelection, orgId, googleAnalyticsKey])
 
   useEffect(() => {
     if (!session || !metaDataset) { 
@@ -486,6 +554,16 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       return 
     }
     let cancelled = false
+    if (metaAnalyticsKey) {
+      const cached = overviewAnalyticsCache.get(metaAnalyticsKey)
+      if (cached) {
+        startTransition(() => {
+          setMetaAnalytics(cached)
+        })
+        setLoadingMeta(false)
+        return () => { cancelled = true }
+      }
+    }
     setLoadingMeta(true)
     api.analytics
       .compute(
@@ -493,34 +571,83 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         session.access_token,
         orgId,
       )
-      .then(r => { if (!cancelled) setMetaAnalytics(r) })
+      .then(r => {
+        if (metaAnalyticsKey) {
+          setOverviewCache(overviewAnalyticsCache, metaAnalyticsKey, r)
+        }
+        if (!cancelled) {
+          startTransition(() => {
+            setMetaAnalytics(r)
+          })
+        }
+      })
       .catch(e => { if (!cancelled) { setMetaAnalytics(null); setError(e instanceof Error ? `Meta Ads: ${e.message}` : 'Meta Ads analytics failed') } })
       .finally(() => { if (!cancelled) setLoadingMeta(false) })
     return () => { cancelled = true }
-  }, [session, metaDataset, dateSelection, orgId])
+  }, [session, metaDataset, dateSelection, orgId, metaAnalyticsKey])
 
   // Fetch AI insights from the primary available dataset (Google first, then Meta)
   const insightsDataset = googleDataset ?? metaDataset
+  const insightsCacheKey = useMemo(
+    () => (insightsDataset ? buildOverviewAnalyticsKey(insightsDataset, orgId, dateSelection) : null),
+    [insightsDataset, orgId, dateSelection],
+  )
   useEffect(() => {
     if (!session || !insightsDataset) { 
       setInsights([])
       setLoadingInsights(false)
       return 
     }
+    if (loadingGoogle || loadingMeta) {
+      setLoadingInsights(false)
+      return
+    }
     let cancelled = false
-    setLoadingInsights(true)
+
+    async function load() {
+      if (!session || !insightsDataset) return
+
+      if (insightsCacheKey) {
+        const cached = overviewInsightsCache.get(insightsCacheKey)
+        if (cached) {
+          startTransition(() => {
+            setInsights(cached)
+          })
+          setLoadingInsights(false)
+          return
+        }
+      }
+
+      try {
+        const result = await api.analytics.getInsights(
+          { dataset_id: insightsDataset.id, ...buildAnalyticsParams(dateSelection, insightsDataset.detected_date_column) },
+          session.access_token,
+          orgId,
+        )
+        const nextInsights = Array.isArray(result.insights) ? result.insights : []
+        if (insightsCacheKey) {
+          setOverviewCache(overviewInsightsCache, insightsCacheKey, nextInsights)
+        }
+        if (!cancelled) {
+          startTransition(() => {
+            setInsights(nextInsights)
+          })
+        }
+      } catch (e) {
+        if (!cancelled) setInsightsError(e instanceof Error ? e.message : 'Failed to load insights')
+      } finally {
+        if (!cancelled) setLoadingInsights(false)
+      }
+    }
+
     setInsightsError(null)
-    api.analytics
-      .getInsights(
-        { dataset_id: insightsDataset.id, ...buildAnalyticsParams(dateSelection, insightsDataset.detected_date_column) },
-        session.access_token,
-        orgId,
-      )
-      .then(r => { if (!cancelled) setInsights(Array.isArray(r.insights) ? r.insights : []) })
-      .catch(e => { if (!cancelled) setInsightsError(e instanceof Error ? e.message : 'Failed to load insights') })
-      .finally(() => { if (!cancelled) setLoadingInsights(false) })
-    return () => { cancelled = true }
-  }, [session, insightsDataset, dateSelection, orgId])
+    setLoadingInsights(true)
+    const idleHandle = scheduleIdleTask(() => { void load() }, 1200)
+    return () => {
+      cancelled = true
+      cancelIdleTask(idleHandle)
+    }
+  }, [session, insightsDataset, dateSelection, orgId, loadingGoogle, loadingMeta, insightsCacheKey])
 
   // Derived combined metrics
   const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])

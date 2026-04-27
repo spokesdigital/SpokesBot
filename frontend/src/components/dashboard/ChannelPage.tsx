@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useDeferredValue } from 'react'
+import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/lib/api'
+import { cancelIdleTask, scheduleIdleTask } from '@/lib/idle'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { KPICard } from '@/components/dashboard/KPICard'
@@ -565,7 +566,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       if (!token || !datasetId || !analyticsRequestKey) return
 
       const cached = analyticsCache.get(analyticsRequestKey)
-      if (cached) { setAnalytics(cached); setLastUpdated(new Date()); setLoadingAnalytics(false); return }
+      if (cached) {
+        startTransition(() => {
+          setAnalytics(cached)
+          setLastUpdated(new Date())
+        })
+        setLoadingAnalytics(false)
+        return
+      }
 
       setError(null)
       setLoadingAnalytics(true)
@@ -586,7 +594,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
         const result = await api.analytics.compute(body, token, effectiveOrgId)
         setCache(analyticsCache, analyticsRequestKey, result)
-        if (!cancelled) { setAnalytics(result); setLastUpdated(new Date()) }
+        if (!cancelled) {
+          startTransition(() => {
+            setAnalytics(result)
+            setLastUpdated(new Date())
+          })
+        }
       } catch (err) {
         if (!cancelled) {
           const isTimeout = (err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout')))
@@ -637,10 +650,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       if (!token || !datasetId || !insightsRequestKey) return
 
       const cached = insightsCache.get(insightsRequestKey)
-      if (cached) { setInsights(cached.insights); setLoadingInsights(false); return }
+      if (cached) {
+        startTransition(() => {
+          setInsights(cached.insights)
+        })
+        setLoadingInsights(false)
+        return
+      }
 
-      setLoadingInsights(true)
-      setInsightsError(null)
       try {
         const body = {
           dataset_id: datasetId,
@@ -653,7 +670,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
         const result = await api.analytics.getInsights(body, token, effectiveOrgId)
         setCache(insightsCache, insightsRequestKey, result)
-        if (!cancelled) setInsights(result.insights)
+        if (!cancelled) {
+          startTransition(() => {
+            setInsights(result.insights)
+          })
+        }
       } catch (err) {
         if (!cancelled) {
           setInsights([])
@@ -664,10 +685,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       }
     }
 
-    setInsights([])
     setInsightsError(null)
-    const tid = window.setTimeout(() => { void load() }, 350)
-    return () => { cancelled = true; window.clearTimeout(tid) }
+    setLoadingInsights(true)
+    const idleHandle = scheduleIdleTask(() => { void load() }, 1200)
+    return () => { cancelled = true; cancelIdleTask(idleHandle) }
   }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role, analyticsDataQualityWarnings])
 
   // ── ViewModel ─────────────────────────────────────────────────────────────
