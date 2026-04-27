@@ -110,7 +110,7 @@ def make_tools(df: pd.DataFrame):
                 # The agent doesn't need thousands of daily data points, which blow past the 128k token limit.
                 result.pop("time_series", None)
                 result.pop("metric_time_series", None)
-                
+
             return json.dumps(result, indent=2, default=str)
         except ValueError as e:
             return f"Error: {e}"

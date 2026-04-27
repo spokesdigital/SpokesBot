@@ -120,13 +120,13 @@ export default function ActivityPage() {
 
   useEffect(() => {
     if (!session) return
-    setError(null)
     Promise.all([
       api.datasets.list(session.access_token, undefined, true),
       api.organizations.list(session.access_token),
       api.support.list(session.access_token),
     ])
       .then(([ds, os, msgs]) => {
+        setError(null)
         setDatasets(ds)
         setOrgs(os)
         setMessages(msgs as SupportMessage[])

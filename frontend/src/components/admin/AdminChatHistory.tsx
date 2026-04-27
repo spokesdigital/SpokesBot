@@ -345,7 +345,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
     append: boolean,
   ) => {
     if (!session) return
-    offset === 0 ? setLoadingThreads(true) : setLoadingMore(true)
+    if (offset === 0) { setLoadingThreads(true) } else { setLoadingMore(true) }
     setThreadsError(null)
     try {
       const data = await api.threads.list(session.access_token, orgId, undefined, {

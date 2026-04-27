@@ -28,7 +28,7 @@ const API_URL = (_rawApiUrl ?? 'http://localhost:8000').replace(/\/+$/, '')
 const DEFAULT_API_TIMEOUT_MS = 15_000
 
 // In-memory cache for idempotent requests to prevent redundant loading states
-const apiCache = new Map<string, { data: any; expiresAt: number }>()
+const apiCache = new Map<string, { data: unknown; expiresAt: number }>()
 
 /**
  * Clear the entire API cache. Use this after a new dataset is uploaded

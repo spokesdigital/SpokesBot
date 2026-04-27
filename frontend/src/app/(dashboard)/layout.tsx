@@ -11,7 +11,6 @@ const ChatWidget = dynamic(
 )
 import { MessageCircleMore, X, Menu } from 'lucide-react'
 import { useDashboardStore } from '@/store/dashboard'
-import { useShallow } from 'zustand/react/shallow'
 import Image from 'next/image'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

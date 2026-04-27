@@ -780,12 +780,6 @@ def make_graph(df: pd.DataFrame):
     return builder.compile()
 
 
-# ── Public streaming interface ────────────────────────────────────────────────
-
-
-import logging as _logging
-_agent_logger = _logging.getLogger(__name__)
-
 
 async def stream_agent(
     df: pd.DataFrame,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import {
   Area,
@@ -394,11 +394,21 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   )
 
   const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_30_days' })
-  const datasets = datasetsOrgId === orgId && globalDatasetsLoaded ? globalDatasets : []
-  const hasPendingDatasets = datasetsOrgId === orgId && globalDatasetsLoaded
-    ? globalDatasets.some((dataset) => dataset.status !== 'completed')
-    : false
-  const shouldFetchDatasets = datasetsOrgId !== orgId || !globalDatasetsLoaded || hasPendingDatasets
+  const datasets = useMemo(
+    () => (datasetsOrgId === orgId && globalDatasetsLoaded ? globalDatasets : []),
+    [datasetsOrgId, orgId, globalDatasetsLoaded, globalDatasets],
+  )
+  const hasPendingDatasets = useMemo(
+    () =>
+      datasetsOrgId === orgId && globalDatasetsLoaded
+        ? globalDatasets.some((dataset) => dataset.status !== 'completed')
+        : false,
+    [datasetsOrgId, orgId, globalDatasetsLoaded, globalDatasets],
+  )
+  const shouldFetchDatasets = useMemo(
+    () => datasetsOrgId !== orgId || !globalDatasetsLoaded || hasPendingDatasets,
+    [datasetsOrgId, orgId, globalDatasetsLoaded, hasPendingDatasets],
+  )
   const [loadingDatasets, setLoadingDatasets] = useState(datasets.length === 0)
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
@@ -451,7 +461,6 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
   useEffect(() => {
     if (!session || !googleDataset) { 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGoogleAnalytics(null)
       setLoadingGoogle(false)
       return 
@@ -472,7 +481,6 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
   useEffect(() => {
     if (!session || !metaDataset) { 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMetaAnalytics(null)
       setLoadingMeta(false)
       return 
@@ -495,7 +503,6 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   const insightsDataset = googleDataset ?? metaDataset
   useEffect(() => {
     if (!session || !insightsDataset) { 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setInsights([])
       setLoadingInsights(false)
       return 

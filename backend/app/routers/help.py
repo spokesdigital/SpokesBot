@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import get_service_client, require_admin
 from app.schemas.help import HelpArticleCreate, HelpArticleResponse, HelpArticleUpdate

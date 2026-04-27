@@ -77,7 +77,7 @@ export default function SettingsPage() {
     }
     setEmailNotifications(readPref(PREF_KEYS.emailNotifications, true))
     setAutoGenerateReports(readPref(PREF_KEYS.autoGenerateReports, true))
-  }, [user])
+  }, [user, session])
 
   // ── Save profile ──────────────────────────────────────────────────────────
   async function handleSaveProfile(e: React.FormEvent) {
