@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 import type { Dataset, Organization } from '@/types'
 import {
   Upload,
@@ -151,6 +151,7 @@ export default function UploadsPage() {
           if (ds.status === 'completed' || ds.status === 'failed') {
             clearInterval(pollRef.current!)
             setUploadState(ds.status === 'completed' ? 'done' : 'error')
+            if (ds.status === 'completed') invalidateApiCache()
             if (ds.status === 'failed') setUploadError(ds.error_message ?? 'Processing failed.')
             void fetchHistory(session.access_token)
           }

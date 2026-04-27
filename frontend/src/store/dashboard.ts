@@ -1,8 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { DateRange } from '@/types'
+import { invalidateApiCache } from '@/lib/api'
+import type { DateRange, Dataset } from '@/types'
 
 interface DashboardState {
+  datasets: Dataset[]
+  datasetsLoaded: boolean
+  datasetsOrgId: string | null
+
   organizationId: string | null
   activeDatasetId: string | null
   dateRange: DateRange
@@ -12,6 +17,7 @@ interface DashboardState {
   mobileMenuOpen: boolean
 
   setOrganization: (id: string | null) => void
+  setDatasets: (datasets: Dataset[], orgId: string | null) => void
   setActiveDataset: (id: string | null) => void
   setDateRange: (start: Date, end: Date, preset?: string) => void
   clearDateRange: () => void
@@ -22,6 +28,10 @@ interface DashboardState {
 }
 
 const initialState = {
+  datasets: [],
+  datasetsLoaded: false,
+  datasetsOrgId: null,
+
   organizationId: null,
   activeDatasetId: null,
   dateRange: { start: null, end: null },
@@ -36,7 +46,18 @@ export const useDashboardStore = create<DashboardState>()(
     (set) => ({
       ...initialState,
 
-      setOrganization: (id) => set({ organizationId: id, activeDatasetId: null, activeThreadId: null }),
+      setOrganization: (id) => {
+        invalidateApiCache()
+        set({ 
+          organizationId: id, 
+          activeDatasetId: null, 
+          activeThreadId: null,
+          datasets: [],
+          datasetsLoaded: false,
+          datasetsOrgId: null
+        })
+      },
+      setDatasets: (datasets, orgId) => set({ datasets, datasetsLoaded: true, datasetsOrgId: orgId }),
       setActiveDataset: (id) => set({ activeDatasetId: id }),
       setDateRange: (start, end, preset) => set({ dateRange: { start, end }, datePreset: preset ?? null }),
       clearDateRange: () => set({ dateRange: { start: null, end: null }, datePreset: 'all_data' }),

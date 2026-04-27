@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 import type { Dataset, Organization } from '@/types'
 import {
   FileBarChart,
@@ -87,6 +87,7 @@ export default function ReportsPage() {
     setDatasets(prev => prev.filter(d => d.id !== datasetId))
     try {
       await api.datasets.delete(datasetId, session.access_token)
+      invalidateApiCache()
     } catch {
       if (removed) setDatasets(prev => [removed, ...prev])
     } finally {

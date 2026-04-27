@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useDeferredValue } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
-import { exportDashboardToPDF } from '@/lib/export'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { useShallow } from 'zustand/react/shallow'
@@ -358,14 +357,31 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   void _accentLight
   void _accentText
   const { session, organizations, user } = useAuth()
-  const { organizationId, datePreset, dateRange, setActiveDataset } = useDashboardStore(
-    useShallow((s) => ({ organizationId: s.organizationId, datePreset: s.datePreset, dateRange: s.dateRange, setActiveDataset: s.setActiveDataset })),
+  const { organizationId, datePreset, dateRange, setActiveDataset, globalDatasets, globalDatasetsLoaded, datasetsOrgId, setGlobalDatasets } = useDashboardStore(
+    useShallow((s) => ({
+      organizationId: s.organizationId,
+      datePreset: s.datePreset,
+      dateRange: s.dateRange,
+      setActiveDataset: s.setActiveDataset,
+      globalDatasets: s.datasets,
+      globalDatasetsLoaded: s.datasetsLoaded,
+      datasetsOrgId: s.datasetsOrgId,
+      setGlobalDatasets: s.setDatasets,
+    })),
   )
 
-  const [datasets, setDatasets] = useState<Dataset[]>([])
+  const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+  const isCorrectOrg = datasetsOrgId === (effectiveOrgId ?? null)
+  
+  // Filter global datasets for this channel's report type
+  const datasets = useMemo(() => {
+    if (!isCorrectOrg || !globalDatasetsLoaded) return []
+    return globalDatasets.filter(d => d.report_type === reportType)
+  }, [isCorrectOrg, globalDatasetsLoaded, globalDatasets, reportType])
+
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsResult | null>(null)
-  const [loadingDatasets, setLoadingDatasets] = useState(true)
+  const [loadingDatasets, setLoadingDatasets] = useState(datasets.length === 0)
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loadingInsights, setLoadingInsights] = useState(false)
@@ -377,16 +393,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [campaignSort, setCampaignSort] = useState<SortState>({ key: 'cost', dir: 'desc' })
   const [dailySort, setDailySort] = useState<SortState>({ key: 'date', dir: 'desc' })
   const [dailyPage, setDailyPage] = useState(0)
-  const [exporting, setExporting] = useState(false)
-
-  const handleExportPDF = useCallback(async () => {
-    setExporting(true)
-    try {
-      await exportDashboardToPDF('dashboard-pdf-content', `${channelName.toLowerCase().replace(/\s+/g, '-')}-report.pdf`)
-    } finally {
-      setExporting(false)
-    }
-  }, [channelName])
 
   const orgLoadRef = useRef<string | null>(null)
 
@@ -469,6 +475,17 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     return () => { setActiveDataset(null) }
   }, [activeDatasetId, setActiveDataset])
 
+  // ── Pre-warm the backend Parquet cache ────────────────────────────────────
+  // As soon as we know which dataset we will load, ask the backend to pull its
+  // Parquet from Supabase Storage into its in-memory DataFrame cache.  This
+  // runs in the background on the server, so by the time the analytics compute
+  // request arrives the cache is already warm and responds in < 1 s.
+  useEffect(() => {
+    if (!session?.access_token || !activeDatasetId) return
+    const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+    api.analytics.warm(activeDatasetId, session.access_token, effectiveOrgId)
+  }, [activeDatasetId, session?.access_token, targetOrgId, user?.role, organizationId])
+
   // Load datasets filtered by report_type
   useEffect(() => {
     if (!session) return
@@ -477,15 +494,22 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     async function load() {
       const token = session?.access_token
       if (!token) return
-      setLoadingDatasets(true)
+      
+      if (!isCorrectOrg || !globalDatasetsLoaded) {
+        setLoadingDatasets(true)
+      }
+      
       setError(null)
       try {
-        const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
-        const data = await api.datasets.list(token, effectiveOrgId, undefined, reportType)
+        // Fetch ALL datasets so the cache is shared with the Overview dashboard
+        const data = await api.datasets.list(token, effectiveOrgId)
         if (cancelled) return
 
-        const sorted = [...data].sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
-        setDatasets(sorted)
+        setGlobalDatasets(data, effectiveOrgId ?? null)
+
+        // Local sorting and filtering for this specific channel
+        const filtered = data.filter(d => d.report_type === reportType)
+        const sorted = [...filtered].sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
 
         const available = sorted.filter((d) => d.status === 'completed')
         const scopeKey = `${reportType}::${effectiveOrgId ?? 'client-org'}`
@@ -549,9 +573,17 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         if (!cancelled) { setAnalytics(result); setLastUpdated(new Date()) }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error && err.name === 'AbortError'
-            ? 'Analytics timed out. Try narrowing the date range.'
+          const isTimeout = (err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout')))
+          setError(isTimeout
+            ? 'The server is warming up — data loading took longer than expected. Retrying now…'
             : err instanceof Error ? err.message : 'Failed to load analytics')
+          // Re-trigger warm so the automatic retry (via refreshTick) hits the cache
+          if (isTimeout && session?.access_token && activeDatasetId) {
+            const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+            api.analytics.warm(activeDatasetId, session.access_token, effectiveOrgId)
+            // Auto-retry after 5 seconds
+            setTimeout(() => { if (!cancelled) setRefreshTick(t => t + 1) }, 5000)
+          }
         }
       } finally {
         if (!cancelled) setLoadingAnalytics(false)
@@ -1008,15 +1040,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <DateFilter />
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={exporting || completedDatasets.length === 0}
-            className="flex items-center gap-2 rounded-xl border border-[#e7e1d6] bg-white px-4 py-2 text-sm font-medium text-[#252b36] shadow-sm transition hover:border-[#f0a500] hover:text-[#f0a500] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            {exporting ? 'Generating…' : 'Export PDF'}
-          </button>
         </div>
       </header>
 
@@ -1089,6 +1112,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="Clicks vs CTR"
                     empty={viewModel.clicksCtrData.length === 0}
                     emptyMsg="Need a date column plus clicks and impressions to draw this chart."
+                    dataCount={viewModel.clicksCtrData.length || undefined}
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCtrData as Record<string, unknown>[]}
@@ -1103,6 +1127,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="Clicks vs Avg CPC"
                     empty={viewModel.clicksCpcData.length === 0}
                     emptyMsg="Need a date column plus clicks and cost columns to draw this chart."
+                    dataCount={viewModel.clicksCpcData.length || undefined}
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCpcData as Record<string, unknown>[]}
@@ -1142,6 +1167,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="Transactions vs CPA"
                     empty={!hasTransactionsOrCpaData(viewModel.transactionsCpaData)}
                     emptyMsg="Need conversions and cost data with a date column to draw this chart."
+                    dataCount={viewModel.transactionsCpaData.length || undefined}
                   >
                     <DualAxisComboChart
                       data={viewModel.transactionsCpaData as Record<string, unknown>[]}
@@ -1157,6 +1183,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="Conversion Rate Trend"
                     empty={!hasConversionRateData(viewModel.conversionRateData)}
                     emptyMsg="Need conversions and clicks data with a date column to compute conversion rate."
+                    dataCount={viewModel.conversionRateData.length || undefined}
                   >
                     <AreaTrendChart
                       data={viewModel.conversionRateData as Record<string, unknown>[]}
@@ -1198,6 +1225,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="Revenue vs Cost"
                     empty={viewModel.trendData.length === 0}
                     emptyMsg="Need a date column plus revenue and cost columns to draw this chart."
+                    dataCount={viewModel.trendData.length || undefined}
                   >
                     <AreaTrendChart
                       data={viewModel.trendData as Record<string, unknown>[]}
@@ -1211,6 +1239,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     title="ROAS Trend"
                     empty={viewModel.roasData.filter((p) => p.roas != null).length === 0}
                     emptyMsg="Need revenue and cost columns with a date column to compute ROAS trend."
+                    dataCount={viewModel.roasData.length || undefined}
                   >
                     <AreaTrendChart
                       data={viewModel.roasData as Record<string, unknown>[]}

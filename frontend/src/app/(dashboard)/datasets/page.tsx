@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 import type { Dataset } from '@/types'
 import { Database, Trash2, MessageSquare, UploadCloud } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
@@ -28,6 +28,7 @@ export default function DatasetsPage() {
     try {
       await api.datasets.delete(id, session.access_token)
       setDatasets((prev) => prev.filter((d) => d.id !== id))
+      invalidateApiCache()
       if (activeDatasetId === id) setActiveDataset(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Delete failed.')

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { UploadCloud, CheckCircle, XCircle, Loader2, FileText, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/components/ui/Toast'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -182,6 +182,7 @@ function ChannelSlot({ channel, orgId, session, onUploadComplete }: ChannelSlotP
             stopPolling()
             setSlot((s) => ({ ...s, phase: 'done', message: 'Dataset ready!' }))
             toastSuccess(`${channel.label} dataset uploaded and ready.`)
+            invalidateApiCache()
             onUploadComplete?.()
             // Auto-clear the done state after 4 s so the slot is ready for a new upload
             setTimeout(reset, 4_000)

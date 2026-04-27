@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import tempfile
 import uuid as uuid_lib
@@ -20,10 +21,13 @@ from fastapi import (
     status,
 )
 
+from app.cache import invalidate_org
 from app.dependencies import get_service_client, get_supabase_client, require_admin
 from app.main import limiter
 from app.services import analytics_service
 from supabase import Client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upload", tags=["admin_upload"])
 
@@ -145,6 +149,10 @@ def _process_file(
                 "ingestion_warnings": profile["ingestion_warnings"],
             },
         )
+
+        # ── Phase 5: Invalidate analytics cache for this org ─────────────────
+        # Ensures clients never see stale aggregations after a new CSV lands.
+        invalidate_org(organization_id)
 
     except Exception as exc:
         _set_status("failed", error=str(exc))

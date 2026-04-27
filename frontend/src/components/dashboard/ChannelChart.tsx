@@ -124,13 +124,22 @@ interface ChartCardProps {
   height?: number
   empty?: boolean
   emptyMsg?: string
+  /** Optional point count badge shown in the top-right corner of the card header. */
+  dataCount?: number
   children: React.ReactNode
 }
 
-export function ChartCard({ title, height = 280, empty, emptyMsg, children }: ChartCardProps) {
+export function ChartCard({ title, height = 280, empty, emptyMsg, dataCount, children }: ChartCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
-      <h3 className="text-sm font-semibold text-muted-foreground mb-4">{title}</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
+        {dataCount != null && !empty && (
+          <span className="text-[11px] tabular-nums text-muted-foreground/60 select-none">
+            {dataCount} data points
+          </span>
+        )}
+      </div>
       {empty ? (
         <div
           className="flex items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-center"

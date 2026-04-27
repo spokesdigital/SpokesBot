@@ -27,6 +27,17 @@ if (!_rawApiUrl && typeof window !== 'undefined') {
 const API_URL = (_rawApiUrl ?? 'http://localhost:8000').replace(/\/+$/, '')
 const DEFAULT_API_TIMEOUT_MS = 15_000
 
+// In-memory cache for idempotent requests to prevent redundant loading states
+const apiCache = new Map<string, { data: any; expiresAt: number }>()
+
+/**
+ * Clear the entire API cache. Use this after a new dataset is uploaded
+ * or when switching organizations to ensure data freshness.
+ */
+export function invalidateApiCache() {
+  apiCache.clear()
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -39,15 +50,29 @@ export class ApiError extends Error {
 
 async function apiFetch<T>(
   path: string,
-  options: RequestInit & { token?: string; timeoutMs?: number } = {},
+  options: RequestInit & { token?: string; timeoutMs?: number; cacheMs?: number } = {},
 ): Promise<T> {
   const {
     token,
     headers: extraHeaders,
     signal: externalSignal,
     timeoutMs = DEFAULT_API_TIMEOUT_MS,
+    cacheMs,
     ...fetchOptions
   } = options
+
+  const method = fetchOptions.method || 'GET'
+  let cacheKey: string | null = null
+
+  if (cacheMs && (method === 'GET' || method === 'POST')) {
+    // Generate a unique key for this request based on its parameters
+    cacheKey = `${method}:${path}:${fetchOptions.body ? String(fetchOptions.body) : ''}:${token || ''}`
+    const cached = apiCache.get(cacheKey)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data as T
+    }
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(extraHeaders as Record<string, string>),
@@ -91,7 +116,13 @@ async function apiFetch<T>(
     // 204 No Content
     if (res.status === 204) return undefined as T
 
-    return res.json() as Promise<T>
+    const data = (await res.json()) as T
+
+    if (cacheKey && cacheMs) {
+      apiCache.set(cacheKey, { data, expiresAt: Date.now() + cacheMs })
+    }
+
+    return data
   } finally {
     clearTimeout(timeoutId)
     externalSignal?.removeEventListener('abort', abortFromExternalSignal)
@@ -141,7 +172,7 @@ export const api = {
     list: (token: string, orgId?: string, allOrgs?: boolean, reportType?: string) =>
       apiFetch<{ datasets: Dataset[] }>(
         withQuery('/datasets/', { org_id: orgId, all_orgs: allOrgs ? 'true' : undefined, report_type: reportType }),
-        { token, timeoutMs: 10_000 },
+        { token, timeoutMs: 10_000, cacheMs: 60_000 },
       ).then(r => r.datasets),
 
     get: (id: string, token: string) =>
@@ -219,12 +250,28 @@ export const api = {
   },
 
   analytics: {
+    // Fire-and-forget: ask the backend to pre-load the dataset Parquet into its
+    // in-memory cache so the next compute() call hits the cache instantly.
+    // Never throws — errors are silently ignored since this is best-effort.
+    warm: (datasetId: string, token: string, orgId?: string): void => {
+      apiFetch<{ status: string }>(withQuery('/analytics/warm', { org_id: orgId }), {
+        method: 'POST',
+        body: JSON.stringify({ dataset_id: datasetId }),
+        token,
+        timeoutMs: 10_000,
+      }).catch(() => { /* intentionally silenced — warm is best-effort */ })
+    },
+
     compute: (body: AnalyticsRequest, token: string, orgId?: string) =>
       apiFetch<AnalyticsResult>(withQuery('/analytics/compute', { org_id: orgId }), {
         method: 'POST',
         body: JSON.stringify(body),
         token,
-        timeoutMs: 20_000,
+        // Raised from 20 s → 45 s to accommodate cold Parquet downloads from
+        // Supabase Storage on first load. With pre-warming, this will rarely
+        // be reached, but prevents spurious timeout errors as a safety net.
+        timeoutMs: 45_000,
+        cacheMs: 5 * 60_000, // Cache heavy analytics for 5 minutes
       }),
 
     getInsights: (body: InsightsRequest, token: string, orgId?: string) =>
@@ -233,6 +280,7 @@ export const api = {
         body: JSON.stringify(body),
         token,
         timeoutMs: 95_000,
+        cacheMs: 5 * 60_000, // Cache insights for 5 minutes
       }),
   },
 

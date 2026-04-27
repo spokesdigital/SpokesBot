@@ -4,7 +4,7 @@ import { use, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashboard'
 import { ChannelPage } from '@/components/dashboard/ChannelPage'
@@ -83,6 +83,7 @@ export default function ClientDetailPage({
     setDeleting(id)
     try {
       await api.datasets.delete(id, session.access_token)
+      invalidateApiCache()
       toastSuccess('Dataset deleted.')
     } catch (e: unknown) {
       if (removed) setDatasets((prev) => [removed, ...prev])

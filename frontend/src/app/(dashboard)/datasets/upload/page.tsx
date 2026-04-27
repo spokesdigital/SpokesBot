@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { UploadZone } from '@/components/upload/UploadZone'
-import { api } from '@/lib/api'
+import { api, invalidateApiCache } from '@/lib/api'
 import { useDashboardStore } from '@/store/dashboard'
 import type { UploadStatus } from '@/types'
 
@@ -69,6 +69,7 @@ export default function UploadPage() {
               pollRef.current = null
               setUploadStatus({ status: 'done', dataset_id, message: 'Dataset ready!' })
               setReportName('')
+              invalidateApiCache()
               setTimeout(() => router.push('/dashboard/datasets'), 1200)
               return
             }

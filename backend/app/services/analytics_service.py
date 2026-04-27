@@ -579,11 +579,30 @@ def _build_coercion_warnings(
     return warnings
 
 
+def _pad_series(
+    series: list[dict[str, Any]],
+    full_date_index: "pd.DatetimeIndex",
+) -> list[dict[str, Any]]:
+    """Extend a daily metric series to every date in full_date_index.
+
+    Missing days are filled with 0 so charts render a flat baseline instead of
+    a gap.  Sum metrics (clicks, cost, revenue) are correctly 0 for days with no
+    activity.  Ratio metrics (CTR, ROAS) are derived on the frontend from their
+    underlying sum columns, so their raw-column zeros are never surfaced directly.
+    """
+    existing = {item["date"]: item["value"] for item in series}
+    return [
+        {"date": str(d.date()), "value": existing.get(str(d.date()), 0)}
+        for d in full_date_index
+    ]
+
+
 def compute(
     df: pd.DataFrame,
     operation: str,
     column: str | None = None,
     group_by: str | None = None,
+    date_range: tuple[datetime, datetime] | None = None,
 ) -> dict[str, Any]:
     # Snapshot null counts before coercion so we can measure what was silently lost
     pre_null_counts = {col: int(df[col].isnull().sum()) for col in df.columns}
@@ -626,7 +645,7 @@ def compute(
         result = _sanitize(numeric.corr().to_dict())
 
     elif operation == "auto":
-        result = _auto_analyze(df)
+        result = _auto_analyze(df, date_range=date_range)
 
     else:
         raise ValueError(
@@ -642,8 +661,16 @@ def compute(
     return result
 
 
-def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
-    """All-in-one analysis for the dashboard. Returns KPI data + chart data."""
+def _auto_analyze(
+    df: pd.DataFrame,
+    date_range: tuple[datetime, datetime] | None = None,
+) -> dict[str, Any]:
+    """All-in-one analysis for the dashboard. Returns KPI data + chart data.
+
+    When date_range is provided the time-series data is reindexed against a
+    continuous pd.date_range so charts always show every day in the selected
+    window — days with no CSV data appear as zero instead of a gap.
+    """
     shape = {"rows": int(len(df)), "cols": int(len(df.columns))}
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     selected_metric_columns = _pick_metric_columns(df)
@@ -658,6 +685,15 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
 
     # Detect date columns
     date_columns = _detect_date_columns(df)
+
+    # Build the absolute boundary index when a date range is requested.
+    # Every metric series will be reindexed against this, ensuring the frontend
+    # always receives exactly N days of data (N = days in the selected preset).
+    full_date_index: pd.DatetimeIndex | None = None
+    if date_range is not None:
+        full_date_index = pd.date_range(
+            start=date_range[0].date(), end=date_range[1].date(), freq="D"
+        )
 
     # Try to parse potential date columns
     parsed_dates: dict[str, list] = {}
@@ -681,16 +717,26 @@ def _auto_analyze(df: pd.DataFrame) -> dict[str, Any]:
             if metric_col:
                 grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
                 agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
-                parsed_dates[col] = [
+                raw_series = [
                     {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
                 ]
+                parsed_dates[col] = (
+                    _pad_series(raw_series, full_date_index)
+                    if full_date_index is not None
+                    else raw_series
+                )
             metric_series_for_col: dict[str, list[dict[str, Any]]] = {}
             for metric_col in selected_metric_columns:
                 grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
                 agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
-                metric_series_for_col[metric_col] = [
+                raw_series = [
                     {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
                 ]
+                metric_series_for_col[metric_col] = (
+                    _pad_series(raw_series, full_date_index)
+                    if full_date_index is not None
+                    else raw_series
+                )
             if metric_series_for_col:
                 metric_time_series[col] = metric_series_for_col
         except Exception:

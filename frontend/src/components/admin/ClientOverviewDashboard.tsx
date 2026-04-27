@@ -14,14 +14,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertCircle, Calendar, Check, ChevronDown, Download } from 'lucide-react'
+import { AlertCircle, Calendar, Check, ChevronDown } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
-import { exportDashboardToPDF } from '@/lib/export'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
 import type { AnalyticsResult, Dataset } from '@/types'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
+import { useDashboardStore } from '@/store/dashboard'
+import { useShallow } from 'zustand/react/shallow'
 import { buildPriorLabel, buildNoDataLabel } from '@/components/dashboard/channelMetrics'
 import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 import type { AIInsight } from '@/types'
@@ -383,28 +384,26 @@ function buildAnalyticsParams(dateSelection: DateSelection, dateCol: string | nu
 
 export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; orgName?: string }) {
   const { session } = useAuth()
+  const { globalDatasets, globalDatasetsLoaded, datasetsOrgId, setGlobalDatasets } = useDashboardStore(
+    useShallow(s => ({
+      globalDatasets: s.datasets,
+      globalDatasetsLoaded: s.datasetsLoaded,
+      datasetsOrgId: s.datasetsOrgId,
+      setGlobalDatasets: s.setDatasets,
+    }))
+  )
 
   const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_30_days' })
-  const [datasets, setDatasets] = useState<Dataset[]>([])
+  const datasets = datasetsOrgId === orgId && globalDatasetsLoaded ? globalDatasets : []
+  const [loadingDatasets, setLoadingDatasets] = useState(datasets.length === 0)
   const [googleAnalytics, setGoogleAnalytics] = useState<AnalyticsResult | null>(null)
   const [metaAnalytics, setMetaAnalytics] = useState<AnalyticsResult | null>(null)
-  const [loadingDatasets, setLoadingDatasets] = useState(true)
   const [loadingGoogle, setLoadingGoogle] = useState(false)
   const [loadingMeta, setLoadingMeta] = useState(false)
   const [loadingInsights, setLoadingInsights] = useState(false)
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [insightsError, setInsightsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [exporting, setExporting] = useState(false)
-
-  const handleExportPDF = useCallback(async () => {
-    setExporting(true)
-    try {
-      await exportDashboardToPDF('overview-pdf-content', `${(orgName ?? 'overview').toLowerCase().replace(/\s+/g, '-')}-report.pdf`)
-    } finally {
-      setExporting(false)
-    }
-  }, [orgName])
 
   const googleDataset = useMemo(
     () =>
@@ -425,19 +424,22 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     if (!session) return
     let cancelled = false
     
-    // Use functional update or separate initialization to avoid triggering cascading renders if possible,
-    // though for loading states this is often acceptable. We'll keep it but add the eslint-disable
-    // if the rule is too strict, or ensure we only set it if not already loading.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingDatasets(prev => (prev ? prev : true))
+    // Only show loading if we don't have datasets for this org yet
+    if (datasetsOrgId !== orgId || !globalDatasetsLoaded) {
+      setLoadingDatasets(true)
+    }
     setError(null)
     api.datasets
       .list(session.access_token, orgId)
-      .then(ds => { if (!cancelled) setDatasets(ds) })
-      .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load datasets') })
-      .finally(() => { if (!cancelled) setLoadingDatasets(false) })
+      .then(ds => { 
+        if (!cancelled) {
+          setGlobalDatasets(ds, orgId)
+          setLoadingDatasets(false)
+        }
+      })
+      .catch(e => { if (!cancelled) { setError(e instanceof Error ? e.message : 'Failed to load datasets'); setLoadingDatasets(false) } })
     return () => { cancelled = true }
-  }, [session, orgId])
+  }, [session, orgId, datasetsOrgId, globalDatasetsLoaded, setGlobalDatasets])
 
   useEffect(() => {
     if (!session || !googleDataset) { 
@@ -657,15 +659,6 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         </div>
         <div className="flex items-center gap-3">
           <DateFilterDropdown value={dateSelection} onChange={setDateSelection} />
-          <button
-            type="button"
-            onClick={handleExportPDF}
-            disabled={exporting || !hasAnyData}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-[#f0a500] hover:text-[#f0a500] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            {exporting ? 'Generating…' : 'Export PDF'}
-          </button>
         </div>
       </div>
 
