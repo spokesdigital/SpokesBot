@@ -364,8 +364,8 @@ SYSTEM_PROMPT = """\
 You are SpokesBot, a precise data analyst. Give quick, direct answers — like a trusted colleague who knows the numbers cold.
 
 Rules:
-- ALWAYS call get_dataset_schema first before running any analysis. Never guess column names — use only the exact column names returned by get_dataset_schema.
-- If a user asks about a metric (e.g. "revenue", "clicks", "cost"), first check the schema to find the matching column name, then use that exact name in run_analysis.
+- The dataset schema is pre-loaded in [Dataset Schema] below — use those exact column names directly. Do NOT call get_dataset_schema unless you need null counts or unique value details not listed there.
+- If a user asks about a metric (e.g. "revenue", "clicks", "cost"), match it to the exact column name from [Dataset Schema] below, then pass that name to run_analysis.
 - NEVER fabricate historical data or invent numbers that are not in your tools. Every historical fact and past-period number MUST come from your analysis tools.
 - Respond in 1–3 sentences maximum. No essays, no bullet lists, no multi-paragraph breakdowns.
 - Plain text only — no **bold**, no *italic*, no headings, no markdown lists.
@@ -376,7 +376,7 @@ Rules:
 
 Forecasting & Prediction Rules (IMPORTANT — takes priority over the no-guessing rule for future estimates):
 - If the user asks for a prediction, forecast, or expected future metric (e.g. "predict ROAS", "expected ROI next month", "what will revenue be", "future performance"), DO NOT refuse. You are authorised to produce trend-based projections.
-- Process: (1) call get_dataset_schema to find the relevant columns, (2) call run_analysis to retrieve historical totals or time-series data, (3) calculate the average daily or weekly rate from the available data, (4) extrapolate it forward to the requested horizon, and (5) present it clearly as an estimate.
+- Process: (1) identify the relevant columns from [Dataset Schema] below, (2) call run_analysis to retrieve historical totals or time-series data, (3) calculate the average daily or weekly rate from the available data, (4) extrapolate it forward to the requested horizon, and (5) present it clearly as an estimate.
 - Synonym mapping — treat these user terms as the metrics shown:
     "ROI" → ROAS column (Revenue ÷ Cost), or Revenue and Cost columns if no ROAS column exists.
     "return", "return on investment" → same as ROI above.
@@ -511,11 +511,16 @@ class AgentState(TypedDict):
 
 
 def _get_llm(*, streaming: bool = True) -> ChatOpenAI:
-    """Return the main agent LLM (gpt-4o).  Lazy-imported to keep tests fast."""
+    """Return the main agent LLM.
+
+    gpt-4o-mini is ~3-5x faster per call than gpt-4o and sufficient for
+    structured tool-use data analysis — the tools do the heavy lifting and
+    the critic catches any numeric errors before the answer reaches the user.
+    """
     from app.config import settings
 
     return ChatOpenAI(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         openai_api_key=settings.OPENAI_API_KEY,
         streaming=streaming,
         temperature=0,
@@ -558,7 +563,23 @@ def _needs_validation(draft: str) -> bool:
 # ── History builder ───────────────────────────────────────────────────────────
 
 
-def build_history(messages: list[dict], page_context: str | None = None) -> list[BaseMessage]:
+def _build_schema_context(df: pd.DataFrame) -> str:
+    """
+    Compact schema string injected into the system prompt so the agent can
+    skip the get_dataset_schema tool call on every turn — saving one full
+    LLM round-trip (~3-5 seconds) per request.
+    """
+    lines = [f"Row count: {len(df):,}", "Columns (use these exact names):"]
+    for col in df.columns:
+        lines.append(f"  {col}: {df[col].dtype}")
+    return "\n".join(lines)
+
+
+def build_history(
+    messages: list[dict],
+    page_context: str | None = None,
+    schema_context: str | None = None,
+) -> list[BaseMessage]:
     """
     Convert DB message records → LangChain message objects.
 
@@ -573,6 +594,8 @@ def build_history(messages: list[dict], page_context: str | None = None) -> list
     full text is still persisted in the database.
     """
     system_content = SYSTEM_PROMPT
+    if schema_context:
+        system_content += f"\n\n[Dataset Schema]\n{schema_context}"
     if page_context:
         system_content += f"\n\n[Context] User is currently viewing: {page_context}."
     result: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -803,7 +826,8 @@ async def stream_agent(
     The caller (threads.py event_stream) handles this and surfaces an error SSE.
     """
     graph = make_graph(df)
-    messages = build_history(history, page_context=page_context)
+    schema_context = _build_schema_context(df)
+    messages = build_history(history, page_context=page_context, schema_context=schema_context)
     messages.append(HumanMessage(content=new_message))
 
     initial_state: AgentState = {
