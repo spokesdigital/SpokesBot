@@ -21,9 +21,9 @@ import {
 } from 'recharts'
 // Legend is still used by DistributionChart (PieChart) below
 
-// Minimum pixels per data point — ensures bars/lines are never squished when
-// there is a lot of data. The chart scrolls horizontally beyond this threshold.
-const MIN_PX_PER_POINT = 52
+// Minimum pixels per data point. We set this to 0 so the chart naturally fits
+// 100% of the container width. The user can use the zoom buttons if the data is too dense.
+const MIN_PX_PER_POINT = 0
 
 // ─── Zoom hook ────────────────────────────────────────────────────────────────
 
