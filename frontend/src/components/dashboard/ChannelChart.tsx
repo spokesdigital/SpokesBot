@@ -265,7 +265,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
           : String(row[xAxisKey] ?? row.date ?? ''),
     ]),
   )
-  const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 6) : "preserveStartEnd"
+  const tickInterval = Math.max(0, Math.ceil(visibleData.length / 6) - 1)
   const barSize = visibleData.length > 60 ? 6 : visibleData.length > 30 ? 10 : visibleData.length > 14 ? 16 : 22
 
   return (
@@ -291,7 +291,6 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
                 tickMargin={10}
                 height={32}
                 padding={{ left: 50, right: 50 }}
-                minTickGap={35}
               />
               <YAxis
                 yAxisId="l"
@@ -440,7 +439,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
     ]),
   )
 
-  const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 6) : "preserveStartEnd"
+  const tickInterval = Math.max(0, Math.ceil(visibleData.length / 6) - 1)
 
   return (
     <div className="relative flex flex-col h-full">
@@ -471,7 +470,6 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                 tickMargin={10}
                 height={32}
                 padding={{ left: 50, right: 50 }}
-                minTickGap={35}
               />
               <YAxis
                 tick={{ fill: '#7a8292', fontSize: 11 }}

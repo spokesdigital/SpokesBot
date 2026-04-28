@@ -866,7 +866,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtDate(v, granularity)} interval={granularity === 'monthly' ? 0 : Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={granularity === 'monthly' ? 0 : 40} />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtDate(v, granularity)} interval={Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={35} />
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`} />
                   <Tooltip
                     contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 4px 16px rgba(15,23,42,0.08)' }}
