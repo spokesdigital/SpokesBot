@@ -19,14 +19,6 @@ const presets: Preset[] = [
     getValue: () => ({ start: startOfDay(new Date()), end: endOfDay(new Date()) }),
   },
   {
-    label: 'Yesterday',
-    key: 'yesterday',
-    getValue: () => ({
-      start: startOfDay(subDays(new Date(), 1)),
-      end: endOfDay(subDays(new Date(), 1)),
-    }),
-  },
-  {
     label: 'Last 7 Days',
     key: 'last_7_days',
     getValue: () => ({ start: startOfDay(subDays(new Date(), 6)), end: endOfDay(new Date()) }),
