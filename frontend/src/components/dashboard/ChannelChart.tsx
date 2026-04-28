@@ -265,7 +265,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
           : String(row[xAxisKey] ?? row.date ?? ''),
     ]),
   )
-  const tickInterval = visibleData.length <= 14 ? 0 : Math.ceil(visibleData.length / 8)
+  const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 8) : "preserveStartEnd"
   const barSize = visibleData.length > 60 ? 6 : visibleData.length > 30 ? 10 : visibleData.length > 14 ? 16 : 22
 
   return (
@@ -285,12 +285,13 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
                 dataKey={xAxisKey}
                 interval={tickInterval}
                 tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value), granularity)}
-                tick={{ fill: '#7a8292', fontSize: 12 }}
-                tickLine={false}
+                tick={{ fill: '#7a8292', fontSize: 12, dx: 0 }}
+                tickLine={{ stroke: '#d9dee7', strokeWidth: 1.5 }}
                 axisLine={false}
-                tickMargin={9}
+                tickMargin={10}
                 height={32}
                 padding={{ left: 50, right: 50 }}
+                minTickGap={15}
               />
               <YAxis
                 yAxisId="l"
@@ -313,6 +314,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
               )}
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
+                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                 labelFormatter={(label) =>
                   tooltipLabelMap.get(String(label))
                   ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label), granularity))
@@ -438,7 +440,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
     ]),
   )
 
-  const tickInterval = visibleData.length <= 14 ? 0 : Math.ceil(visibleData.length / 8)
+  const tickInterval = visibleData.length > 14 ? Math.ceil(visibleData.length / 8) : "preserveStartEnd"
 
   return (
     <div className="relative flex flex-col h-full">
@@ -463,12 +465,13 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                 dataKey={xAxisKey}
                 interval={tickInterval}
                 tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value), granularity)}
-                tick={{ fill: '#7a8292', fontSize: 12 }}
-                tickLine={false}
+                tick={{ fill: '#7a8292', fontSize: 12, dx: 0 }}
+                tickLine={{ stroke: '#d9dee7', strokeWidth: 1.5 }}
                 axisLine={false}
-                tickMargin={9}
+                tickMargin={10}
                 height={32}
                 padding={{ left: 50, right: 50 }}
+                minTickGap={15}
               />
               <YAxis
                 tick={{ fill: '#7a8292', fontSize: 11 }}
