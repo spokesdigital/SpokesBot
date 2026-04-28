@@ -69,7 +69,7 @@ type MetricCardDefinition = {
 }
 
 // Metrics where a positive delta is BAD (higher cost / higher CPC = worse performance)
-const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
+const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc', 'cpa', 'cpm'])
 
 type MetricCardData = {
   key: string

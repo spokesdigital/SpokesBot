@@ -47,11 +47,9 @@ export const KPICard = React.memo(function KPICard({ title, value, trendValue, t
         : 'text-muted-foreground'
 
   const TrendIcon =
-    direction === 'positive'
-      ? TrendingUp
-      : direction === 'negative'
-        ? TrendingDown
-        : Minus
+    trendValue != null
+      ? (Math.abs(trendValue) < 0.05 ? Minus : trendValue > 0 ? TrendingUp : TrendingDown)
+      : (direction === 'positive' ? TrendingUp : direction === 'negative' ? TrendingDown : Minus)
 
   return (
     <div className="relative bg-card rounded-xl p-4 sm:p-5 card-shadow border border-border hover:card-shadow-hover transition-shadow duration-200 overflow-visible hover:z-50 focus-within:z-50 has-[[data-state=open]]:z-50">

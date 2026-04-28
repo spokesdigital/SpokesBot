@@ -104,7 +104,7 @@ const METRIC_DEFS = [
   },
 ] as const
 
-const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc'])
+const INVERTED_TREND_KEYS = new Set(['cost', 'avg_cpc', 'cpa', 'cpm'])
 
 const CHANNEL_COLORS: Record<string, string> = {
   'Google Ads': '#f0a500',
