@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -11,6 +12,7 @@ from app.dependencies import (
     ROLE_ADMIN,
     get_current_org_id,
     get_current_role,
+    get_current_user,
     get_current_user_id,
     get_service_client,
     get_supabase_client,
@@ -25,12 +27,26 @@ from app.schemas import (
     ThreadCreate,
     ThreadResponse,
 )
-from app.services import dataset_service, thread_service
+from app.services import dataset_service, support_service, thread_service
 from supabase import Client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/threads", tags=["threads"])
+
+# Phrases the system prompt instructs the agent to use when it cannot answer.
+# Detecting these in the final response triggers the escalation prompt so the
+# user can send the query to a human admin instead of hitting a dead end.
+_ESCALATION_SIGNALS = (
+    "i only have access to the current dashboard dataset",
+    "i'm here to help you analyse your dashboard data",
+    "i can only share analysed insights from your data",
+)
+
+
+def _needs_escalation(text: str) -> bool:
+    lower = text.strip().lower()
+    return any(signal in lower for signal in _ESCALATION_SIGNALS)
 
 
 @router.post("/", response_model=ThreadResponse, status_code=201)
@@ -272,8 +288,18 @@ async def chat(
             # ── 6. Persist full assembled response ────────────────────────────
             if accumulated:
                 thread_service.save_message(thread_id, "assistant", accumulated, service_client)
-
-            yield f"data: {json.dumps({'done': True})}\n\n"
+                done_payload: dict = {"done": True}
+                if _needs_escalation(accumulated):
+                    done_payload["requires_escalation"] = True
+                yield f"data: {json.dumps(done_payload)}\n\n"
+            else:
+                # Agent produced no answer — save a fallback so the thread isn't
+                # left without a response, stream it to the client, then signal
+                # the client to offer escalation so the button anchors to this message.
+                fallback_text = "I wasn't able to find a clear answer based on your data."
+                thread_service.save_message(thread_id, "assistant", fallback_text, service_client)
+                yield f"data: {json.dumps({'token': fallback_text})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'requires_escalation': True})}\n\n"
 
         except asyncio.CancelledError:
             # Client disconnected mid-stream — save whatever accumulated
@@ -312,6 +338,61 @@ async def chat(
             "Connection": "keep-alive",
         },
     )
+
+
+# ── Escalation endpoint ───────────────────────────────────────────────────────
+
+
+@router.post("/{thread_id}/escalate", status_code=200)
+@limiter.limit("5/minute")
+async def escalate_thread(
+    request: Request,
+    thread_id: str,
+    supabase: Client = Depends(get_supabase_client),
+    service_client: Client = Depends(get_service_client),
+    user_id: str = Depends(get_current_user_id),
+    caller_org_id: str = Depends(get_current_org_id),
+    role: str = Depends(get_current_role),
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Flag a thread for admin review.
+
+    Creates a SupportMessage so the escalation surfaces in the admin
+    Escalations dashboard.  The last user query is included as context
+    so the admin knows exactly what the user was trying to ask.
+
+    Rate-limited to 5/minute per user to prevent spam.
+    """
+    if role == ROLE_ADMIN:
+        thread = (
+            service_client.table("threads").select("*").eq("id", thread_id).maybe_single().execute()
+        ).data
+        if not thread:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found.")
+        history_client = service_client
+    else:
+        thread = thread_service.get_thread(thread_id, supabase)
+        history_client = supabase
+
+    # Pull the most recent user message to give the admin full context
+    messages = thread_service.get_messages(thread_id, history_client)
+    last_user_msg = next((m for m in reversed(messages) if m["role"] == "user"), None)
+    query_text = last_user_msg["content"] if last_user_msg else "(no message)"
+
+    thread_title = thread.get("title", thread_id)
+    org_id = thread.get("organization_id", caller_org_id)
+    email = getattr(current_user, "email", "") or ""
+
+    support_msg = support_service.create_message(
+        user_id=user_id,
+        org_id=org_id,
+        email=email,
+        message=f"[Chat Escalation] Thread: {thread_title}\n\nUser query: {query_text}",
+        service_client=service_client,
+    )
+
+    return {"escalated": True, "support_message_id": support_msg["id"]}
 
 
 # ── Proactive insight endpoint ────────────────────────────────────────────────

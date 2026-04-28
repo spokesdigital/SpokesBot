@@ -11,6 +11,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { api, streamChat } from '@/lib/api'
 import type { Thread, Message, Dataset } from '@/types'
 import { mergeServerMessages } from '@/components/dashboard/chatState'
+import { EscalationButton } from '@/components/dashboard/EscalationButton'
 import {
   Bar,
   BarChart,
@@ -539,6 +540,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [supportSent, setSupportSent] = useState(false)
   const [supportError, setSupportError] = useState<string | null>(null)
 
+  // Escalation state: fallback flag (AI returned no answer) and idle timer trigger
+  const [lastResponseRequiresEscalation, setLastResponseRequiresEscalation] = useState(false)
+  const [showIdleEscalation, setShowIdleEscalation] = useState(false)
+
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   // AbortController for cancelling in-flight streaming requests
@@ -549,9 +554,36 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   // Synchronous guard for submitMessage — flips before any await so rapid
   // double-clicks can't both pass the React-state `streaming` check.
   const submittingRef = useRef(false)
+  // Idle escalation timer — cleared on any user interaction or new message
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Abort any in-flight stream on unmount
   useEffect(() => () => { abortRef.current?.abort() }, [])
+
+  // 45-second idle escalation timer.
+  // Starts when the AI finishes streaming and the last message is from the assistant.
+  // Resets whenever streaming resumes or a new message arrives.
+  useEffect(() => {
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
+    if (streaming) return
+    const lastMsg = messages[messages.length - 1]
+    if (!lastMsg || lastMsg.role !== 'assistant') return
+
+    idleTimerRef.current = setTimeout(() => {
+      setShowIdleEscalation(true)
+      idleTimerRef.current = null
+    }, 45_000)
+
+    return () => {
+      if (idleTimerRef.current !== null) {
+        clearTimeout(idleTimerRef.current)
+        idleTimerRef.current = null
+      }
+    }
+  }, [streaming, messages.length])
 
   // Pre-fill the support email when the form opens, but only if the user
   // hasn't already typed something. Binding the field value directly to
@@ -680,6 +712,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setInput('')
     setSuggestions([])
     setError(null)
+    setLastResponseRequiresEscalation(false)
+    setShowIdleEscalation(false)
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
     setMessages((prev) => [...prev, optimistic])
 
     let thread = activeThread
@@ -724,10 +762,14 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     abortRef.current = controller
 
     let accumulated = ''
+    let streamRequiresEscalation = false
     try {
       for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal, pageContext)) {
         if (chunk.error) throw new Error(chunk.error)
-        if (chunk.done) break
+        if (chunk.done) {
+          if (chunk.requires_escalation) streamRequiresEscalation = true
+          break
+        }
         if (chunk.status) continue  // thinking heartbeat — indicator handles its own animation
         if (chunk.token) {
           if (isThinking) setIsThinking(false)  // first real token — exit thinking phase
@@ -767,6 +809,8 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
         }
       }
       if (!synced) await syncMessages(thread.id)
+
+      if (streamRequiresEscalation) setLastResponseRequiresEscalation(true)
 
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
@@ -813,6 +857,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setStreamingContent('')
     setSuggestions([])
     setError(null)
+    setLastResponseRequiresEscalation(false)
+    setShowIdleEscalation(false)
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
   }
 
   if (!isRendered) return null
@@ -830,6 +880,15 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   // Show welcome message only when there are no messages AND we're not fetching an insight
   const showWelcome = messages.length === 0 && !streaming
+
+  // Index of the last assistant message — used to decide where to attach the escalation button
+  const lastAssistantIndex = messages.reduceRight(
+    (found, msg, i) => (found !== -1 ? found : msg.role === 'assistant' ? i : -1),
+    -1,
+  )
+
+  const showEscalationButton =
+    !streaming && (lastResponseRequiresEscalation || showIdleEscalation)
 
   return (
     /* Fixed overlay — bottom-right, above the FAB */
@@ -1035,6 +1094,16 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         >
                           {msg.role === 'assistant' ? renderMessageContent(msg.content) : msg.content}
                         </div>
+                        {/* Escalation button — shown on the last assistant message when:
+                            (a) the AI flagged it needed escalation, or
+                            (b) the user has been idle for 45 seconds */}
+                        {msg.role === 'assistant' && index === lastAssistantIndex && showEscalationButton && (
+                          <EscalationButton
+                            threadId={activeThread?.id ?? ''}
+                            token={session?.access_token ?? ''}
+                            fadeIn={showIdleEscalation && !lastResponseRequiresEscalation}
+                          />
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1102,6 +1171,11 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         onChange={(e) => {
                           setInput(e.target.value)
                           if (error) setError(null)
+                          if (idleTimerRef.current !== null) {
+                            clearTimeout(idleTimerRef.current)
+                            idleTimerRef.current = null
+                            setShowIdleEscalation(false)
+                          }
                         }}
                         disabled={streaming || datasetsLoading || !hasDataset}
                         maxLength={500}

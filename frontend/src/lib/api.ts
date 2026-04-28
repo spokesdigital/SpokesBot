@@ -239,6 +239,12 @@ export const api = {
     messages: (threadId: string, token: string) =>
       apiFetch<Message[]>(`/threads/${threadId}/messages`, { token, timeoutMs: 10_000 }),
 
+    escalate: (threadId: string, token: string) =>
+      apiFetch<{ escalated: boolean; support_message_id: string }>(
+        `/threads/${threadId}/escalate`,
+        { method: 'POST', token, timeoutMs: 12_000 },
+      ),
+
     /**
      * Ask the backend to run a quick Reflexion-validated insight on the thread's
      * dataset and persist it as the first assistant message.
@@ -375,7 +381,7 @@ export async function* streamChat(
   token: string,
   signal?: AbortSignal,
   pageContext?: string,
-): AsyncGenerator<{ token?: string; done?: boolean; error?: string; status?: string }> {
+): AsyncGenerator<{ token?: string; done?: boolean; error?: string; status?: string; requires_escalation?: boolean }> {
   const res = await fetch(`${API_URL}/threads/${threadId}/chat`, {
     method: 'POST',
     headers: {
