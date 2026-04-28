@@ -668,6 +668,20 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     const userMessage = rawMessage.trim().slice(0, 500)
     const currentDatasetId = resolveDatasetId(datasets, activeDatasetId)
 
+    // Show the user's message immediately so the UI feels instant.
+    const tempId = `temp-${Date.now()}`
+    const optimistic: Message = {
+      id: tempId,
+      thread_id: activeThread?.id ?? '',
+      role: 'user',
+      content: userMessage,
+      created_at: new Date().toISOString(),
+    }
+    setInput('')
+    setSuggestions([])
+    setError(null)
+    setMessages((prev) => [...prev, optimistic])
+
     let thread = activeThread
     if (!thread) {
       let datasetId = currentDatasetId
@@ -677,10 +691,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       }
       if (!datasetId) {
         setError(datasetsLoading ? 'Loading your reports… please try again in a moment.' : 'Please upload a completed dataset first.')
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
         submittingRef.current = false
         return
       }
-      setError(null)
       try {
         thread = await api.threads.create(
           { dataset_id: datasetId, title: userMessage.slice(0, 60) },
@@ -689,29 +703,19 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
         )
         setActiveThread(thread)
         persistThread(thread.id)
+        // Patch the optimistic message with the real thread_id so mergeServerMessages can dedup it.
+        setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, thread_id: thread!.id } : m))
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Failed to create conversation.')
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
         submittingRef.current = false
         return
       }
     }
 
-    setError(null)
-    setInput('')
-    setSuggestions([])
     setStreaming(true)
     setStreamingContent('')
     setIsThinking(true)
-
-
-    const optimistic: Message = {
-      id: `temp-${Date.now()}`,
-      thread_id: thread.id,
-      role: 'user',
-      content: userMessage,
-      created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, optimistic])
 
     // Create a fresh AbortController for this request.
     // A 90-second hard timeout prevents the UI from hanging if the backend stalls.
@@ -745,6 +749,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
             (m) => m.role === 'assistant' && m.content === accumulated,
           )
           if (hasAssistantReply || attempt === 3) {
+            // Clear the streaming bubble atomically with the server message arriving.
+            // React 18 batches all three setState calls into one render, so the user
+            // never sees the server copy and the streaming copy simultaneously.
+            setStreamingContent('')
+            setStreaming(false)
+            setIsThinking(false)
             setMessages((prev) => mergeServerMessages(nextMessages, prev.filter(
               // drop the optimistic user message only — keep nothing with a local id
               (m) => !m.id.startsWith('stream-'),

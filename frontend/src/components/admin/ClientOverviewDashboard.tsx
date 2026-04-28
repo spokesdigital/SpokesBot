@@ -393,8 +393,13 @@ function safeSum(a: number | null, b: number | null): number | null {
   return (a ?? 0) + (b ?? 0)
 }
 
-const fmtDate = (v: string) => {
-  try { return format(parseISO(v), 'MMM d') } catch { return v }
+const fmtDate = (v: string, granularity?: 'daily' | 'monthly') => {
+  try { 
+    if (granularity === 'monthly') return format(parseISO(v), "MMM yyyy")
+    return format(parseISO(v), 'MMM d') 
+  } catch { 
+    return v 
+  }
 }
 
 // Build analytics params for a dataset given the current date selection
@@ -660,6 +665,11 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   const priorLabel = buildPriorLabel(comparisonWindow)
   const noDataLabel = buildNoDataLabel(comparisonWindow !== null, priorLabel)
 
+  const granularity = useMemo(
+    () => (googleAnalytics?.result?.granularity ?? metaAnalytics?.result?.granularity ?? 'daily') as 'daily' | 'monthly',
+    [googleAnalytics, metaAnalytics]
+  )
+
   const combined = useMemo(() => {
     const sum = (k: keyof ChannelTotals) => ({
       current: safeSum(googleTotals[k].current, metaTotals[k].current),
@@ -856,12 +866,12 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={fmtDate} interval={Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={40} />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtDate(v, granularity)} interval={granularity === 'monthly' ? 0 : Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={granularity === 'monthly' ? 0 : 40} />
                   <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`} />
                   <Tooltip
                     contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 4px 16px rgba(15,23,42,0.08)' }}
                     formatter={(v: number) => `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
-                    labelFormatter={v => { try { return format(parseISO(String(v)), 'MMM d, yyyy') } catch { return String(v) } }}
+                    labelFormatter={v => { try { return granularity === 'monthly' ? format(parseISO(String(v)), "MMM yyyy") : format(parseISO(String(v)), 'MMM d, yyyy') } catch { return String(v) } }}
                   />
                   <Area type="monotone" connectNulls dataKey="total_revenue" name="Revenue" stroke="#f0a500" fill="url(#ov_rev)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                   <Area type="monotone" connectNulls dataKey="total_cost" name="Cost" stroke="#94a3b8" fill="url(#ov_cost)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />

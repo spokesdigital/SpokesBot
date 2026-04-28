@@ -689,15 +689,30 @@ def _auto_analyze(
     # Build the absolute boundary index when a date range is requested.
     # Every metric series will be reindexed against this, ensuring the frontend
     # always receives exactly N days of data (N = days in the selected preset).
+    granularity = "daily"
+    freq = "D"
     full_date_index: pd.DatetimeIndex | None = None
+    
     if date_range is not None:
+        delta = date_range[1] - date_range[0]
+        if delta.days > 90:
+            granularity = "monthly"
+            freq = "MS"
+            start_date_for_index = date_range[0].date().replace(day=1)
+        else:
+            start_date_for_index = date_range[0].date()
+            
         full_date_index = pd.date_range(
-            start=date_range[0].date(), end=date_range[1].date(), freq="D"
+            start=start_date_for_index, end=date_range[1].date(), freq=freq
         )
 
     # Try to parse potential date columns
     parsed_dates: dict[str, list] = {}
     metric_time_series: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    
+    # Pre-compute metric mappings for recalculated ratios
+    metric_mappings = infer_metric_mappings(df)
+
     for col in df.columns:
         try:
             series = df[col]
@@ -713,26 +728,58 @@ def _auto_analyze(
             sorted_df = df.copy()
             sorted_df[col] = parsed
             sorted_df = sorted_df.sort_values(col)
+            
+            # Use Grouper for resampling
+            grouper = pd.Grouper(key=col, freq=freq)
+            grouped = sorted_df.groupby(grouper)
+            summed = grouped.sum(numeric_only=True)
+            
+            # Re-calculate averages based on sums
+            def get_aggregated_series(metric_col: str):
+                if _uses_average_basis(metric_col):
+                    if metric_col == metric_mappings.get("ctr"):
+                        clicks_col = metric_mappings.get("clicks")
+                        impr_col = metric_mappings.get("impressions")
+                        if clicks_col in summed.columns and impr_col in summed.columns:
+                            return summed[clicks_col] / summed[impr_col].replace(0, pd.NA)
+                    elif metric_col == metric_mappings.get("avg_cpc"):
+                        cost_col = metric_mappings.get("cost")
+                        clicks_col = metric_mappings.get("clicks")
+                        if cost_col in summed.columns and clicks_col in summed.columns:
+                            return summed[cost_col] / summed[clicks_col].replace(0, pd.NA)
+                    elif metric_col == metric_mappings.get("roas"):
+                        rev_col = metric_mappings.get("revenue")
+                        cost_col = metric_mappings.get("cost")
+                        if rev_col in summed.columns and cost_col in summed.columns:
+                            return summed[rev_col] / summed[cost_col].replace(0, pd.NA)
+                    elif "cpa" in metric_col.lower():
+                        cost_col = metric_mappings.get("cost")
+                        conv_col = metric_mappings.get("conversions")
+                        if cost_col in summed.columns and conv_col in summed.columns:
+                            return summed[cost_col] / summed[conv_col].replace(0, pd.NA)
+                    return grouped[metric_col].mean()
+                else:
+                    return summed[metric_col] if metric_col in summed.columns else grouped[metric_col].sum()
+
             metric_col = _pick_metric_column(df)
             if metric_col:
-                grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
-                agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
+                agg = get_aggregated_series(metric_col)
                 raw_series = [
-                    {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
+                    {"date": str(k.date()), "value": _sanitize(v)} for k, v in agg.items() if pd.notna(k)
                 ]
                 parsed_dates[col] = (
                     _pad_series(raw_series, full_date_index)
                     if full_date_index is not None
                     else raw_series
                 )
+                
             metric_series_for_col: dict[str, list[dict[str, Any]]] = {}
-            for metric_col in selected_metric_columns:
-                grp = sorted_df.groupby(sorted_df[col].dt.date)[metric_col]
-                agg = grp.mean() if _uses_average_basis(metric_col) else grp.sum()
+            for m_col in selected_metric_columns:
+                agg = get_aggregated_series(m_col)
                 raw_series = [
-                    {"date": str(k), "value": _sanitize(v)} for k, v in agg.items()
+                    {"date": str(k.date()), "value": _sanitize(v)} for k, v in agg.items() if pd.notna(k)
                 ]
-                metric_series_for_col[metric_col] = (
+                metric_series_for_col[m_col] = (
                     _pad_series(raw_series, full_date_index)
                     if full_date_index is not None
                     else raw_series
@@ -799,4 +846,5 @@ def _auto_analyze(
         "date_columns": date_columns,
         "dtypes": dtypes,
         "sample": sample,
+        "granularity": granularity,
     }

@@ -55,7 +55,7 @@ export interface AnalyticsRequest {
 export interface AnalyticsResult {
   dataset_id: string
   operation: string
-  result: Record<string, unknown>
+  result: Record<string, unknown> & { granularity?: 'daily' | 'monthly' }
 }
 
 export interface InsightsRequest {

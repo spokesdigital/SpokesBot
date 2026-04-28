@@ -263,7 +263,7 @@ function formatPercent(value: number) {
 }
 
 function formatRatio(value: number) {
-  return `${value.toFixed(2)}x`
+  return `${(value * 100).toFixed(0)}%`
 }
 
 // Stable formatter references for memoized chart props — defined at module level
@@ -280,8 +280,8 @@ const fmtCpaTooltip = (v: number, n: string): [string, string] =>
 const fmtConvRateTick = (v: number) => `${v.toFixed(0)}%`
 const fmtConvRateTooltip = (v: number) => `${v.toFixed(2)}%`
 const fmtRevenueTick = (v: number) => `$${Math.round(v)}`
-const fmtRoasTick = (v: number) => `${v.toFixed(1)}x`
-const fmtRoasTooltip = (v: number) => `${v.toFixed(2)}x`
+const fmtRoasTick = (v: number) => `${(v * 100).toFixed(0)}%`
+const fmtRoasTooltip = (v: number) => `${(v * 100).toFixed(1)}%`
 
 function formatMetricValue(kind: MetricCardDefinition['kind'], value: number | null) {
   if (value == null || Number.isNaN(value)) return '—'
@@ -308,7 +308,7 @@ function fmtPct(v: number | null) {
 }
 function fmtX(v: number | null) {
   if (v == null) return '—'
-  return `${v.toFixed(2)}x`
+  return `${(v * 100).toFixed(1)}%`
 }
 
 function getDashboardDateColumn(dataset: Dataset | null) {
@@ -703,6 +703,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const shape = (result.shape ?? null) as { rows: number; cols: number } | null
     const comparisonWindow = (result.comparison_window ?? null) as ComparisonWindow | null
     const comparisonAttempted = comparisonWindow !== null
+    const granularity = (result.granularity ?? 'daily') as 'daily' | 'monthly'
     const priorLabel = buildPriorLabel(comparisonWindow)
     const noDataLabel = buildNoDataLabel(comparisonAttempted, priorLabel)
 
@@ -975,6 +976,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       campaignRows,
       dailyRows,
       availableCampaignDimensions,
+      granularity,
     }
   }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset, selectedCampaignDimension])
 
@@ -1150,6 +1152,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={viewModel.clicksCtrData.length === 0}
                     emptyMsg="Need a date column plus clicks and impressions to draw this chart."
                     dataCount={viewModel.clicksCtrData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCtrData as Record<string, unknown>[]}
@@ -1157,6 +1160,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       leftTickFormatter={formatCompactNumber}
                       rightTickFormatter={fmtCtrRight}
                       tooltipFormatter={fmtCtrTooltip}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
 
@@ -1165,6 +1169,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={viewModel.clicksCpcData.length === 0}
                     emptyMsg="Need a date column plus clicks and cost columns to draw this chart."
                     dataCount={viewModel.clicksCpcData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <DualAxisComboChart
                       data={viewModel.clicksCpcData as Record<string, unknown>[]}
@@ -1172,6 +1177,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       leftTickFormatter={formatCompactNumber}
                       rightTickFormatter={fmtCpcRight}
                       tooltipFormatter={fmtCpcTooltip}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
                 </div>
@@ -1205,6 +1211,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={!hasTransactionsOrCpaData(viewModel.transactionsCpaData)}
                     emptyMsg="Need conversions and cost data with a date column to draw this chart."
                     dataCount={viewModel.transactionsCpaData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <DualAxisComboChart
                       data={viewModel.transactionsCpaData as Record<string, unknown>[]}
@@ -1213,6 +1220,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       leftTickFormatter={formatCompactNumber}
                       rightTickFormatter={fmtCpaRight}
                       tooltipFormatter={fmtCpaTooltip}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
 
@@ -1221,6 +1229,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={!hasConversionRateData(viewModel.conversionRateData)}
                     emptyMsg="Need conversions and clicks data with a date column to compute conversion rate."
                     dataCount={viewModel.conversionRateData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <AreaTrendChart
                       data={viewModel.conversionRateData as Record<string, unknown>[]}
@@ -1229,6 +1238,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       curveType="linear"
                       tickFormatter={fmtConvRateTick}
                       tooltipFormatter={fmtConvRateTooltip}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
                 </div>
@@ -1263,12 +1273,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={viewModel.trendData.length === 0}
                     emptyMsg="Need a date column plus revenue and cost columns to draw this chart."
                     dataCount={viewModel.trendData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <AreaTrendChart
                       data={viewModel.trendData as Record<string, unknown>[]}
                       series={revenueCostSeries}
                       tickFormatter={fmtRevenueTick}
                       tooltipFormatter={formatCurrency}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
 
@@ -1277,12 +1289,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     empty={viewModel.roasData.filter((p) => p.roas != null).length === 0}
                     emptyMsg="Need revenue and cost columns with a date column to compute ROAS trend."
                     dataCount={viewModel.roasData.length || undefined}
+                    granularity={viewModel.granularity}
                   >
                     <AreaTrendChart
                       data={viewModel.roasData as Record<string, unknown>[]}
                       series={roasSeries}
                       tickFormatter={fmtRoasTick}
                       tooltipFormatter={fmtRoasTooltip}
+                      granularity={viewModel.granularity}
                     />
                   </ChartCard>
                 </div>

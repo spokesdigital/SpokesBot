@@ -105,8 +105,11 @@ const TOOLTIP_STYLE = {
   fontSize: '13px',
 }
 
-function formatXLabel(value: string) {
+function formatXLabel(value: string, granularity?: 'daily' | 'monthly') {
   try {
+    if (granularity === 'monthly') {
+      return format(parseISO(value), "MMM yyyy")
+    }
     return format(parseISO(value), 'MMM d')
   } catch {
     return value
@@ -126,19 +129,27 @@ interface ChartCardProps {
   emptyMsg?: string
   /** Optional point count badge shown in the top-right corner of the card header. */
   dataCount?: number
+  granularity?: 'daily' | 'monthly'
   children: React.ReactNode
 }
 
-export function ChartCard({ title, height = 280, empty, emptyMsg, dataCount, children }: ChartCardProps) {
+export function ChartCard({ title, height = 280, empty, emptyMsg, dataCount, granularity, children }: ChartCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
-        {dataCount != null && !empty && (
-          <span className="text-[11px] tabular-nums text-muted-foreground/60 select-none">
-            {dataCount} data points
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {granularity === 'monthly' && !empty && (
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600 ring-1 ring-amber-200 select-none">
+              Monthly
+            </span>
+          )}
+          {dataCount != null && !empty && (
+            <span className="text-[11px] tabular-nums text-muted-foreground/60 select-none">
+              {dataCount} pts
+            </span>
+          )}
+        </div>
       </div>
       {empty ? (
         <div
@@ -222,6 +233,7 @@ interface DualAxisComboChartProps {
   tooltipFormatter?: (value: number, name: string) => [string, string]
   connectNulls?: boolean
   height?: number
+  granularity?: 'daily' | 'monthly'
 }
 
 export const DualAxisComboChart = React.memo(function DualAxisComboChart({
@@ -232,6 +244,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
   tooltipFormatter,
   connectNulls = false,
   height = 280,
+  granularity = 'daily',
 }: DualAxisComboChartProps) {
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
@@ -271,7 +284,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
               <XAxis
                 dataKey={xAxisKey}
                 interval={tickInterval}
-                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
+                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value), granularity)}
                 tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
@@ -302,7 +315,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
                 contentStyle={TOOLTIP_STYLE}
                 labelFormatter={(label) =>
                   tooltipLabelMap.get(String(label))
-                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label), granularity))
                 }
                 formatter={
                   tooltipFormatter
@@ -396,6 +409,7 @@ interface AreaTrendChartProps {
   connectNulls?: boolean
   curveType?: 'basis' | 'basisClosed' | 'basisOpen' | 'bumpX' | 'bumpY' | 'bump' | 'linear' | 'linearClosed' | 'natural' | 'monotoneX' | 'monotoneY' | 'monotone' | 'step' | 'stepBefore' | 'stepAfter'
   height?: number
+  granularity?: 'daily' | 'monthly'
 }
 
 export const AreaTrendChart = React.memo(function AreaTrendChart({
@@ -406,6 +420,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
   connectNulls = false,
   curveType = 'linear',
   height = 280,
+  granularity = 'daily',
 }: AreaTrendChartProps) {
   const { range, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom(data.length)
   const visibleData = data.slice(range[0], range[1] + 1)
@@ -447,7 +462,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
               <XAxis
                 dataKey={xAxisKey}
                 interval={tickInterval}
-                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value))}
+                tickFormatter={(value) => xAxisKey === 'label' ? String(value) : formatXLabel(String(value), granularity)}
                 tick={{ fill: '#7a8292', fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
@@ -466,7 +481,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                 contentStyle={TOOLTIP_STYLE}
                 labelFormatter={(label) =>
                   tooltipLabelMap.get(String(label))
-                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label)))
+                  ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label), granularity))
                 }
                 formatter={
                   tooltipFormatter
