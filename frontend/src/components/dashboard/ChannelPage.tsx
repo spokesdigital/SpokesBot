@@ -151,6 +151,34 @@ const metricDefinitions: MetricCardDefinition[] = [
     tooltip: 'Average cost per click.',
   },
   {
+    key: 'conversions',
+    label: 'TOTAL TRANSACTIONS',
+    kind: 'number',
+    patterns: [/\bconversions?\b/i, /\btransactions?\b/i, /\borders?\b/i, /\bpurchases?\b/i],
+    tooltip: 'Total number of transactions.',
+  },
+  {
+    key: 'cpa',
+    label: 'AVG CPT',
+    kind: 'currency',
+    patterns: [/\bcpa\b/i, /cost[\s_-]*per[\s_-]*action/i, /cost[\s_-]*per[\s_-]*conversion/i],
+    tooltip: 'Average cost per transaction.',
+  },
+  {
+    key: 'conversion_rate',
+    label: 'TRANSACTION RATE',
+    kind: 'percent',
+    patterns: [/\bconversion[\s_-]*rate\b/i, /\bcvr\b/i],
+    tooltip: 'Percentage of clicks that became transactions.',
+  },
+  {
+    key: 'revenue',
+    label: 'TOTAL REVENUE',
+    kind: 'currency',
+    patterns: [/\brevenue\b/i, /\bsales\b/i, /\bgmv\b/i, /\bpurchase[\s_-]*value/i, /\bconversion[\s_-]*value/i],
+    tooltip: 'Revenue from ad-driven customers.',
+  },
+  {
     key: 'cost',
     label: 'COST',
     kind: 'currency',
@@ -158,18 +186,18 @@ const metricDefinitions: MetricCardDefinition[] = [
     tooltip: 'Total ad spend this period.',
   },
   {
-    key: 'revenue',
-    label: 'REVENUE',
-    kind: 'currency',
-    patterns: [/\brevenue\b/i, /\bsales\b/i, /\bgmv\b/i, /\bpurchase[\s_-]*value/i, /\bconversion[\s_-]*value/i],
-    tooltip: 'Revenue from ad-driven customers.',
-  },
-  {
     key: 'roas',
     label: 'ROAS',
     kind: 'ratio',
     patterns: [/\broas\b/i, /return[\s_-]*on[\s_-]*ad[\s_-]*spend/i],
     tooltip: 'Revenue earned per $1 of ad spend.',
+  },
+  {
+    key: 'aov',
+    label: 'AOV',
+    kind: 'currency',
+    patterns: [/\baov\b/i, /average[\s_-]*order[\s_-]*value/i],
+    tooltip: 'Average revenue per transaction.',
   },
 ]
 
@@ -710,9 +738,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const numericColumns = Object.keys(numericSummary)
     const storedMappings = activeDataset?.metric_mappings ?? {}
     const metricColumns = getVerifiedMetricColumns(metricDefinitions, storedMappings, numericColumns)
+    const conversionsColumn = pickConversionsColumn(storedMappings, numericColumns)
 
     const getMetricValues = (key: string) => {
-      const col = metricColumns[key]
+      const col = key === 'conversions' && !metricColumns[key] ? conversionsColumn : metricColumns[key]
       if (!col) return { current: null, previous: null }
       return {
         current: comparison[col]?.current ?? numericTotals[col] ?? null,
@@ -721,11 +750,11 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     }
 
     const cards: MetricCardData[] = metricDefinitions.map((def) => {
-      const column = metricColumns[def.key]
+      const column = def.key === 'conversions' && !metricColumns[def.key] ? conversionsColumn : metricColumns[def.key]
       let value: number | null = null
       let delta: number | null = null
 
-      const isDerived = ['ctr', 'avg_cpc', 'roas'].includes(def.key)
+      const isDerived = ['ctr', 'avg_cpc', 'roas', 'cpa', 'conversion_rate', 'aov'].includes(def.key)
 
       if (column && !isDerived) {
         value = def.kind === 'percent' || def.kind === 'ratio'
@@ -747,6 +776,15 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         } else if (def.key === 'roas') {
           const r = getMetricValues('revenue'); const co = getMetricValues('cost')
           currNum = r.current; currDen = co.current; prevNum = r.previous; prevDen = co.previous
+        } else if (def.key === 'cpa') {
+          const co = getMetricValues('cost'); const conv = getMetricValues('conversions')
+          currNum = co.current; currDen = conv.current; prevNum = co.previous; prevDen = conv.previous
+        } else if (def.key === 'conversion_rate') {
+          const conv = getMetricValues('conversions'); const c = getMetricValues('clicks')
+          currNum = conv.current; currDen = c.current; prevNum = conv.previous; prevDen = c.previous
+        } else if (def.key === 'aov') {
+          const r = getMetricValues('revenue'); const conv = getMetricValues('conversions')
+          currNum = r.current; currDen = conv.current; prevNum = r.previous; prevDen = conv.previous
         }
 
         if (currNum != null && currDen != null && currDen > 0) {
@@ -784,7 +822,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const impressionsSeries = getSeriesForColumn(metricColumns.impressions)
     const revenueSeries = getSeriesForColumn(metricColumns.revenue)
     const costSeries = getSeriesForColumn(metricColumns.cost)
-    const conversionsColumn = pickConversionsColumn(storedMappings, numericColumns)
     const conversionsSeries = getSeriesForColumn(conversionsColumn)
     const chartBounds = {
       startDate: chartStartDateValue,
@@ -1108,33 +1145,34 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
         <EmptyDashboardState channelName={channelName} />
       ) : (
         <>
-          {/* ── KPI Cards ────────────────────────────────────────────────── */}
-          {loadingAnalytics ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <KPICard key={i} title="" value="" loading />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4 stagger-children">
-              {viewModel.cards.map((card) => (
-                <KPICard
-                  key={card.key}
-                  title={card.label}
-                  value={card.value}
-                  trendValue={card.delta}
-                  trendDirection={card.trendDirection}
-                  priorLabel={card.priorLabel}
-                  noDataLabel={card.noDataLabel}
-                  tooltip={card.tooltip}
-                />
-              ))}
-            </div>
-          )}
+          {/* ── KPI Cards were moved to their respective sections ────────────────── */}
 
             {/* ── Traffic Performance ─────────────────────────────────── */}
             <section className="space-y-4">
-              <h2 className="text-lg font-bold">Traffic Performance</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-center">Traffic Performance</h2>
+
+              {loadingAnalytics ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <KPICard key={i} title="" value="" loading />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger-children">
+                  {viewModel.cards.filter(c => ['impressions', 'clicks', 'ctr', 'avg_cpc'].includes(c.key)).map((card) => (
+                    <KPICard
+                      key={card.key}
+                      title={card.label}
+                      value={card.value}
+                      trendValue={card.delta}
+                      trendDirection={card.trendDirection}
+                      priorLabel={card.priorLabel}
+                      noDataLabel={card.noDataLabel}
+                      tooltip={card.tooltip}
+                    />
+                  ))}
+                </div>
+              )}
 
               {loadingAnalytics ? (
                 <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
@@ -1193,7 +1231,30 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
             />
 
             <section className="space-y-4">
-              <h2 className="text-lg font-bold">Conversion Performance</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-center">Transaction Performance</h2>
+
+              {loadingAnalytics ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <KPICard key={i} title="" value="" loading />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 stagger-children">
+                  {viewModel.cards.filter(c => ['conversions', 'cpa', 'conversion_rate'].includes(c.key)).map((card) => (
+                    <KPICard
+                      key={card.key}
+                      title={card.label}
+                      value={card.value}
+                      trendValue={card.delta}
+                      trendDirection={card.trendDirection}
+                      priorLabel={card.priorLabel}
+                      noDataLabel={card.noDataLabel}
+                      tooltip={card.tooltip}
+                    />
+                  ))}
+                </div>
+              )}
 
               {loadingAnalytics ? (
                 <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
@@ -1255,7 +1316,30 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
             {/* ── Revenue Performance ─────────────────────────────────── */}
             <section className="space-y-4">
-              <h2 className="text-lg font-bold">Revenue Performance</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold text-center">Revenue Performance</h2>
+
+              {loadingAnalytics ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <KPICard key={i} title="" value="" loading />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 stagger-children">
+                  {viewModel.cards.filter(c => ['revenue', 'cost', 'roas', 'aov'].includes(c.key)).map((card) => (
+                    <KPICard
+                      key={card.key}
+                      title={card.label}
+                      value={card.value}
+                      trendValue={card.delta}
+                      trendDirection={card.trendDirection}
+                      priorLabel={card.priorLabel}
+                      noDataLabel={card.noDataLabel}
+                      tooltip={card.tooltip}
+                    />
+                  ))}
+                </div>
+              )}
 
               {loadingAnalytics ? (
                 <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">

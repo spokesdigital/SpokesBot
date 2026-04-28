@@ -376,16 +376,51 @@ function buildTrend(
   gCost: Map<string, number>,
   mRev: Map<string, number>,
   mCost: Map<string, number>,
+  dateSelection: DateSelection
 ): TrendPoint[] {
   const allDates = new Set([...gRev.keys(), ...gCost.keys(), ...mRev.keys(), ...mCost.keys()])
-  return Array.from(allDates)
-    .sort()
-    .map(date => {
-      const tr = (gRev.get(date) ?? 0) + (mRev.get(date) ?? 0)
-      const tc = (gCost.get(date) ?? 0) + (mCost.get(date) ?? 0)
-      return { date, total_revenue: tr || undefined, total_cost: tc || undefined }
-    })
-    .filter(pt => pt.total_revenue || pt.total_cost)
+  let datesArray = Array.from(allDates).sort()
+
+  if (dateSelection.preset !== 'all_time') {
+    let startStr: string
+    let endStr: string
+
+    if (dateSelection.preset === 'custom') {
+      startStr = dateSelection.startDate
+      endStr = dateSelection.endDate
+    } else {
+      const today = new Date()
+      const days = dateSelection.preset === 'last_90_days' ? 90 : dateSelection.preset === 'last_180_days' ? 180 : 30
+      const start = new Date(today)
+      start.setDate(today.getDate() - days + 1) // +1 because e.g. 30 days includes today
+      startStr = start.toISOString().split('T')[0]
+      endStr = today.toISOString().split('T')[0]
+    }
+
+    const range: string[] = []
+    let cursor = new Date(`${startStr}T00:00:00Z`)
+    const end = new Date(`${endStr}T00:00:00Z`)
+    while (cursor <= end) {
+      range.push(cursor.toISOString().split('T')[0])
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+    datesArray = range
+  } else if (datesArray.length > 0) {
+    const range: string[] = []
+    let cursor = new Date(`${datesArray[0]}T00:00:00Z`)
+    const end = new Date(`${datesArray[datesArray.length - 1]}T00:00:00Z`)
+    while (cursor <= end) {
+      range.push(cursor.toISOString().split('T')[0])
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+    datesArray = range
+  }
+
+  return datesArray.map(date => {
+    const tr = (gRev.get(date) ?? 0) + (mRev.get(date) ?? 0)
+    const tc = (gCost.get(date) ?? 0) + (mCost.get(date) ?? 0)
+    return { date, total_revenue: tr, total_cost: tc }
+  })
 }
 
 function safeSum(a: number | null, b: number | null): number | null {
@@ -721,8 +756,8 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     const gCost = extractTimeSeries(googleAnalytics, googleDataset, 'cost')
     const mRev = extractTimeSeries(metaAnalytics, metaDataset, 'revenue')
     const mCost = extractTimeSeries(metaAnalytics, metaDataset, 'cost')
-    return buildTrend(gRev, gCost, mRev, mCost)
-  }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset])
+    return buildTrend(gRev, gCost, mRev, mCost, dateSelection)
+  }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset, dateSelection])
 
   // Revenue/status split — prefer order-status data, then revenue, then cost
   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
