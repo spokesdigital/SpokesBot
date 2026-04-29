@@ -24,6 +24,7 @@ class MessageResponse(BaseModel):
     thread_id: UUID
     role: str  # 'user' | 'assistant' | 'system'
     content: str
+    metadata: dict | None = None
     created_at: datetime
 
 

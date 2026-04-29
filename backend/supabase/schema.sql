@@ -89,6 +89,7 @@ CREATE TABLE messages (
     thread_id  UUID NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     role       TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
     content    TEXT NOT NULL,
+    metadata   JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
 );
 

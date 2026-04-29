@@ -1,19 +1,7 @@
 'use client'
 
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
-import { format, parseISO } from 'date-fns'
-import {
-  Area,
-  AreaChart,
-  PieChart,
-  Pie,
-  Cell,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import { AlertCircle, Calendar, Check, ChevronDown } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { useAuth } from '@/contexts/AuthContext'
@@ -27,6 +15,15 @@ import { useShallow } from 'zustand/react/shallow'
 import { buildPriorLabel, buildNoDataLabel } from '@/components/dashboard/channelMetrics'
 import type { ComparisonWindow } from '@/components/dashboard/channelMetrics'
 import type { AIInsight } from '@/types'
+
+const OverviewAreaChart = dynamic(
+  () => import('./OverviewCharts').then((m) => ({ default: m.OverviewAreaChart })),
+  { ssr: false, loading: () => <div className="shimmer-warm h-[280px] rounded-xl" /> },
+)
+const OverviewPieChart = dynamic(
+  () => import('./OverviewCharts').then((m) => ({ default: m.OverviewPieChart })),
+  { ssr: false, loading: () => <div className="shimmer-warm flex-1 min-h-[300px] rounded-xl" /> },
+)
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -428,15 +425,6 @@ function safeSum(a: number | null, b: number | null): number | null {
   return (a ?? 0) + (b ?? 0)
 }
 
-const fmtDate = (v: string, granularity?: 'daily' | 'monthly') => {
-  try { 
-    if (granularity === 'monthly') return format(parseISO(v), "MMM yyyy")
-    return format(parseISO(v), 'MMM d') 
-  } catch { 
-    return v 
-  }
-}
-
 // Build analytics params for a dataset given the current date selection
 function buildAnalyticsParams(dateSelection: DateSelection, dateCol: string | null) {
   if (dateSelection.preset === 'all_time' || !dateCol) return {}
@@ -835,14 +823,14 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   return (
-    <div id="overview-pdf-content" className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+    <div id="overview-pdf-content" className="space-y-6 sm:space-y-8 animate-fade-in px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          {orgName && <p className="text-sm font-medium text-slate-500 mb-1">{orgName}</p>}
-          <h2 className="text-2xl font-bold text-slate-800">Overview</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Combined performance across all active channels</p>
+          {orgName && <p className="mb-1 text-xs font-bold tracking-[0.1em] text-muted-foreground uppercase">{orgName}</p>}
+          <h1 className="text-xl sm:text-2xl font-bold mb-1">Overview</h1>
+          <p className="text-sm text-muted-foreground">Combined performance across all active channels</p>
         </div>
         <div className="flex items-center gap-3">
           <DateFilterDropdown value={dateSelection} onChange={setDateSelection} />
@@ -887,32 +875,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           {loadingAnalytics ? (
             <div className="shimmer-warm h-[280px] rounded-xl" />
           ) : trendData.length > 0 ? (
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="ov_rev" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#f0a500" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="#f0a500" stopOpacity={0.02} />
-                    </linearGradient>
-                    <linearGradient id="ov_cost" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.18} />
-                      <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.01} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtDate(v, granularity)} interval={Math.max(0, Math.ceil(trendData.length / 7) - 1)} minTickGap={35} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`} />
-                  <Tooltip
-                    contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 4px 16px rgba(15,23,42,0.08)' }}
-                    formatter={(v: number) => `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
-                    labelFormatter={v => { try { return granularity === 'monthly' ? format(parseISO(String(v)), "MMM yyyy") : format(parseISO(String(v)), 'MMM d, yyyy') } catch { return String(v) } }}
-                  />
-                  <Area type="monotone" connectNulls dataKey="total_revenue" name="Revenue" stroke="#f0a500" fill="url(#ov_rev)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                  <Area type="monotone" connectNulls dataKey="total_cost" name="Cost" stroke="#94a3b8" fill="url(#ov_cost)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <OverviewAreaChart data={trendData} granularity={granularity} />
           ) : (
             <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
               <div className="text-center">
@@ -929,50 +892,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           {loadingAnalytics ? (
             <div className="shimmer-warm mt-3 flex-1 min-h-[300px] rounded-xl" />
           ) : splitData.length > 0 ? (
-            <div className="flex flex-col items-center justify-center flex-1 -mt-2">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart margin={{ top: 20, right: 20, bottom: 0, left: 20 }}>
-                  <Pie
-                    data={splitData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={80}
-                    outerRadius={118}
-                    paddingAngle={splitData.length > 1 ? 4 : 0}
-                    dataKey="value"
-                    stroke="none"
-                    startAngle={90}
-                    endAngle={-270}
-                  >
-                    {splitData.map(entry => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, name: string) =>
-                      splitIsStatus
-                        ? [new Intl.NumberFormat('en-US').format(value) + ' orders', name]
-                        : [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value), name]
-                    }
-                    contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', fontSize: 12 }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Legend */}
-              <div className={`flex flex-wrap items-center justify-center gap-x-5 gap-y-2 -mt-2 pb-2 ${splitIsStatus ? 'px-2' : ''}`}>
-                {splitData.map(entry => {
-                  const total = splitData.reduce((s, r) => s + r.value, 0)
-                  const pct = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0'
-                  return (
-                    <div key={entry.name} className="flex items-center gap-1.5">
-                      <div className="h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: entry.color }} />
-                      <span className="text-xs font-medium text-slate-600">{entry.name}</span>
-                      <span className="text-[11px] text-slate-400">({pct}%)</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <OverviewPieChart data={splitData} isStatus={splitIsStatus} />
           ) : (
             <div className="flex flex-1 min-h-[280px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
               No channel data available

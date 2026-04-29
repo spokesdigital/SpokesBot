@@ -57,11 +57,15 @@ def get_messages(thread_id: str, supabase: Client) -> list[dict]:
     return response.data
 
 
-def save_message(thread_id: str, role: str, content: str, service_client: Client) -> dict:
+def save_message(thread_id: str, role: str, content: str, service_client: Client, metadata: dict | None = None) -> dict:
     """Persist a message. Service client used — called from agent streaming context."""
+    insert_data = {"thread_id": thread_id, "role": role, "content": content}
+    if metadata is not None:
+        insert_data["metadata"] = metadata
+        
     response = (
         service_client.table("messages")
-        .insert({"thread_id": thread_id, "role": role, "content": content})
+        .insert(insert_data)
         .execute()
     )
     return response.data[0]

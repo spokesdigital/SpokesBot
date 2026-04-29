@@ -38,6 +38,7 @@ export interface Message {
   thread_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  metadata?: Record<string, any>
   created_at: string
 }
 

@@ -63,20 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = useCallback(async (token: string) => {
     const gen = ++loadGenRef.current
-    console.log('[AuthContext] Loading profile...', { gen })
     try {
       const profile = await api.auth.me(token)
-      console.log('[AuthContext] Profile loaded successfully', { gen, profile })
-      
-      if (gen !== loadGenRef.current) {
-        console.warn('[AuthContext] superseder call detected, discarding result', { gen })
-        return
-      }
-      
+
+      if (gen !== loadGenRef.current) return
+
       setUser(profile)
       void loadOrganizations(token, profile)
     } catch (err) {
-      console.error('[AuthContext] Profile load failed', { gen, error: err })
       if (gen !== loadGenRef.current) return
       
       setUser(null)

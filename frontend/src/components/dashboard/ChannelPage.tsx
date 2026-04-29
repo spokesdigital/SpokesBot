@@ -3,7 +3,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
@@ -276,12 +276,16 @@ function isLikelyDateColumn(name: string) {
     n === 'created_at' || n === 'updated_at'
 }
 
+// Module-level Intl instances — constructed once, reused on every formatter call
+const _intlN = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+const _intlCur = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
+
 function formatCompactNumber(value: number) {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)
+  return _intlN.format(value)
 }
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
+  return _intlCur.format(value)
 }
 
 // CTR is always stored as a ratio (0–1). Multiply unconditionally — no ≤1 heuristic
@@ -323,11 +327,11 @@ function formatMetricValue(kind: MetricCardDefinition['kind'], value: number | n
 
 function fmtN(v: number | null) {
   if (v == null) return '—'
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v)
+  return _intlN.format(v)
 }
 function fmtCur(v: number | null) {
   if (v == null) return '—'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v)
+  return _intlCur.format(v)
 }
 // Table CTR values are stored as ratios (0–1). Always multiply by 100.
 function fmtPct(v: number | null) {
@@ -1089,37 +1093,24 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div id="dashboard-pdf-content" className="min-h-full bg-[#fcfaf7]">
+    <div id="dashboard-pdf-content" className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8 sm:space-y-8 animate-fade-in">
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-[#e7e1d6] bg-white px-4 py-5 sm:px-6 md:px-8 md:py-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <p className="mb-1 text-[0.8rem] font-bold tracking-[0.1em] text-[#8a93a5] uppercase">
-            {activeOrganizationName}
-          </p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-[#252b36]">{channelName} Performance</h1>
-            <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-600">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              Live
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-[#8a93a5]">
-            {getChannelSubtitle(channelName)}
+          <h1 className="text-xl sm:text-2xl font-bold mb-1">
+            {channelName} Performance
             {lastUpdated && (
-              <span className="ml-2 text-[#b0b7c5]">· Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="ml-3 text-[11px] font-normal text-muted-foreground align-middle">
+                Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             )}
-          </p>
+          </h1>
+          <p className="text-sm text-muted-foreground">Detailed analytics for your {channelName} campaigns</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3">
           <DateFilter />
         </div>
-      </header>
-
-      <div className="animate-fade-in space-y-6 px-4 py-5 sm:px-6 sm:py-6 md:space-y-8 md:px-8 md:py-8">
+      </div>
 
       {/* Alerts */}
       {error && (
@@ -1651,7 +1642,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
           </>
         )}
-      </div>
     </div>
   )
 }

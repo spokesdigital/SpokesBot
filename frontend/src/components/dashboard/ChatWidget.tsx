@@ -540,8 +540,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [supportSent, setSupportSent] = useState(false)
   const [supportError, setSupportError] = useState<string | null>(null)
 
-  // Escalation state: fallback flag (AI returned no answer) and idle timer trigger
-  const [lastResponseRequiresEscalation, setLastResponseRequiresEscalation] = useState(false)
+  // Escalation state: idle timer trigger
   const [showIdleEscalation, setShowIdleEscalation] = useState(false)
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -712,7 +711,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setInput('')
     setSuggestions([])
     setError(null)
-    setLastResponseRequiresEscalation(false)
+
     setShowIdleEscalation(false)
     if (idleTimerRef.current !== null) {
       clearTimeout(idleTimerRef.current)
@@ -810,7 +809,6 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       }
       if (!synced) await syncMessages(thread.id)
 
-      if (streamRequiresEscalation) setLastResponseRequiresEscalation(true)
 
     } catch (e: unknown) {
       // Ignore abort errors — user intentionally cancelled
@@ -857,7 +855,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setStreamingContent('')
     setSuggestions([])
     setError(null)
-    setLastResponseRequiresEscalation(false)
+
     setShowIdleEscalation(false)
     if (idleTimerRef.current !== null) {
       clearTimeout(idleTimerRef.current)
@@ -887,8 +885,6 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     -1,
   )
 
-  const showEscalationButton =
-    !streaming && (lastResponseRequiresEscalation || showIdleEscalation)
 
   return (
     /* Fixed overlay — bottom-right, above the FAB */
@@ -1094,14 +1090,14 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         >
                           {msg.role === 'assistant' ? renderMessageContent(msg.content) : msg.content}
                         </div>
-                        {/* Escalation button — shown on the last assistant message when:
-                            (a) the AI flagged it needed escalation, or
-                            (b) the user has been idle for 45 seconds */}
-                        {msg.role === 'assistant' && index === lastAssistantIndex && showEscalationButton && (
+                        {/* Escalation button — shown when:
+                            (a) the message metadata flags it needs escalation, or
+                            (b) it is the last assistant message and the user has been idle for 45 seconds */}
+                        {msg.role === 'assistant' && (msg.metadata?.requires_escalation || (index === lastAssistantIndex && showIdleEscalation)) && (
                           <EscalationButton
                             threadId={activeThread?.id ?? ''}
                             token={session?.access_token ?? ''}
-                            fadeIn={showIdleEscalation && !lastResponseRequiresEscalation}
+                            fadeIn={!msg.metadata?.requires_escalation && showIdleEscalation}
                           />
                         )}
                       </div>
