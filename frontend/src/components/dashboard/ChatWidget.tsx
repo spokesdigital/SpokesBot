@@ -565,6 +565,11 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [idleEscalationMessageId, setIdleEscalationMessageId] = useState<string | null>(null)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Welcome-screen idle escalation — fires after 45s when the chat is open
+  // but the user hasn't sent any messages yet (no thread exists).
+  const [showWelcomeEscalation, setShowWelcomeEscalation] = useState(false)
+  const welcomeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
 
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -620,7 +625,31 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming, messages.length])
 
+  // ── 45-second welcome-screen idle timer ──────────────────────────────────────
+  // Arms when the chat is open with no messages (user hasn't started a conversation).
+  // Opens the support form after 45s so the user can reach a human without needing
+  // to send a bot message first.
+  useEffect(() => {
+    if (welcomeTimerRef.current !== null) {
+      clearTimeout(welcomeTimerRef.current)
+      welcomeTimerRef.current = null
+    }
+    setShowWelcomeEscalation(false)
 
+    if (!open || messages.length > 0 || streaming) return
+
+    welcomeTimerRef.current = setTimeout(() => {
+      setShowWelcomeEscalation(true)
+      welcomeTimerRef.current = null
+    }, 45_000)
+
+    return () => {
+      if (welcomeTimerRef.current !== null) {
+        clearTimeout(welcomeTimerRef.current)
+        welcomeTimerRef.current = null
+      }
+    }
+  }, [open, messages.length, streaming])
 
   // Pre-fill the support email when the form opens, but only if the user
   // hasn't already typed something. Binding the field value directly to
@@ -775,6 +804,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       idleTimerRef.current = null
     }
     setIdleEscalationMessageId(null)
+    setShowWelcomeEscalation(false)
     setMessages((prev) => [...prev, optimistic])
 
     let thread = activeThread
@@ -1147,6 +1177,18 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                           : <>Hi there! 👋 I&apos;m SpokesAI, your account manager assistant.{' '}Ask me anything about your data — revenue, trends, campaigns, and more!</>
                         }
                       </div>
+                      {showWelcomeEscalation && (
+                        <div className="flex justify-center w-full mt-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                          <button
+                            type="button"
+                            onClick={() => setShowSupportForm(true)}
+                            className="flex items-center gap-1.5 rounded-full border border-[#e0deda] bg-white px-3 py-1.5 text-xs font-medium text-[#7a7775] transition-all hover:border-[#f0a500] hover:text-[#f0a500]"
+                          >
+                            <Headphones className="h-3.5 w-3.5 flex-shrink-0" />
+                            Talk to a human
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
