@@ -74,7 +74,9 @@ const ESCALATION_SIGNALS = [
 function needsEscalation(content: string): boolean {
   if (!content) return false
   const lower = content.toLowerCase()
-  return ESCALATION_SIGNALS.some(signal => lower.includes(signal))
+  const match = ESCALATION_SIGNALS.some(signal => lower.includes(signal))
+  console.log('[needsEscalation] checking content:', { content, match })
+  return match
 }
 
 interface ChatWidgetProps {
