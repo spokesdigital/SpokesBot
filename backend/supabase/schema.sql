@@ -93,6 +93,21 @@ CREATE TABLE messages (
 );
 
 -- --------------------------------------------------------
+-- 6. Support Messages (manual support + chat escalation)
+-- --------------------------------------------------------
+CREATE TABLE support_messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES auth.users(id),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    email           TEXT NOT NULL,
+    message         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+    source          TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'chat_escalation')),
+    thread_id       UUID NULL REFERENCES threads(id) ON DELETE SET NULL,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()) NOT NULL
+);
+
+-- --------------------------------------------------------
 -- ROW LEVEL SECURITY
 -- --------------------------------------------------------
 ALTER TABLE organizations     ENABLE ROW LEVEL SECURITY;
@@ -101,6 +116,7 @@ ALTER TABLE datasets          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_logs        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE threads           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_messages  ENABLE ROW LEVEL SECURITY;
 
 -- --------------------------------------------------------
 -- HELPER FUNCTIONS  (used by RLS policies and API layer)
@@ -187,6 +203,20 @@ CREATE POLICY "backend_inserts_event_logs"
     ON event_logs FOR INSERT
     WITH CHECK (organization_id = get_my_org_id());
 
+-- Support inbox: users can submit only for themselves and their own org.
+-- Admins can view/update all messages in their org.
+CREATE POLICY "users_insert_own_support_messages"
+    ON support_messages FOR INSERT
+    WITH CHECK (user_id = auth.uid() AND organization_id = get_my_org_id());
+
+CREATE POLICY "org_admins_select_support_messages"
+    ON support_messages FOR SELECT
+    USING (organization_id = get_my_org_id() AND is_org_admin());
+
+CREATE POLICY "org_admins_update_support_messages"
+    ON support_messages FOR UPDATE
+    USING (organization_id = get_my_org_id() AND is_org_admin());
+
 -- --------------------------------------------------------
 -- INDEXES
 -- --------------------------------------------------------
@@ -197,3 +227,9 @@ CREATE INDEX idx_threads_dataset_id     ON threads(dataset_id);
 CREATE INDEX idx_messages_thread_id     ON messages(thread_id);
 CREATE INDEX idx_eventlogs_org_id       ON event_logs(organization_id);
 CREATE INDEX idx_user_orgs_user_id      ON user_organizations(user_id);
+CREATE INDEX idx_support_messages_org_id ON support_messages(organization_id);
+CREATE INDEX idx_support_messages_status ON support_messages(status);
+CREATE INDEX idx_support_messages_thread_id ON support_messages(thread_id);
+CREATE UNIQUE INDEX uq_open_chat_escalation_per_thread
+    ON support_messages(user_id, organization_id, thread_id)
+    WHERE status = 'open' AND source = 'chat_escalation' AND thread_id IS NOT NULL;

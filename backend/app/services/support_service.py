@@ -9,6 +9,8 @@ def create_message(
     email: str,
     message: str,
     service_client: Client,
+    source: str = "manual",
+    thread_id: str | None = None,
 ) -> dict:
     """Insert a new support message."""
     result = (
@@ -20,10 +22,42 @@ def create_message(
                 "email": email,
                 "message": message,
                 "status": "open",
+                "source": source,
+                "thread_id": thread_id,
             }
         )
         .execute()
     )
+    return result.data[0]
+
+
+def get_open_chat_escalation(
+    *,
+    user_id: str,
+    org_id: str,
+    thread_id: str,
+    service_client: Client,
+) -> dict | None:
+    """
+    Return an existing OPEN chat escalation for this user/thread if present.
+
+    This makes escalation idempotent from the API perspective so repeated clicks
+    or retries do not create duplicate unresolved tickets.
+    """
+    result = (
+        service_client.table("support_messages")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("organization_id", org_id)
+        .eq("status", "open")
+        .eq("source", "chat_escalation")
+        .eq("thread_id", thread_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
     return result.data[0]
 
 

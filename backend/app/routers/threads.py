@@ -41,6 +41,11 @@ _ESCALATION_SIGNALS = (
     "i only have access to the current dashboard dataset",
     "i'm here to help you analyse your dashboard data",
     "i can only share analysed insights from your data",
+    "i don't have enough context to answer",
+    "i dont have enough context to answer",
+    "please share more details",
+    "please contact support",
+    "send this to an admin",
 )
 
 
@@ -384,12 +389,27 @@ async def escalate_thread(
     org_id = thread.get("organization_id", caller_org_id)
     email = getattr(current_user, "email", "") or ""
 
+    existing_open = support_service.get_open_chat_escalation(
+        user_id=user_id,
+        org_id=org_id,
+        thread_id=thread_id,
+        service_client=service_client,
+    )
+    if existing_open:
+        return {"escalated": True, "support_message_id": existing_open["id"]}
+
     support_msg = support_service.create_message(
         user_id=user_id,
         org_id=org_id,
         email=email,
-        message=f"[Chat Escalation] Thread: {thread_title}\n\nUser query: {query_text}",
+        message=(
+            f"[Chat Escalation] Thread: {thread_title}\n"
+            f"Thread ID: {thread_id}\n\n"
+            f"User query: {query_text}"
+        ),
         service_client=service_client,
+        source="chat_escalation",
+        thread_id=thread_id,
     )
 
     return {"escalated": True, "support_message_id": support_msg["id"]}
