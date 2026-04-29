@@ -818,10 +818,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     abortRef.current = controller
 
     let accumulated = ''
+    let doneRequiresEscalation = false
     try {
       for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal, pageContext)) {
         if (chunk.error) throw new Error(chunk.error)
         if (chunk.done) {
+          if (chunk.requires_escalation) doneRequiresEscalation = true
           break
         }
         if (chunk.status) continue  // thinking heartbeat — indicator handles its own animation
@@ -854,9 +856,26 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
             setStreamingContent('')
             setStreaming(false)
             setIsThinking(false)
-            setMessages((prev) => mergeServerMessages(nextMessages, prev.filter(
-              (m) => !m.id.startsWith('stream-'),
-            )))
+            setMessages((prev) => {
+              const merged = mergeServerMessages(nextMessages, prev.filter(
+                (m) => !m.id.startsWith('stream-'),
+              ))
+              // If the backend signalled requires_escalation on the done event but the
+              // DB metadata wasn't persisted (e.g. metadata column not yet migrated),
+              // patch it locally so the button still appears immediately.
+              if (doneRequiresEscalation) {
+                const lastAssistantIdx = merged.map(m => m.role).lastIndexOf('assistant')
+                if (lastAssistantIdx !== -1 && !merged[lastAssistantIdx].metadata?.requires_escalation) {
+                  const patched = [...merged]
+                  patched[lastAssistantIdx] = {
+                    ...patched[lastAssistantIdx],
+                    metadata: { ...patched[lastAssistantIdx].metadata, requires_escalation: true },
+                  }
+                  return patched
+                }
+              }
+              return merged
+            })
             didSyncCleanup = true
             break
           }
