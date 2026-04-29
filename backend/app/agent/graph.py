@@ -853,8 +853,16 @@ async def stream_agent(
     # on_chat_model_stream fires for every LLM token — including tool-call
     # decision tokens (content="", tool_call_chunks=[...]). The guard below
     # filters those out so only final-answer tokens reach the client.
-    async for event in react.astream_events({"messages": messages}, version="v2"):
-        if time.time() - start_time > _GRAPH_TIMEOUT:
+    iterator = react.astream_events({"messages": messages}, version="v2").__aiter__()
+    while True:
+        try:
+            remaining_time = _GRAPH_TIMEOUT - (time.time() - start_time)
+            if remaining_time <= 0:
+                raise TimeoutError("Graph execution exceeded timeout")
+            event = await asyncio.wait_for(iterator.__anext__(), timeout=remaining_time)
+        except StopAsyncIteration:
+            break
+        except asyncio.TimeoutError:
             raise TimeoutError("Graph execution exceeded timeout")
 
         kind = event["event"]

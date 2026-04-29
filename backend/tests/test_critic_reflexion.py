@@ -492,8 +492,15 @@ class TestStreamAgent:
         df = pd.DataFrame({"revenue": [100, 200, 400]})
         expected_answer = "The average revenue is 233.33."
 
+        async def fake_astream_events(*args, **kwargs):
+            for char in expected_answer:
+                yield {
+                    "event": "on_chat_model_stream",
+                    "data": {"chunk": AIMessage(content=char)}
+                }
+
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(return_value=_make_fake_agent_result(draft=expected_answer))
+        mock_agent.astream_events = fake_astream_events
 
         critic_llm = MagicMock()
         critic_llm.invoke.return_value = AIMessage(content="YES")
@@ -525,8 +532,15 @@ class TestStreamAgent:
         )
         expected_answer = "Your sales for the last week were $1,080."
 
+        async def fake_astream_events(*args, **kwargs):
+            for char in expected_answer:
+                yield {
+                    "event": "on_chat_model_stream",
+                    "data": {"chunk": AIMessage(content=char)}
+                }
+
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = AsyncMock(return_value=_make_fake_agent_result(draft=expected_answer))
+        mock_agent.astream_events = fake_astream_events
 
         critic_llm = MagicMock()
         critic_llm.invoke.return_value = AIMessage(content="YES")
@@ -551,11 +565,15 @@ class TestStreamAgent:
         """
         df = pd.DataFrame({"revenue": [100]})
 
-        async def hanging_ainvoke(_state):
+        async def hanging_astream_events(*args, **kwargs):
             await asyncio.sleep(9999)  # simulate hang
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": AIMessage(content="hi")}
+            }
 
         mock_agent = AsyncMock()
-        mock_agent.ainvoke = hanging_ainvoke
+        mock_agent.astream_events = hanging_astream_events
 
         critic_llm = MagicMock()
         critic_llm.invoke.return_value = AIMessage(content="YES")
@@ -564,9 +582,8 @@ class TestStreamAgent:
             patch("app.agent.graph.create_react_agent", return_value=mock_agent),
             patch("app.agent.graph._get_llm", return_value=MagicMock()),
             patch("app.agent.graph._get_critic_llm", return_value=critic_llm),
-            # Override the graph-level timeout to 1s so the test doesn't take 2 minutes
             patch("app.agent.graph._GRAPH_TIMEOUT", 1.0),
         ):
-            with pytest.raises(asyncio.TimeoutError):
+            with pytest.raises((asyncio.TimeoutError, TimeoutError)):
                 async for _ in stream_agent(df, [], "test"):
                     pass
