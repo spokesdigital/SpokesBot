@@ -12,7 +12,7 @@ from supabase import Client
 
 BUCKET = "datasets"
 _DATAFRAME_CACHE_TTL_SECONDS = 300
-_DATAFRAME_CACHE_MAX_ITEMS = 4
+_DATAFRAME_CACHE_MAX_ITEMS = 20
 _dataframe_cache: OrderedDict[str, tuple[float, pd.DataFrame]] = OrderedDict()
 _dataframe_cache_lock = Lock()
 

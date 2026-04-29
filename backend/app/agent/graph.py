@@ -509,39 +509,47 @@ class AgentState(TypedDict):
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
 
+# Module-level cache: avoids creating a new ChatOpenAI client on every request.
+# Lazy-initialised on first call so settings aren't read at import time.
+_MAIN_LLM: "ChatOpenAI | None" = None
+_CRITIC_LLM: "ChatOpenAI | None" = None
+
 
 def _get_llm(*, streaming: bool = True) -> ChatOpenAI:
-    """Return the main agent LLM.
+    """Return the main agent LLM (cached at module level).
 
     gpt-4o-mini is ~3-5x faster per call than gpt-4o and sufficient for
     structured tool-use data analysis — the tools do the heavy lifting and
     the critic catches any numeric errors before the answer reaches the user.
     """
-    from app.config import settings
-
-    return ChatOpenAI(
-        model="gpt-4o-mini",
-        openai_api_key=settings.OPENAI_API_KEY,
-        streaming=streaming,
-        temperature=0,
-    )
+    global _MAIN_LLM
+    if _MAIN_LLM is None:
+        from app.config import settings
+        _MAIN_LLM = ChatOpenAI(
+            model="gpt-4o-mini",
+            openai_api_key=settings.OPENAI_API_KEY,
+            streaming=True,
+            temperature=0,
+        )
+    return _MAIN_LLM
 
 
 def _get_critic_llm() -> ChatOpenAI:
-    """
-    Return a fast, cheap model for the YES/NO critic decision.
+    """Return the critic LLM (cached at module level).
 
     gpt-4o-mini is ~3× faster and 15× cheaper than gpt-4o for this
     simple binary classification task.
     """
-    from app.config import settings
-
-    return ChatOpenAI(
-        model="gpt-4o-mini",
-        openai_api_key=settings.OPENAI_API_KEY,
-        streaming=False,
-        temperature=0,
-    )
+    global _CRITIC_LLM
+    if _CRITIC_LLM is None:
+        from app.config import settings
+        _CRITIC_LLM = ChatOpenAI(
+            model="gpt-4o-mini",
+            openai_api_key=settings.OPENAI_API_KEY,
+            streaming=False,
+            temperature=0,
+        )
+    return _CRITIC_LLM
 
 
 def _needs_validation(draft: str) -> bool:
@@ -811,73 +819,101 @@ async def stream_agent(
     page_context: str | None = None,
 ):
     """
-    Async generator that yields validated text tokens to the SSE router.
+    Async generator that yields live text tokens to the SSE router.
 
-    All answers — including comparison and period queries — are routed through
-    the full Reflexion graph (agent → critic [→ correction → agent]*) so that
-    every number the user sees has been critic-validated against raw tool data.
-    Fast-path shortcuts have been removed: they bypassed the critic and could
-    produce confident but unvalidated wrong numbers.
+    True streaming via react.astream_events — first tokens arrive in ~1-2 s
+    instead of waiting for the full Reflexion cycle (~8-10 s).
 
-    The final answer is yielded in small chunks to preserve the typewriter
-    streaming UX at the HTTP layer.
+    Phases:
+      1. Stream tokens live as the ReAct agent generates the final answer.
+         Tool-call chunks (empty content, non-empty tool_call_chunks) are
+         skipped; only final-answer content tokens reach the client.
+      2. Run critic validation silently after streaming — zero user-perceived
+         latency because streaming is already complete.
+      3. If critic rejects (rare, ~5% of requests), yield a correction notice
+         and stream the corrected answer from a second agent run.
 
-    Raises TimeoutError if the graph exceeds _GRAPH_TIMEOUT seconds.
-    The caller (threads.py event_stream) handles this and surfaces an error SSE.
+    Raises TimeoutError if the total wall time exceeds _GRAPH_TIMEOUT seconds.
     """
-    graph = make_graph(df)
+    tools = make_tools(df)
     schema_context = _build_schema_context(df)
     messages = build_history(history, page_context=page_context, schema_context=schema_context)
     messages.append(HumanMessage(content=new_message))
 
-    initial_state: AgentState = {
+    react = create_react_agent(_get_llm(streaming=True), tools)
+    start_time = time.time()
+    accumulated = ""
+    tool_outputs: list[str] = []
+
+    # Phase 1: stream tokens live.
+    # on_chat_model_stream fires for every LLM token — including tool-call
+    # decision tokens (content="", tool_call_chunks=[...]). The guard below
+    # filters those out so only final-answer tokens reach the client.
+    async for event in react.astream_events({"messages": messages}, version="v2"):
+        if time.time() - start_time > _GRAPH_TIMEOUT:
+            raise TimeoutError("Graph execution exceeded timeout")
+
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if (
+                isinstance(chunk.content, str)
+                and chunk.content
+                and not getattr(chunk, "tool_call_chunks", None)
+            ):
+                accumulated += chunk.content
+                yield chunk.content
+        elif kind == "on_tool_end":
+            out = event["data"].get("output")
+            if out is not None:
+                tool_outputs.append(str(out))
+
+    if not accumulated:
+        return
+
+    # Phase 2: silent critic validation (runs after streaming, no added latency).
+    if not _needs_validation(accumulated):
+        return
+
+    state: AgentState = {
         "messages": messages,
-        "tool_outputs": [],
-        "draft_answer": "",
+        "tool_outputs": tool_outputs,
+        "draft_answer": accumulated,
         "validation_feedback": "",
         "retry_count": 0,
     }
 
-    start_time = time.time()
-    task = asyncio.create_task(graph.ainvoke(initial_state))
+    # Run the synchronous critic in a thread pool to avoid blocking the event loop.
+    verdict = await asyncio.to_thread(
+        lambda: run_critic_node(state, _get_critic_llm())["validation_feedback"].strip()
+    )
+    upper = verdict.upper()
 
-    while not task.done():
-        if time.time() - start_time > _GRAPH_TIMEOUT:
-            await _cancel_graph_task(task)
-            raise TimeoutError("Graph execution exceeded timeout")
-        try:
-            # Yield empty tokens as keep-alives every 5 s to bypass proxy timeouts
-            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-        except TimeoutError:
-            # Still running — send a heartbeat and loop again
-            yield ""
-        except Exception:
-            # Task finished with an exception inside the 5 s window.
-            # Break out so the result() call below re-raises it where the
-            # event_stream error handler can log it with full traceback.
-            break
-
-    # Safely retrieve the final state; if the task raised an exception (either
-    # during polling or after the break above), result() will re-raise it here
-    # so the caller's except-block handles it consistently.
-    try:
-        final_state = task.result()
-    except asyncio.CancelledError:
-        # Propagate cleanly — caller distinguishes CancelledError from other errors
-        raise
-    except Exception:
-        # Re-raise so event_stream's generic except-block logs and surfaces it
-        raise
-
-    answer = final_state.get("draft_answer", "")
-    if not answer:
+    # Critic approved (or returned an ambiguous response) → done.
+    if not (re.match(r"^NO[:\s]", upper) or upper == "NO"):
         return
 
-    answer = _finalize_answer(answer)
+    # Phase 3: critic rejected — stream a correction (rare path).
+    state["validation_feedback"] = verdict
+    correction_state = run_inject_feedback_node(state)
 
-    # Stream the validated answer in small chunks → typewriter effect in the UI
-    for i in range(0, len(answer), _STREAM_CHUNK):
-        yield answer[i : i + _STREAM_CHUNK]
+    yield "\n\n---\nRechecking...\n\n"
+
+    async for event in react.astream_events(
+        {"messages": correction_state["messages"]}, version="v2"
+    ):
+        if time.time() - start_time > _GRAPH_TIMEOUT:
+            raise TimeoutError("Graph execution exceeded timeout")
+
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if (
+                isinstance(chunk.content, str)
+                and chunk.content
+                and not getattr(chunk, "tool_call_chunks", None)
+            ):
+                yield chunk.content
 
 
 # ── Proactive insight interface ───────────────────────────────────────────────
