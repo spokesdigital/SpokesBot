@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { usePathname } from 'next/navigation'
@@ -1113,39 +1113,43 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                   )}
 
                   {messages.map((msg, index) => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {/* Insight badge on the first assistant message */}
-                      <div className="flex flex-col gap-1 max-w-[82%] min-w-0">
-                        {msg.role === 'assistant' && index === 0 && !msg.id.startsWith('stream-') && (
-                          <span className="flex items-center gap-1 text-[0.72rem] font-medium text-[#f0a500] pl-1">
-                            <Sparkles className="h-3 w-3" />
-                            Proactive insight
-                          </span>
-                        )}
-                        <div
-                          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                            msg.role === 'user'
-                              ? 'rounded-tr-sm whitespace-pre-wrap bg-[#f0a500] text-white'
-                              : 'rounded-tl-sm bg-[#f2f2f0] text-[#1a1a1a]'
-                          }`}
-                        >
-                          {msg.role === 'assistant' ? renderMessageContent(msg.content) : msg.content}
+                    <Fragment key={msg.id}>
+                      <div
+                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        {/* Insight badge on the first assistant message */}
+                        <div className="flex flex-col gap-1 max-w-[82%] min-w-0">
+                          {msg.role === 'assistant' && index === 0 && !msg.id.startsWith('stream-') && (
+                            <span className="flex items-center gap-1 text-[0.72rem] font-medium text-[#f0a500] pl-1">
+                              <Sparkles className="h-3 w-3" />
+                              Proactive insight
+                            </span>
+                          )}
+                          <div
+                            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                              msg.role === 'user'
+                                ? 'rounded-tr-sm whitespace-pre-wrap bg-[#f0a500] text-white'
+                                : 'rounded-tl-sm bg-[#f2f2f0] text-[#1a1a1a]'
+                            }`}
+                          >
+                            {msg.role === 'assistant' ? renderMessageContent(msg.content) : msg.content}
+                          </div>
                         </div>
-                        {/* Escalation button — shown when:
-                            (a) message.metadata.requires_escalation = true (AI fallback, Phase 1), OR
-                            (b) this message is the idle-escalation target (45s inactivity, Phase 2) */}
-                        {msg.role === 'assistant' && (msg.metadata?.requires_escalation || msg.id === idleEscalationMessageId) && (
+                      </div>
+
+                      {/* Escalation button — shown when:
+                          (a) message.metadata.requires_escalation = true (AI fallback, Phase 1), OR
+                          (b) this message is the idle-escalation target (45s inactivity, Phase 2) */}
+                      {msg.role === 'assistant' && (msg.metadata?.requires_escalation || msg.id === idleEscalationMessageId) && (
+                        <div className="flex justify-center w-full my-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                           <EscalationButton
                             threadId={activeThread?.id ?? ''}
                             token={session?.access_token ?? ''}
                             fadeIn={!msg.metadata?.requires_escalation && msg.id === idleEscalationMessageId}
                           />
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      )}
+                    </Fragment>
                   ))}
 
                   {/* Thinking / streaming bubble */}

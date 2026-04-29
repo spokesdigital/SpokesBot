@@ -317,7 +317,10 @@ async def chat(
         except asyncio.CancelledError:
             # Client disconnected mid-stream — save whatever accumulated
             if accumulated:
-                thread_service.save_message(thread_id, "assistant", accumulated, service_client)
+                metadata = {}
+                if _needs_escalation(accumulated):
+                    metadata["requires_escalation"] = True
+                thread_service.save_message(thread_id, "assistant", accumulated, service_client, metadata=metadata if metadata else None)
 
         except Exception as exc:
             # C5: Never expose raw exception details to the client over SSE
@@ -331,7 +334,10 @@ async def chat(
             # Save whatever we have — partial answer is better than nothing.
             # If we have nothing, save a placeholder so the thread isn't broken.
             if accumulated:
-                thread_service.save_message(thread_id, "assistant", accumulated, service_client)
+                metadata = {}
+                if _needs_escalation(accumulated):
+                    metadata["requires_escalation"] = True
+                thread_service.save_message(thread_id, "assistant", accumulated, service_client, metadata=metadata if metadata else None)
             else:
                 thread_service.save_message(
                     thread_id,
