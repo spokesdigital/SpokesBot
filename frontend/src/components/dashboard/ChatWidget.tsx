@@ -60,6 +60,23 @@ type AssistantSegment =
   | { type: 'markdown'; content: string }
   | { type: 'chart'; chart: ChatChartPayload }
 
+const ESCALATION_SIGNALS = [
+  "i only have access to the current dashboard dataset",
+  "i'm here to help you analyse your dashboard data",
+  "i can only share analysed insights from your data",
+  "i don't have enough context to answer",
+  "i dont have enough context to answer",
+  "please share more details",
+  "please contact support",
+  "send this to an admin",
+]
+
+function needsEscalation(content: string): boolean {
+  if (!content) return false
+  const lower = content.toLowerCase()
+  return ESCALATION_SIGNALS.some(signal => lower.includes(signal))
+}
+
 interface ChatWidgetProps {
   open: boolean
   onClose: () => void
@@ -1140,7 +1157,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                       {/* Escalation button — shown when:
                           (a) message.metadata.requires_escalation = true (AI fallback, Phase 1), OR
                           (b) this message is the idle-escalation target (45s inactivity, Phase 2) */}
-                      {msg.role === 'assistant' && (msg.metadata?.requires_escalation || msg.id === idleEscalationMessageId) && (
+                      {msg.role === 'assistant' && (msg.metadata?.requires_escalation || msg.id === idleEscalationMessageId || needsEscalation(msg.content)) && (
                         <div className="flex justify-center w-full my-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                           <EscalationButton
                             threadId={activeThread?.id ?? ''}
