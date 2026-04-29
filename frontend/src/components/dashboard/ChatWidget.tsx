@@ -627,6 +627,17 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       .catch(() => persistThread(null)) // stale or deleted thread — clear from store
   }, [session, open, activeThreadId, persistThread])
 
+  // When the store clears activeThreadId (e.g. admin org switch, resetChat store path),
+  // mirror that into local state so the widget shows the welcome screen immediately
+  // instead of displaying the previous org's conversation.
+  useEffect(() => {
+    if (activeThreadId !== null) return
+    if (activeThread === null) return
+    setActiveThread(null)
+    setMessages([])
+    hydratedThreadIdRef.current = null
+  }, [activeThreadId, activeThread])
+
   const loadDatasets = useCallback(async () => {
     if (!session) return [] as Dataset[]
 
@@ -661,8 +672,17 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     container.scrollTo({ top: container.scrollHeight, behavior })
   }
 
+  // NOTE: streamingRef mirrors the `streaming` state value synchronously so that
+  // callbacks and closures (especially syncMessages) can read the current value
+  // without being stale due to React's closure-over-state behaviour.
+  const streamingRef = useRef(false)
+
   const syncMessages = useCallback(async (threadId: string) => {
     if (!session) return
+    // Never overwrite messages mid-stream — the streaming bubble is the source
+    // of truth while the AI is typing. Firing a server sync at this point would
+    // race with the post-stream atomic cleanup and cause the double-flash.
+    if (streamingRef.current) return
     try {
       const nextMessages = await api.threads.messages(threadId, session.access_token)
       setMessages((prev) => mergeServerMessages(nextMessages, prev))
@@ -770,6 +790,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
 
     setStreaming(true)
+    streamingRef.current = true
     setStreamingContent('')
     setIsThinking(true)
 
@@ -798,7 +819,9 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       if (accumulated) setSuggestions(getSuggestions(accumulated))
 
       // Short retry loop: backend can take up to ~500ms to persist the assistant message.
-      let synced = false
+      // `didSyncCleanup` is set to true once we atomically clear streaming state here,
+      // so the finally block below knows NOT to trigger a second redundant render.
+      let didSyncCleanup = false
       for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt > 0) await new Promise((r) => setTimeout(r, 250))
         try {
@@ -806,25 +829,30 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
           const hasAssistantReply = nextMessages.some(
             (m) => m.role === 'assistant' && m.content === accumulated,
           )
-          if (hasAssistantReply || attempt === 3) {
-            // Clear the streaming bubble atomically with the server message arriving.
-            // React 18 batches all three setState calls into one render, so the user
-            // never sees the server copy and the streaming copy simultaneously.
+          if (hasAssistantReply || attempt === 2) {
+            // Atomically clear the streaming bubble AND inject the server message
+            // in a single React batch. This is the ONLY place we call setStreaming(false)
+            // for the happy path — the finally block skips it via didSyncCleanup.
+            streamingRef.current = false
             setStreamingContent('')
             setStreaming(false)
             setIsThinking(false)
             setMessages((prev) => mergeServerMessages(nextMessages, prev.filter(
-              // drop the optimistic user message only — keep nothing with a local id
               (m) => !m.id.startsWith('stream-'),
             )))
-            synced = true
+            didSyncCleanup = true
             break
           }
         } catch {
           // best-effort
         }
       }
-      if (!synced) await syncMessages(thread.id)
+      if (!didSyncCleanup) {
+        // All retries exhausted without finding the server message — fall back to
+        // a plain sync which will at least show whatever the server has.
+        streamingRef.current = false
+        await syncMessages(thread.id)
+      }
 
 
     } catch (e: unknown) {
@@ -845,9 +873,16 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
       }
     } finally {
       clearTimeout(streamTimeout)
-      setStreamingContent('')
-      setStreaming(false)
-      setIsThinking(false)
+      // Only clear streaming state here if the happy-path sync loop didn't already
+      // do it atomically. Calling setStreaming(false) a second time would cause a
+      // redundant render that makes the streaming bubble briefly re-appear on top
+      // of the already-committed server message (the double-flash bug).
+      if (streamingRef.current) {
+        streamingRef.current = false
+        setStreamingContent('')
+        setStreaming(false)
+        setIsThinking(false)
+      }
       submittingRef.current = false
       abortRef.current = null
     }
