@@ -395,7 +395,7 @@ function buildTrend(
     }
 
     const range: string[] = []
-    let cursor = new Date(`${startStr}T00:00:00Z`)
+    const cursor = new Date(`${startStr}T00:00:00Z`)
     const end = new Date(`${endStr}T00:00:00Z`)
     while (cursor <= end) {
       range.push(cursor.toISOString().split('T')[0])
@@ -404,7 +404,7 @@ function buildTrend(
     datesArray = range
   } else if (datesArray.length > 0) {
     const range: string[] = []
-    let cursor = new Date(`${datesArray[0]}T00:00:00Z`)
+    const cursor = new Date(`${datesArray[0]}T00:00:00Z`)
     const end = new Date(`${datesArray[datesArray.length - 1]}T00:00:00Z`)
     while (cursor <= end) {
       range.push(cursor.toISOString().split('T')[0])

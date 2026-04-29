@@ -146,7 +146,8 @@ def normalize_chunk(chunk: pd.DataFrame, coerced_columns: list[str]) -> pd.DataF
         if col not in result.columns:
             continue
         cleaned = (
-            result[col].astype(str)
+            result[col]
+            .astype(str)
             .str.strip()
             .replace({"": None, "nan": None, "None": None, "null": None})
             .str.replace(",", "", regex=False)
@@ -592,8 +593,7 @@ def _pad_series(
     """
     existing = {item["date"]: item["value"] for item in series}
     return [
-        {"date": str(d.date()), "value": existing.get(str(d.date()), 0)}
-        for d in full_date_index
+        {"date": str(d.date()), "value": existing.get(str(d.date()), 0)} for d in full_date_index
     ]
 
 
@@ -692,7 +692,7 @@ def _auto_analyze(
     granularity = "daily"
     freq = "D"
     full_date_index: pd.DatetimeIndex | None = None
-    
+
     if date_range is not None:
         delta = date_range[1] - date_range[0]
         if delta.days > 90:
@@ -701,7 +701,7 @@ def _auto_analyze(
             start_date_for_index = date_range[0].date().replace(day=1)
         else:
             start_date_for_index = date_range[0].date()
-            
+
         full_date_index = pd.date_range(
             start=start_date_for_index, end=date_range[1].date(), freq=freq
         )
@@ -709,7 +709,7 @@ def _auto_analyze(
     # Try to parse potential date columns
     parsed_dates: dict[str, list] = {}
     metric_time_series: dict[str, dict[str, list[dict[str, Any]]]] = {}
-    
+
     # Pre-compute metric mappings for recalculated ratios
     metric_mappings = infer_metric_mappings(df)
 
@@ -728,14 +728,14 @@ def _auto_analyze(
             sorted_df = df.copy()
             sorted_df[col] = parsed
             sorted_df = sorted_df.sort_values(col)
-            
+
             # Use Grouper for resampling
             grouper = pd.Grouper(key=col, freq=freq)
             grouped = sorted_df.groupby(grouper)
             summed = grouped.sum(numeric_only=True)
-            
+
             # Re-calculate averages based on sums
-            def get_aggregated_series(metric_col: str):
+            def get_aggregated_series(metric_col: str, grouped=grouped, summed=summed):
                 if _uses_average_basis(metric_col):
                     if metric_col == metric_mappings.get("ctr"):
                         clicks_col = metric_mappings.get("clicks")
@@ -759,25 +759,33 @@ def _auto_analyze(
                             return summed[cost_col] / summed[conv_col].replace(0, pd.NA)
                     return grouped[metric_col].mean()
                 else:
-                    return summed[metric_col] if metric_col in summed.columns else grouped[metric_col].sum()
+                    return (
+                        summed[metric_col]
+                        if metric_col in summed.columns
+                        else grouped[metric_col].sum()
+                    )
 
             metric_col = _pick_metric_column(df)
             if metric_col:
                 agg = get_aggregated_series(metric_col)
                 raw_series = [
-                    {"date": str(k.date()), "value": _sanitize(v)} for k, v in agg.items() if pd.notna(k)
+                    {"date": str(k.date()), "value": _sanitize(v)}
+                    for k, v in agg.items()
+                    if pd.notna(k)
                 ]
                 parsed_dates[col] = (
                     _pad_series(raw_series, full_date_index)
                     if full_date_index is not None
                     else raw_series
                 )
-                
+
             metric_series_for_col: dict[str, list[dict[str, Any]]] = {}
             for m_col in selected_metric_columns:
                 agg = get_aggregated_series(m_col)
                 raw_series = [
-                    {"date": str(k.date()), "value": _sanitize(v)} for k, v in agg.items() if pd.notna(k)
+                    {"date": str(k.date()), "value": _sanitize(v)}
+                    for k, v in agg.items()
+                    if pd.notna(k)
                 ]
                 metric_series_for_col[m_col] = (
                     _pad_series(raw_series, full_date_index)

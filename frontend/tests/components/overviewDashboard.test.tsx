@@ -1,5 +1,5 @@
 import { render, waitFor } from '@testing-library/react'
-import { OverviewDashboard } from '@/app/(dashboard)/dashboard/page'
+import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashboard'
 import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
@@ -51,11 +51,10 @@ describe('OverviewDashboard', () => {
     })
 
     mockUseDashboardStore.mockReturnValue({
-      organizationId: 'org-1',
-      activeDatasetId: null,
-      setActiveDataset: jest.fn(),
-      datePreset: null,
-      dateRange: { start: null, end: null },
+      datasets: [],
+      datasetsLoaded: false,
+      datasetsOrgId: null,
+      setDatasets: jest.fn(),
     })
 
     ;(api.datasets.list as jest.Mock).mockResolvedValue([])
@@ -63,11 +62,11 @@ describe('OverviewDashboard', () => {
     ;(api.analytics.getInsights as jest.Mock).mockResolvedValue({ dataset_id: 'dataset-1', insights: [] })
   })
 
-  it('requests only overview datasets for the overview dashboard', async () => {
-    render(<OverviewDashboard />)
+  it('requests datasets for the overview dashboard organization', async () => {
+    render(<ClientOverviewDashboard orgId="org-1" />)
 
     await waitFor(() => {
-      expect(api.datasets.list).toHaveBeenCalledWith('token', 'org-1', undefined, 'overview')
+      expect(api.datasets.list).toHaveBeenCalledWith('token', 'org-1')
     })
   })
 })

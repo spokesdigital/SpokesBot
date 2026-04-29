@@ -19,7 +19,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
-_STORE: dict[str, tuple[Any, float]] = {}          # key → (value, expiry_monotonic)
+_STORE: dict[str, tuple[Any, float]] = {}  # key → (value, expiry_monotonic)
 _ORG_INDEX: dict[str, set[str]] = defaultdict(set)  # org_id → set of keys
 
 ANALYTICS_TTL = 3600  # 1 hour

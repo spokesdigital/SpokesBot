@@ -3,7 +3,7 @@
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
-import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
@@ -380,16 +380,12 @@ interface ChannelPageProps {
   targetOrgId?: string
 }
 
-function getChannelSubtitle(channelName: string) {
-  return `Detailed analytics for your ${channelName} campaigns`
-}
-
 const LIVE_REFRESH_MS = 30_000
 
 export function ChannelPage({ reportType, channelName, accentColor, accentLight: _accentLight, accentText: _accentText, targetOrgId }: ChannelPageProps) {
   void _accentLight
   void _accentText
-  const { session, organizations, user } = useAuth()
+  const { session, user } = useAuth()
   const { organizationId, datePreset, dateRange, setActiveDataset, globalDatasets, globalDatasetsLoaded, datasetsOrgId, setGlobalDatasets } = useDashboardStore(
     useShallow((s) => ({
       organizationId: s.organizationId,
@@ -490,15 +486,6 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     () => getAnalyticsDataQualityWarnings(analyticsResultRecord),
     [analyticsResultRecord],
   )
-
-  // When viewing a client org (admin impersonation), resolve the name from
-  // targetOrgId so we show the client's org name, not the admin's own org.
-  const activeOrganizationName =
-    (targetOrgId
-      ? organizations.find((org) => org.id === targetOrgId)?.name
-      : organizations.find((org) => org.id === organizationId)?.name)
-    ?? user?.organization?.name
-    ?? 'Client Workspace'
 
   // Reset table/sort state when the active dataset changes.
   useEffect(() => {

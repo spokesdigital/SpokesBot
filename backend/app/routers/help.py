@@ -51,15 +51,17 @@ def create_article(
     now = datetime.now(UTC).isoformat()
     res = (
         service_client.table("help_articles")
-        .insert({
-            "title": body.title,
-            "body": body.body,
-            "category": body.category,
-            "sort_order": body.sort_order,
-            "is_published": body.is_published,
-            "created_at": now,
-            "updated_at": now,
-        })
+        .insert(
+            {
+                "title": body.title,
+                "body": body.body,
+                "category": body.category,
+                "sort_order": body.sort_order,
+                "is_published": body.is_published,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
         .execute()
     )
     if not res.data:
@@ -80,12 +82,7 @@ def update_article(
         raise HTTPException(status_code=400, detail="No fields to update.")
     updates["updated_at"] = datetime.now(UTC).isoformat()
 
-    res = (
-        service_client.table("help_articles")
-        .update(updates)
-        .eq("id", article_id)
-        .execute()
-    )
+    res = service_client.table("help_articles").update(updates).eq("id", article_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Article not found.")
     return res.data[0]
@@ -98,11 +95,6 @@ def delete_article(
     _: None = Depends(require_admin),
 ):
     """Admin-only: permanently delete a help article."""
-    res = (
-        service_client.table("help_articles")
-        .delete()
-        .eq("id", article_id)
-        .execute()
-    )
+    res = service_client.table("help_articles").delete().eq("id", article_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Article not found.")

@@ -179,21 +179,23 @@ async def compute_analytics(
                 detail=str(e),
             ) from e
         if df.empty:
-            return ORJSONResponse(content={
-                "dataset_id": str(body.dataset_id),
-                "operation": str(body.operation),
-                "result": {
-                    "status": "empty",
-                    "message": f"No rows found in the selected date range ({body.date_preset.value}).",
-                    "shape": {"rows": 0, "cols": len(df.columns)},
-                    "numeric_totals": {},
-                    "numeric_summary": {},
-                    "categorical_charts": {},
-                    "time_series": {},
-                    "metric_time_series": {},
-                    "metric_breakdowns": {},
-                },
-            })
+            return ORJSONResponse(
+                content={
+                    "dataset_id": str(body.dataset_id),
+                    "operation": str(body.operation),
+                    "result": {
+                        "status": "empty",
+                        "message": f"No rows found in the selected date range ({body.date_preset.value}).",
+                        "shape": {"rows": 0, "cols": len(df.columns)},
+                        "numeric_totals": {},
+                        "numeric_summary": {},
+                        "categorical_charts": {},
+                        "time_series": {},
+                        "metric_time_series": {},
+                        "metric_breakdowns": {},
+                    },
+                }
+            )
 
     # ── 5. Compute analytics (offloaded — groupbys + aggregations) ──────────
     try:
@@ -331,17 +333,19 @@ async def get_overall_insights(
                 detail=str(exc),
             ) from exc
         if df.empty:
-            return ORJSONResponse(content={
-                "dataset_id": str(body.dataset_id),
-                "insights": {
-                    "status": "empty",
-                    "message": f"No rows found in the selected date range ({body.date_preset.value}).",
-                    "overall_summary": "No data available for the selected period.",
-                    "key_takeaways": [],
-                    "anomalies": [],
-                    "opportunities": [],
-                },
-            })
+            return ORJSONResponse(
+                content={
+                    "dataset_id": str(body.dataset_id),
+                    "insights": {
+                        "status": "empty",
+                        "message": f"No rows found in the selected date range ({body.date_preset.value}).",
+                        "overall_summary": "No data available for the selected period.",
+                        "key_takeaways": [],
+                        "anomalies": [],
+                        "opportunities": [],
+                    },
+                }
+            )
 
     try:
         insights = await generate_structured_insights(df)

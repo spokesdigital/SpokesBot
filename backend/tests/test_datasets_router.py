@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock
 
-from app.services import dataset_service
-
 from conftest import _setup_admin_overrides
+
+from app.services import dataset_service
 
 
 class TestDatasetMetadataRepair:
@@ -65,7 +65,13 @@ class TestDatasetsEndpoint:
                 "revenue": "Revenue",
             },
             "schema_profile": {
-                "numeric_columns": ["Impressions", "Link Clicks", "Cost", "Transactions", "Revenue"],
+                "numeric_columns": [
+                    "Impressions",
+                    "Link Clicks",
+                    "Cost",
+                    "Transactions",
+                    "Revenue",
+                ],
                 "date_columns": ["Date"],
             },
             "ingestion_warnings": [],

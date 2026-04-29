@@ -15,14 +15,14 @@ describe("KPICard", () => {
 
   it("shows positive trend label with TrendingUp icon class", () => {
     render(<KPICard title="ROAS" value="3.5x" trendValue={12.4} />);
-    expect(screen.getByText("12.4% vs prior")).toBeInTheDocument();
+    expect(screen.getByText("12.4% vs prior period")).toBeInTheDocument();
   });
 
   it("shows negative trend label for negative trendValue", () => {
     render(<KPICard title="Cost" value="$8,000" trendValue={-5.3} />);
-    expect(screen.getByText("5.3% vs prior")).toBeInTheDocument();
+    expect(screen.getByText("5.3% vs prior period")).toBeInTheDocument();
     // Red colour class applied
-    const trend = screen.getByText("5.3% vs prior").closest("div");
+    const trend = screen.getByText("5.3% vs prior period").closest("div");
     expect(trend).toHaveClass("text-red-500");
   });
 
@@ -31,7 +31,7 @@ describe("KPICard", () => {
     render(
       <KPICard title="CPC" value="$1.20" trendValue={8} trendDirection="negative" />
     );
-    const trend = screen.getByText("8.0% vs prior").closest("div");
+    const trend = screen.getByText("8.0% vs prior period").closest("div");
     expect(trend).toHaveClass("text-red-500");
   });
 

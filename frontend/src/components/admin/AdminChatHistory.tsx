@@ -78,20 +78,20 @@ function normalizeChartPayload(raw: unknown): ChatChartPayload | null {
       : Object.keys(data[0] ?? {}).find((k) => typeof data[0]?.[k] === 'string') ?? 'label'
   const explicit = Array.isArray(p.series)
     ? (p.series
-        .filter((s) => s && typeof s === 'object')
-        .map((s, i) => {
-          const item = s as Record<string, unknown>
-          if (typeof item.key !== 'string') return null
-          return {
-            key: item.key,
-            label: typeof item.label === 'string' ? item.label : item.key,
-            color:
-              typeof item.color === 'string'
-                ? item.color
-                : DEFAULT_CHART_COLORS[i % DEFAULT_CHART_COLORS.length],
-          }
-        })
-        .filter(Boolean) as ChartSeries[])
+      .filter((s) => s && typeof s === 'object')
+      .map((s, i) => {
+        const item = s as Record<string, unknown>
+        if (typeof item.key !== 'string') return null
+        return {
+          key: item.key,
+          label: typeof item.label === 'string' ? item.label : item.key,
+          color:
+            typeof item.color === 'string'
+              ? item.color
+              : DEFAULT_CHART_COLORS[i % DEFAULT_CHART_COLORS.length],
+        }
+      })
+      .filter(Boolean) as ChartSeries[])
     : []
   const series = explicit.length > 0 ? explicit : inferChartSeries(data, xKey)
   if (series.length === 0) return null
@@ -367,7 +367,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
   // Initial load
   useEffect(() => {
     void fetchThreads('', 0, false)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, orgId])
 
   // Debounced search: 350 ms after user stops typing
@@ -382,7 +382,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
 
   function handleLoadMore() {
@@ -440,11 +440,10 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
     return (
       <button
         onClick={() => setSelectedThread(thread)}
-        className={`w-full text-left px-4 py-3.5 border-b border-[#f0ebe2] transition-colors ${
-          isSelected
+        className={`w-full text-left px-4 py-3.5 border-b border-[#f0ebe2] transition-colors ${isSelected
             ? 'bg-[#fff9e5] border-l-[3px] border-l-[#f0a500]'
             : 'hover:bg-[#faf7f2] border-l-[3px] border-l-transparent'
-        }`}
+          }`}
       >
         <div className="flex items-start gap-2.5">
           <div className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 ${isSelected ? 'bg-[#f0a500]/15' : 'bg-slate-100'}`}>
@@ -636,11 +635,10 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
                     onClick={handleCopyTranscript}
                     disabled={loadingMessages || visibleMessages.length === 0}
                     title={copied ? 'Copied!' : 'Copy transcript to clipboard'}
-                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-medium transition-all disabled:opacity-40 ${
-                      copied
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-medium transition-all disabled:opacity-40 ${copied
                         ? 'border-green-300 bg-green-50 text-green-700'
                         : 'border-[#e7e1d6] bg-white text-slate-600 hover:border-[#f0a500]/50 hover:bg-[#fff9e5] hover:text-[#a36200]'
-                    }`}
+                      }`}
                   >
                     {copied ? (
                       <>

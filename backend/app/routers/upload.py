@@ -87,9 +87,7 @@ def _process_file(
 
         _, profile = analytics_service.build_dataset_profile(sample_df)
         column_headers = list(sample_df.columns)
-        coerced_columns: list[str] = profile["schema_profile"].get(
-            "coerced_numeric_columns", []
-        )
+        coerced_columns: list[str] = profile["schema_profile"].get("coerced_numeric_columns", [])
 
         # ── Phase 2: Convert full file → Parquet ────────────────────────────
         buf = io.BytesIO()

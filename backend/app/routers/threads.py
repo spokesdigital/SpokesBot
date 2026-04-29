@@ -297,7 +297,13 @@ async def chat(
                 if _needs_escalation(accumulated):
                     done_payload["requires_escalation"] = True
                     metadata["requires_escalation"] = True
-                thread_service.save_message(thread_id, "assistant", accumulated, service_client, metadata=metadata if metadata else None)
+                thread_service.save_message(
+                    thread_id,
+                    "assistant",
+                    accumulated,
+                    service_client,
+                    metadata=metadata if metadata else None,
+                )
                 yield f"data: {json.dumps(done_payload)}\n\n"
             else:
                 # Agent produced no answer — save a fallback so the thread isn't
@@ -305,11 +311,11 @@ async def chat(
                 # the client to offer escalation so the button anchors to this message.
                 fallback_text = "I wasn't able to find a clear answer based on your data."
                 thread_service.save_message(
-                    thread_id, 
-                    "assistant", 
-                    fallback_text, 
+                    thread_id,
+                    "assistant",
+                    fallback_text,
                     service_client,
-                    metadata={"requires_escalation": True}
+                    metadata={"requires_escalation": True},
                 )
                 yield f"data: {json.dumps({'token': fallback_text})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'requires_escalation': True})}\n\n"
@@ -320,7 +326,13 @@ async def chat(
                 metadata = {}
                 if _needs_escalation(accumulated):
                     metadata["requires_escalation"] = True
-                thread_service.save_message(thread_id, "assistant", accumulated, service_client, metadata=metadata if metadata else None)
+                thread_service.save_message(
+                    thread_id,
+                    "assistant",
+                    accumulated,
+                    service_client,
+                    metadata=metadata if metadata else None,
+                )
 
         except Exception as exc:
             # C5: Never expose raw exception details to the client over SSE
@@ -337,7 +349,13 @@ async def chat(
                 metadata = {}
                 if _needs_escalation(accumulated):
                     metadata["requires_escalation"] = True
-                thread_service.save_message(thread_id, "assistant", accumulated, service_client, metadata=metadata if metadata else None)
+                thread_service.save_message(
+                    thread_id,
+                    "assistant",
+                    accumulated,
+                    service_client,
+                    metadata=metadata if metadata else None,
+                )
             else:
                 thread_service.save_message(
                     thread_id,

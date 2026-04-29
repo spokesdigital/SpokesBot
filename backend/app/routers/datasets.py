@@ -53,7 +53,9 @@ def list_datasets(
         if report_type:
             q = q.eq("report_type", report_type)
         resp = q.execute()
-        return {"datasets": [dataset_service.repair_dataset_metadata(dataset) for dataset in resp.data]}
+        return {
+            "datasets": [dataset_service.repair_dataset_metadata(dataset) for dataset in resp.data]
+        }
 
     target_org_id = str(org_id) if org_id else caller_org_id
     client = service_client if role == ROLE_ADMIN else supabase

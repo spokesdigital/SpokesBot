@@ -67,11 +67,7 @@ def repair_dataset_metadata(dataset: dict[str, Any]) -> dict[str, Any]:
     repaired = dict(dataset)
 
     raw_metric_mappings = repaired.get("metric_mappings")
-    metric_mappings = (
-        dict(raw_metric_mappings)
-        if isinstance(raw_metric_mappings, dict)
-        else {}
-    )
+    metric_mappings = dict(raw_metric_mappings) if isinstance(raw_metric_mappings, dict) else {}
 
     schema_profile = repaired.get("schema_profile")
     if not isinstance(schema_profile, dict):

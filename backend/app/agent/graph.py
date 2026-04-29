@@ -64,11 +64,11 @@ _CRITIC_TOOL_LIMIT_TOTAL: int = 8_000  # chars for the combined payload
 _HAS_NUMBER_RE = re.compile(r"\d")
 
 # History window — keeps token count manageable for long conversations
-_MAX_HISTORY_MESSAGES: int = 16   # 8 turns × 2 (user + assistant)
+_MAX_HISTORY_MESSAGES: int = 16  # 8 turns × 2 (user + assistant)
 # First N messages are always kept as an "anchor" regardless of window truncation.
 # The opening turns typically contain the user's framing, channel/metric preferences,
 # and dataset context that the agent should never forget in long conversations.
-_ANCHOR_MESSAGES: int = 4         # first 2 turns (1 user + 1 assistant × 2)
+_ANCHOR_MESSAGES: int = 4  # first 2 turns (1 user + 1 assistant × 2)
 
 # ── Answer post-processor ────────────────────────────────────────────────────
 
@@ -515,8 +515,8 @@ class AgentState(TypedDict):
 
 # Module-level cache: avoids creating a new ChatOpenAI client on every request.
 # Lazy-initialised on first call so settings aren't read at import time.
-_MAIN_LLM: "ChatOpenAI | None" = None
-_CRITIC_LLM: "ChatOpenAI | None" = None
+_MAIN_LLM: ChatOpenAI | None = None
+_CRITIC_LLM: ChatOpenAI | None = None
 
 
 def _get_llm(*, streaming: bool = True) -> ChatOpenAI:
@@ -529,6 +529,7 @@ def _get_llm(*, streaming: bool = True) -> ChatOpenAI:
     global _MAIN_LLM
     if _MAIN_LLM is None:
         from app.config import settings
+
         _MAIN_LLM = ChatOpenAI(
             model="gpt-4o-mini",
             openai_api_key=settings.OPENAI_API_KEY,
@@ -547,6 +548,7 @@ def _get_critic_llm() -> ChatOpenAI:
     global _CRITIC_LLM
     if _CRITIC_LLM is None:
         from app.config import settings
+
         _CRITIC_LLM = ChatOpenAI(
             model="gpt-4o-mini",
             openai_api_key=settings.OPENAI_API_KEY,
@@ -815,7 +817,6 @@ def make_graph(df: pd.DataFrame):
     return builder.compile()
 
 
-
 async def stream_agent(
     df: pd.DataFrame,
     history: list[dict],
@@ -855,15 +856,15 @@ async def stream_agent(
     # filters those out so only final-answer tokens reach the client.
     iterator = react.astream_events({"messages": messages}, version="v2").__aiter__()
     while True:
+        remaining_time = _GRAPH_TIMEOUT - (time.time() - start_time)
+        if remaining_time <= 0:
+            raise TimeoutError("Graph execution exceeded timeout")
         try:
-            remaining_time = _GRAPH_TIMEOUT - (time.time() - start_time)
-            if remaining_time <= 0:
-                raise TimeoutError("Graph execution exceeded timeout")
             event = await asyncio.wait_for(iterator.__anext__(), timeout=remaining_time)
         except StopAsyncIteration:
             break
-        except asyncio.TimeoutError:
-            raise TimeoutError("Graph execution exceeded timeout")
+        except TimeoutError as err:
+            raise TimeoutError("Graph execution exceeded timeout") from err
 
         kind = event["event"]
         if kind == "on_chat_model_stream":
@@ -983,10 +984,22 @@ def _normalize_structured_insights(raw_items: list[dict]) -> list[dict[str, str]
     # shows an empty panel just because one section (e.g. Traffic on a
     # revenue-only report) had no relevant data to produce an insight.
     _SECTION_DEFAULTS = [
-        {"type": "trend", "text": "Traffic data is being analysed. Check back after the next data refresh."},
-        {"type": "trend", "text": "Conversion data is being analysed. Check back after the next data refresh."},
-        {"type": "trend", "text": "Revenue data is being analysed. Check back after the next data refresh."},
-        {"type": "trend", "text": "Distribution data is being analysed. Check back after the next data refresh."},
+        {
+            "type": "trend",
+            "text": "Traffic data is being analysed. Check back after the next data refresh.",
+        },
+        {
+            "type": "trend",
+            "text": "Conversion data is being analysed. Check back after the next data refresh.",
+        },
+        {
+            "type": "trend",
+            "text": "Revenue data is being analysed. Check back after the next data refresh.",
+        },
+        {
+            "type": "trend",
+            "text": "Distribution data is being analysed. Check back after the next data refresh.",
+        },
     ]
     while len(normalized) < 4:
         normalized.append(_SECTION_DEFAULTS[len(normalized)])

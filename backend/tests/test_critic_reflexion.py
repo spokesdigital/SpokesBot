@@ -494,10 +494,7 @@ class TestStreamAgent:
 
         async def fake_astream_events(*args, **kwargs):
             for char in expected_answer:
-                yield {
-                    "event": "on_chat_model_stream",
-                    "data": {"chunk": AIMessage(content=char)}
-                }
+                yield {"event": "on_chat_model_stream", "data": {"chunk": AIMessage(content=char)}}
 
         mock_agent = AsyncMock()
         mock_agent.astream_events = fake_astream_events
@@ -534,10 +531,7 @@ class TestStreamAgent:
 
         async def fake_astream_events(*args, **kwargs):
             for char in expected_answer:
-                yield {
-                    "event": "on_chat_model_stream",
-                    "data": {"chunk": AIMessage(content=char)}
-                }
+                yield {"event": "on_chat_model_stream", "data": {"chunk": AIMessage(content=char)}}
 
         mock_agent = AsyncMock()
         mock_agent.astream_events = fake_astream_events
@@ -567,10 +561,7 @@ class TestStreamAgent:
 
         async def hanging_astream_events(*args, **kwargs):
             await asyncio.sleep(9999)  # simulate hang
-            yield {
-                "event": "on_chat_model_stream",
-                "data": {"chunk": AIMessage(content="hi")}
-            }
+            yield {"event": "on_chat_model_stream", "data": {"chunk": AIMessage(content="hi")}}
 
         mock_agent = AsyncMock()
         mock_agent.astream_events = hanging_astream_events
