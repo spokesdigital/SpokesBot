@@ -540,6 +540,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   const [supportSent, setSupportSent] = useState(false)
   const [supportError, setSupportError] = useState<string | null>(null)
 
+  // Phase 2: idle escalation — tracks which message ID triggered the idle button.
+  // Using a specific message ID (not a generic boolean) ensures the button anchors
+  // firmly to the correct bubble even if the user scrolls through a long history.
+  const [idleEscalationMessageId, setIdleEscalationMessageId] = useState<string | null>(null)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
 
 
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -556,6 +562,44 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   // Abort any in-flight stream on unmount
   useEffect(() => () => { abortRef.current?.abort() }, [])
+
+  // ── 45-second idle escalation timer (Phase 2) ──────────────────────────────
+  // Fires when the AI finishes streaming and the last message is from the assistant.
+  // We capture the specific message ID so the button stays anchored to that bubble.
+  // The effect re-runs whenever streaming stops or the message list changes.
+  // The cleanup function guarantees the pending timeout is always cancelled before
+  // the next effect run or component unmount — no memory leaks possible.
+  useEffect(() => {
+    // Always cancel any previously pending timer first.
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
+
+    // Only arm the timer when the AI has finished streaming.
+    if (streaming) return
+
+    const lastMsg = messages[messages.length - 1]
+    if (!lastMsg || lastMsg.role !== 'assistant') return
+
+    // Don't re-arm if this message already triggered the button.
+    if (idleEscalationMessageId === lastMsg.id) return
+
+    const targetId = lastMsg.id
+    idleTimerRef.current = setTimeout(() => {
+      setIdleEscalationMessageId(targetId)
+      idleTimerRef.current = null
+    }, 45_000)
+
+    // Cleanup: always clear the timeout when dependencies change or on unmount.
+    return () => {
+      if (idleTimerRef.current !== null) {
+        clearTimeout(idleTimerRef.current)
+        idleTimerRef.current = null
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming, messages.length])
 
 
 
@@ -1053,11 +1097,14 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         >
                           {msg.role === 'assistant' ? renderMessageContent(msg.content) : msg.content}
                         </div>
-                        {/* Escalation button — shown when the message metadata flags it needs escalation */}
-                        {msg.role === 'assistant' && msg.metadata?.requires_escalation && (
+                        {/* Escalation button — shown when:
+                            (a) message.metadata.requires_escalation = true (AI fallback, Phase 1), OR
+                            (b) this message is the idle-escalation target (45s inactivity, Phase 2) */}
+                        {msg.role === 'assistant' && (msg.metadata?.requires_escalation || msg.id === idleEscalationMessageId) && (
                           <EscalationButton
                             threadId={activeThread?.id ?? ''}
                             token={session?.access_token ?? ''}
+                            fadeIn={!msg.metadata?.requires_escalation && msg.id === idleEscalationMessageId}
                           />
                         )}
                       </div>
@@ -1129,6 +1176,13 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         onChange={(e) => {
                           setInput(e.target.value)
                           if (error) setError(null)
+                          // Any typing resets the idle timer — the button should only appear
+                          // when the user is truly idle, not while they are composing a reply.
+                          if (idleTimerRef.current !== null) {
+                            clearTimeout(idleTimerRef.current)
+                            idleTimerRef.current = null
+                          }
+                          setIdleEscalationMessageId(null)
                         }}
                         disabled={streaming || datasetsLoading || !hasDataset}
                         maxLength={500}

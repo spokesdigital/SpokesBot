@@ -7,9 +7,11 @@ import { api } from '@/lib/api'
 interface EscalationButtonProps {
   threadId: string
   token: string
+  /** When true the button fades in smoothly — used for the 45s idle-timer trigger. */
+  fadeIn?: boolean
 }
 
-export function EscalationButton({ threadId, token }: EscalationButtonProps) {
+export function EscalationButton({ threadId, token, fadeIn = false }: EscalationButtonProps) {
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
 
@@ -27,7 +29,13 @@ export function EscalationButton({ threadId, token }: EscalationButtonProps) {
   }
 
   return (
-    <div className="mt-2 flex">
+    <div
+      className={`mt-2 flex ${
+        fadeIn
+          ? 'animate-in fade-in slide-in-from-bottom-1 duration-500'
+          : ''
+      }`}
+    >
       <button
         type="button"
         onClick={handleEscalate}
