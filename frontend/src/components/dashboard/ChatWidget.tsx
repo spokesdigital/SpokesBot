@@ -730,6 +730,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     setInput('')
     setSuggestions([])
     setError(null)
+    // Clear any pending idle escalation — the user is actively sending a new message.
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
+    setIdleEscalationMessageId(null)
     setMessages((prev) => [...prev, optimistic])
 
     let thread = activeThread
@@ -774,12 +780,10 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     abortRef.current = controller
 
     let accumulated = ''
-    let streamRequiresEscalation = false
     try {
       for await (const chunk of streamChat(thread.id, userMessage, session.access_token, controller.signal, pageContext)) {
         if (chunk.error) throw new Error(chunk.error)
         if (chunk.done) {
-          if (chunk.requires_escalation) streamRequiresEscalation = true
           break
         }
         if (chunk.status) continue  // thinking heartbeat — indicator handles its own animation
@@ -862,6 +866,11 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   /* ── Reset conversation ── */
   function resetChat() {
     abortRef.current?.abort()
+    if (idleTimerRef.current !== null) {
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = null
+    }
+    setIdleEscalationMessageId(null)
     setActiveThread(null)
     persistThread(null)
     setMessages([])
@@ -885,13 +894,6 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   // Show welcome message only when there are no messages AND we're not fetching an insight
   const showWelcome = messages.length === 0 && !streaming
-
-  // Index of the last assistant message — used to decide where to attach the escalation button
-  const lastAssistantIndex = messages.reduceRight(
-    (found, msg, i) => (found !== -1 ? found : msg.role === 'assistant' ? i : -1),
-    -1,
-  )
-
 
   return (
     /* Fixed overlay — bottom-right, above the FAB */

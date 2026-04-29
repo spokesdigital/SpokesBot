@@ -16,7 +16,7 @@
  * Expected multipart/form-data fields (mirrors the FastAPI contract):
  *   file        — the CSV file
  *   org_id      — target organization UUID
- *   report_type — "overview" | "google_ads" | "meta_ads"
+ *   report_type — "google_ads" | "meta_ads"
  *   report_name — (optional) human-readable label
  *
  * Authentication: the Authorization: Bearer <token> header from the client is
@@ -56,9 +56,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!orgId || typeof orgId !== 'string') {
     return NextResponse.json({ detail: 'Missing org_id field.' }, { status: 422 })
   }
-  if (!['overview', 'google_ads', 'meta_ads'].includes(String(reportType))) {
+  if (!['google_ads', 'meta_ads'].includes(String(reportType))) {
     return NextResponse.json(
-      { detail: 'report_type must be one of: overview, google_ads, meta_ads' },
+      { detail: 'report_type must be one of: google_ads, meta_ads' },
       { status: 422 },
     )
   }

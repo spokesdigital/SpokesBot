@@ -8,7 +8,7 @@ export interface Dataset {
   id: string
   organization_id: string
   report_name: string | null
-  report_type: 'overview' | 'google_ads' | 'meta_ads'
+  report_type: 'google_ads' | 'meta_ads'
   detected_date_column: string | null
   metric_mappings: Record<string, string | null>
   schema_profile: Record<string, unknown>

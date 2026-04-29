@@ -19,7 +19,7 @@ class DatasetResponse(BaseModel):
     storage_path: str | None  # None until ingestion completes
     status: str  # queued | processing | completed | failed
     error_message: str | None  # populated on failure, None otherwise
-    report_type: str  # overview | google_ads | meta_ads
+    report_type: str  # google_ads | meta_ads
     uploaded_at: datetime
     updated_at: datetime
 

@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import type { UploadStatus } from '@/types'
 import { UploadCloud, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 
-export type ValidReportType = 'overview' | 'google_ads' | 'meta_ads'
+export type ValidReportType = 'google_ads' | 'meta_ads'
 
 interface UploadZoneProps {
   onFileSelected: (file: File, reportType: ValidReportType) => void
@@ -16,7 +16,7 @@ interface UploadZoneProps {
 export function UploadZone({ onFileSelected, onRetry, disabled, status }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [reportType, setReportType] = useState<ValidReportType>('overview')
+  const [reportType, setReportType] = useState<ValidReportType>('google_ads')
 
   function handleFile(file: File) {
     if (!file.name.endsWith('.csv')) {
@@ -59,7 +59,6 @@ export function UploadZone({ onFileSelected, onRetry, disabled, status }: Upload
           disabled={disabled || isProcessing || isDone}
           className="w-full rounded-xl border border-white/70 bg-white/80 px-4 py-3 text-sm text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] outline-none transition focus:border-[#f0a500] focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
         >
-          <option value="overview">Overview</option>
           <option value="google_ads">Google Ads</option>
           <option value="meta_ads">Meta Ads</option>
         </select>

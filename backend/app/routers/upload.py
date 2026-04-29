@@ -172,7 +172,7 @@ async def upload_file(
     file: UploadFile = File(...),
     org_id: UUID = Form(...),
     report_name: str | None = Form(None),
-    report_type: str = Form("overview"),
+    report_type: str = Form("google_ads"),
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
     _admin: None = Depends(require_admin),
@@ -201,7 +201,7 @@ async def upload_file(
         )
 
     # ── Validate report_type ────────────────────────────────────────────────
-    valid_report_types = {"overview", "google_ads", "meta_ads"}
+    valid_report_types = {"google_ads", "meta_ads"}
     if report_type not in valid_report_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

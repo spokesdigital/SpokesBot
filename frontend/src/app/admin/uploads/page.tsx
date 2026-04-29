@@ -21,7 +21,6 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024
 const ACCEPTED_EXTS = ['.csv', '.xlsx', '.xls']
 
 const REPORT_TYPE_OPTIONS = [
-  { value: 'overview',    label: 'Overview Report' },
   { value: 'google_ads',  label: 'Google Ads' },
   { value: 'meta_ads',   label: 'Meta Ads' },
 ]
@@ -70,7 +69,7 @@ export default function UploadsPage() {
 
   // ── Upload form state ─────────────────────────────────────────────────────
   const [selectedOrgId, setSelectedOrgId] = useState('')
-  const [reportType, setReportType] = useState('overview')
+  const [reportType, setReportType] = useState('google_ads')
   const [reportName, setReportName] = useState('')
   const [stagedFile, setStagedFile] = useState<File | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
