@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -334,6 +335,13 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
 
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const parentRef = useRef<HTMLDivElement>(null)
+
+  const virtualizer = useVirtualizer({
+    count: threads.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80,
+  })
 
   // Dataset lookup map
   const datasetMap = new Map(datasets.map((d) => [d.id, d]))
@@ -558,7 +566,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
         </div>
 
         {/* Thread list */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={parentRef} className="flex-1 overflow-y-auto">
           {loadingThreads ? (
             <ThreadSkeleton />
           ) : threadsError ? (
@@ -572,7 +580,31 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
             </div>
           ) : (
             <>
-              {threads.map((t) => <ThreadItem key={t.id} thread={t} />)}
+              <div
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const t = threads[virtualRow.index]
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <ThreadItem thread={t} />
+                    </div>
+                  )
+                })}
+              </div>
 
               {/* Load More */}
               {hasMore && (
