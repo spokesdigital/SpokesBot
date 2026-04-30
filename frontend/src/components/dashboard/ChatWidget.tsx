@@ -515,6 +515,66 @@ const HELP_ARTICLES: HelpArticle[] = [
     answer:
       'Watch for a rising CPC (Cost Per Click) and a falling CTR (Click-Through Rate) over time. If the same audience is seeing the same ad too often, they stop clicking, which tells the platform the ad is less relevant.',
   },
+  {
+    id: 'ctr',
+    question: 'What is CTR and what is a good benchmark?',
+    answer:
+      'CTR (Click-Through Rate) is the percentage of people who clicked your ad after seeing it — calculated as clicks divided by impressions. A good CTR varies by channel: Search campaigns typically see 3–10%, while Display and Social ads often range from 0.5–2%. A declining CTR usually signals audience fatigue or weak creative.',
+  },
+  {
+    id: 'conversion-rate',
+    question: 'What is conversion rate and how is it calculated?',
+    answer:
+      'Conversion rate is the percentage of users who completed a desired action (purchase, sign-up, etc.) out of the total who clicked your ad. It is calculated as conversions divided by clicks. Even a small improvement — say from 2% to 3% — can dramatically reduce your CPA and improve ROAS without increasing spend.',
+  },
+  {
+    id: 'cpm',
+    question: 'What does CPM mean?',
+    answer:
+      'CPM stands for Cost Per Mille, or cost per thousand impressions. It is the price you pay for every 1,000 times your ad is shown. CPM is most relevant for awareness campaigns where visibility matters more than direct clicks or conversions.',
+  },
+  {
+    id: 'branded-nonbranded',
+    question: 'What is the difference between branded and non-branded campaigns?',
+    answer:
+      'Branded campaigns target keywords or audiences that include your brand name. Non-branded campaigns target broader, category-level keywords. Branded campaigns typically have higher ROAS because users already intend to buy from you, while non-branded campaigns expand reach but usually cost more per conversion.',
+  },
+  {
+    id: 'lookalike',
+    question: 'What is a lookalike audience?',
+    answer:
+      'A lookalike audience is a targeting tool (available on platforms like Meta and Google) that finds new users who share characteristics with your existing customers. The platform analyzes your best customers and identifies similar people who are likely to convert, helping you expand reach without sacrificing relevance.',
+  },
+  {
+    id: 'retargeting',
+    question: 'How does retargeting work?',
+    answer:
+      'Retargeting shows ads to people who have already interacted with your brand — visited your website, viewed a product, or abandoned a cart. Because these users already have some intent, retargeting campaigns typically convert at a higher rate and lower cost than prospecting campaigns aimed at cold audiences.',
+  },
+  {
+    id: 'learning-phase',
+    question: 'What does "learning phase" mean on ad platforms?',
+    answer:
+      'When you launch or significantly change a campaign, Meta and Google enter a learning phase where the algorithm gathers data to optimize delivery. During this period, performance can be unstable. Avoid major edits until the platform exits learning, which usually requires around 50 conversions within a 7-day window.',
+  },
+  {
+    id: 'prospecting-vs-retargeting',
+    question: 'What is the difference between prospecting and retargeting campaigns?',
+    answer:
+      'Prospecting campaigns target people who have never interacted with your brand before. Retargeting campaigns re-engage people who already visited your site or showed interest. A healthy strategy usually splits budget between both: prospecting fills the top of the funnel while retargeting captures intent already built.',
+  },
+  {
+    id: 'landing-page',
+    question: 'Why does my landing page affect ad performance?',
+    answer:
+      'Ad platforms score your ads partly based on landing page experience. A slow, irrelevant, or confusing landing page increases bounce rate, which lowers your Quality Score on Google and Relevance Score on Meta — causing you to pay more per click. Improving landing page speed and message match is often the fastest way to lower CPA.',
+  },
+  {
+    id: 'ad-spend-vs-marketing-spend',
+    question: 'What is the difference between ad spend and total marketing spend?',
+    answer:
+      'Ad spend is the amount paid directly to platforms like Google or Meta to run your ads. Total marketing spend includes ad spend plus additional costs like creative production, agency fees, tools, and staff. ROAS is calculated against ad spend only, so keep that distinction in mind when evaluating true campaign profitability.',
+  },
 ]
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -956,7 +1016,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
   }
 
-  async function sendMessage(e: React.FormEvent) {
+  async function sendMessage(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     await submitMessage(input)
   }

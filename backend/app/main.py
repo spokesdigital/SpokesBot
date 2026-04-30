@@ -42,6 +42,8 @@ async def lifespan(app: FastAPI):
             settings.FRONTEND_URL,
             "http://localhost:3000",
             "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
         }
     )
     logger.info(
@@ -59,14 +61,18 @@ async def lifespan(app: FastAPI):
     # Any dataset stuck in "processing" when the server starts will never
     # advance on its own — the background task that was running it is gone.
     # Reset them to "failed" so the UI surfaces the error instead of spinning.
-    service_client = get_service_client()
-    service_client.table("datasets").update(
-        {
-            "status": "failed",
-            "error_message": "Server restarted while this dataset was being processed. Please re-upload.",
-        }
-    ).eq("status", "processing").execute()
-    logger.info("startup_recovery", message="Reset stuck processing datasets to failed")
+    try:
+        service_client = get_service_client()
+        service_client.table("datasets").update(
+            {
+                "status": "failed",
+                "error_message": "Server restarted while this dataset was being processed. Please re-upload.",
+            }
+        ).eq("status", "processing").execute()
+        logger.info("startup_recovery", message="Reset stuck processing datasets to failed")
+    except Exception as exc:
+        # Non-fatal: the server must still start even if Supabase is temporarily unreachable.
+        logger.warning("startup_recovery_failed", error=str(exc))
     yield
 
 
@@ -97,6 +103,8 @@ _CORS_ORIGINS = list(
         settings.FRONTEND_URL,  # picks up any override set in Render dashboard
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:3001",   # local dev on alt port
+        "http://127.0.0.1:3001",
     }
 )
 app.add_middleware(

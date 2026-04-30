@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
+import { TimeoutScreen } from '@/components/dashboard/TimeoutScreen'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { useShallow } from 'zustand/react/shallow'
@@ -420,6 +421,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [loadingInsights, setLoadingInsights] = useState(false)
   const [insightsError, setInsightsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isTimeoutError, setIsTimeoutError] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [selectedCampaignDimension, setSelectedCampaignDimension] = useState<string | null>(null)
@@ -595,6 +597,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       }
 
       setError(null)
+      setIsTimeoutError(false)
       setLoadingAnalytics(true)
       try {
         const body = {
@@ -622,15 +625,16 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       } catch (err) {
         if (!cancelled) {
           const isTimeout = (err instanceof Error && (err.name === 'AbortError' || err.message.toLowerCase().includes('timeout')))
-          setError(isTimeout
-            ? 'The server is warming up — data loading took longer than expected. Retrying now…'
-            : err instanceof Error ? err.message : 'Failed to load analytics')
-          // Re-trigger warm so the automatic retry (via refreshTick) hits the cache
-          if (isTimeout && session?.access_token && activeDatasetId) {
-            const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
-            api.analytics.warm(activeDatasetId, session.access_token, effectiveOrgId)
-            // Auto-retry after 5 seconds
-            setTimeout(() => { if (!cancelled) setRefreshTick(t => t + 1) }, 5000)
+          if (isTimeout) {
+            setIsTimeoutError(true)
+            // Re-trigger warm so the automatic retry hits the cache
+            if (session?.access_token && activeDatasetId) {
+              const effectiveOrgId = targetOrgId ?? (user?.role === 'admin' ? organizationId ?? undefined : undefined)
+              api.analytics.warm(activeDatasetId, session.access_token, effectiveOrgId)
+              setTimeout(() => { if (!cancelled) setRefreshTick(t => t + 1) }, 5000)
+            }
+          } else {
+            setError(err instanceof Error ? err.message : 'Failed to load analytics')
           }
         }
       } finally {
@@ -1121,6 +1125,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
       {!loadingDatasets && completedDatasets.length === 0 ? (
         <EmptyDashboardState channelName={channelName} />
+      ) : isTimeoutError && !analytics ? (
+        <TimeoutScreen channelName={channelName} />
       ) : (
         <>
           {/* ── KPI Cards were moved to their respective sections ────────────────── */}

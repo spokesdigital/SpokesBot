@@ -18,6 +18,7 @@ import {
   Pencil,
   Settings2,
   ChevronRight,
+  Ban,
 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 
@@ -261,6 +262,12 @@ export default function ClientsPage() {
           <Settings2 className="h-4 w-4" />
         </Link>
         <button
+          title="Disable client"
+          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-amber-50 hover:text-amber-600 disabled:opacity-40"
+        >
+          <Ban className="h-4 w-4" />
+        </button>
+        <button
           onClick={() => setConfirmDelete(org)}
           disabled={isDeleting}
           title="Delete client"
@@ -498,6 +505,7 @@ export default function ClientsPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/50 bg-white/30">
+                  <th className="w-8 px-3 py-3.5" />
                   {['CLIENT NAME', 'USERNAME', 'STATUS', 'LAST UPLOAD', 'REPORT STATUS', 'CREATED ON', 'ACTIONS'].map(col => (
                     <th key={col} className="px-6 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                       {col}
@@ -510,6 +518,15 @@ export default function ClientsPage() {
                   const rsCfg = REPORT_STATUS_CONFIG[reportStatus]
                   return (
                     <tr key={org.id} className="group transition hover:bg-white/40">
+                      <td className="w-8 px-3 py-4">
+                        <Link
+                          href={`/admin/clients/${org.id}`}
+                          title="View client details"
+                          className="flex items-center justify-center text-slate-300 transition group-hover:text-slate-500"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </td>
                       <td className="px-6 py-4">
                         <span className="font-semibold text-slate-800">{org.name}</span>
                       </td>

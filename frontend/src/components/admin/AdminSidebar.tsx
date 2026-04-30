@@ -87,7 +87,7 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
                 isActive
                   ? isEscalations
                     ? 'border border-red-500/30 bg-red-500/10 text-red-400'
-                    : 'border border-white/10 bg-white/5 text-white shadow-sm'
+                    : 'border border-amber-500/20 bg-amber-500/15 text-amber-300'
                   : isEscalations
                     ? 'text-red-400/70 hover:bg-red-500/10 hover:text-red-400'
                     : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -103,9 +103,14 @@ export function AdminSidebar({ onClose }: { onClose?: () => void } = {}) {
       {/* User + collapse */}
       <div className="space-y-1 border-t border-white/10 p-2">
         {!sidebarCollapsed && user && (
-          <div className="px-3 py-2">
-            <p className="truncate text-xs font-medium text-white">{user.email}</p>
-            <p className="text-xs capitalize text-slate-500">{user.role}</p>
+          <div className="flex items-center gap-2.5 px-3 py-2">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-[10px] font-bold text-amber-300">
+              {user.email.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-medium text-white">{user.email}</p>
+              <p className="text-[10px] capitalize text-slate-500">{user.role}</p>
+            </div>
           </div>
         )}
         <button

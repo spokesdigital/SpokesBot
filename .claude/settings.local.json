@@ -52,7 +52,10 @@
       "Bash(kill 11311)",
       "Bash(pkill -f \"next dev\")",
       "Bash(awk '{print $2, $11}')",
-      "Bash(lsof -iTCP -sTCP:LISTEN -P)"
+      "Bash(lsof -iTCP -sTCP:LISTEN -P)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(xargs cat *)"
     ]
   }
 }

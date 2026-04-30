@@ -1,6 +1,7 @@
 import type {
   Dataset,
   HelpArticle,
+  OrgMember,
   Thread,
   Message,
   AnalyticsRequest,
@@ -65,8 +66,9 @@ async function apiFetch<T>(
   let cacheKey: string | null = null
 
   if (cacheMs && (method === 'GET' || method === 'POST')) {
-    // Generate a unique key for this request based on its parameters
-    cacheKey = `${method}:${path}:${fetchOptions.body ? String(fetchOptions.body) : ''}:${token || ''}`
+    // Token is intentionally excluded from the key: the cache lives in one browser
+    // tab for one user session, so including it just bloats the key with a JWT.
+    cacheKey = `${method}:${path}:${fetchOptions.body ? String(fetchOptions.body) : ''}`
     const cached = apiCache.get(cacheKey)
     if (cached && cached.expiresAt > Date.now()) {
       return cached.data as T
@@ -119,6 +121,11 @@ async function apiFetch<T>(
     const data = (await res.json()) as T
 
     if (cacheKey && cacheMs) {
+      // Evict the oldest entry when the cache grows too large to prevent memory bloat.
+      if (apiCache.size >= 500) {
+        const firstKey = apiCache.keys().next().value
+        if (firstKey !== undefined) apiCache.delete(firstKey)
+      }
       apiCache.set(cacheKey, { data, expiresAt: Date.now() + cacheMs })
     }
 
@@ -166,6 +173,26 @@ export const api = {
 
     delete: (id: string, token: string) =>
       apiFetch<void>(`/organizations/${id}`, { method: 'DELETE', token, timeoutMs: 10_000 }),
+
+    members: {
+      list: (orgId: string, token: string) =>
+        apiFetch<OrgMember[]>(`/organizations/${orgId}/members`, { token, timeoutMs: 10_000 }),
+
+      invite: (orgId: string, body: { email: string; role: string }, token: string) =>
+        apiFetch<OrgMember>(`/organizations/${orgId}/members`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+          token,
+          timeoutMs: 20_000,
+        }),
+
+      remove: (orgId: string, userId: string, token: string) =>
+        apiFetch<void>(`/organizations/${orgId}/members/${userId}`, {
+          method: 'DELETE',
+          token,
+          timeoutMs: 10_000,
+        }),
+    },
   },
 
   datasets: {
@@ -397,7 +424,8 @@ export async function* streamChat(
     throw new ApiError(res.status, body.detail ?? 'Chat request failed')
   }
 
-  const reader = res.body!.getReader()
+  if (!res.body) throw new ApiError(res.status, 'No response body from chat stream')
+  const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 

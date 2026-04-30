@@ -10,7 +10,7 @@ import { ClientOverviewDashboard } from '@/components/admin/ClientOverviewDashbo
 import { ChannelPage } from '@/components/dashboard/ChannelPage'
 import { AdminCSVUpload } from '@/components/admin/AdminCSVUpload'
 import { AdminChatHistory } from '@/components/admin/AdminChatHistory'
-import type { Dataset, Organization } from '@/types'
+import type { Dataset, OrgMember, Organization } from '@/types'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -23,12 +23,18 @@ import {
   Share2,
   UserMinus,
   MessageSquare,
+  Users,
+  UserPlus,
+  RefreshCw,
+  Mail,
+  Shield,
+  User,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 
 
-type MainTab = 'data' | 'client-view' | 'chat-history'
+type MainTab = 'data' | 'client-view' | 'chat-history' | 'members'
 type ClientViewTab = 'overview' | 'google-ads' | 'meta-ads'
 
 export default function ClientDetailPage({
@@ -51,6 +57,17 @@ export default function ClientDetailPage({
   const [confirmRemoveOrg, setConfirmRemoveOrg] = useState(false)
   const [mainTab, setMainTab] = useState<MainTab>('data')
   const [clientViewTab, setClientViewTab] = useState<ClientViewTab>('overview')
+
+  // ── Members state ──────────────────────────────────────────────────────────
+  const [members, setMembers] = useState<OrgMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [membersError, setMembersError] = useState<string | null>(null)
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [removingMember, setRemovingMember] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     if (!session) return
@@ -111,6 +128,62 @@ export default function ClientDetailPage({
       toastError(msg)
     } finally {
       setRemovingOrg(false)
+    }
+  }
+
+  // ── Member actions ─────────────────────────────────────────────────────────
+  const loadMembers = useCallback(async () => {
+    if (!session) return
+    setMembersLoading(true)
+    setMembersError(null)
+    try {
+      const data = await api.organizations.members.list(orgId, session.access_token)
+      setMembers(data)
+    } catch (e) {
+      setMembersError(e instanceof Error ? e.message : 'Failed to load members.')
+    } finally {
+      setMembersLoading(false)
+    }
+  }, [session, orgId])
+
+  useEffect(() => {
+    if (mainTab !== 'members' || !session) return
+    void loadMembers()
+  }, [mainTab, session, loadMembers])
+
+  async function handleInvite(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!session || !inviteEmail.trim() || inviting) return
+    setInviting(true)
+    setInviteError(null)
+    try {
+      const member = await api.organizations.members.invite(
+        orgId,
+        { email: inviteEmail.trim().toLowerCase(), role: inviteRole },
+        session.access_token,
+      )
+      setMembers(prev => [...prev, member])
+      setInviteEmail('')
+      setInviteRole('user')
+      setShowInvite(false)
+    } catch (e) {
+      setInviteError(e instanceof Error ? e.message : 'Failed to invite member.')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  async function handleRemoveMember(member: OrgMember) {
+    if (!session || removingMember) return
+    setRemovingMember(member.user_id)
+    setMembers(prev => prev.filter(m => m.user_id !== member.user_id))
+    try {
+      await api.organizations.members.remove(orgId, member.user_id, session.access_token)
+    } catch (e) {
+      setMembers(prev => [...prev, member])
+      setMembersError(e instanceof Error ? e.message : 'Failed to remove member.')
+    } finally {
+      setRemovingMember(null)
     }
   }
 
@@ -212,6 +285,24 @@ export default function ClientDetailPage({
           >
             <MessageSquare className="w-4 h-4" />
             Chat History
+          </button>
+          <button
+            role="tab"
+            aria-selected={mainTab === 'members'}
+            onClick={() => setMainTab('members')}
+            className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors ${
+              mainTab === 'members'
+                ? 'border-[#f0a500] text-[#f0a500]'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Members
+            {members.length > 0 && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                {members.length}
+              </span>
+            )}
           </button>
         </nav>
       </div>
@@ -417,6 +508,208 @@ export default function ClientDetailPage({
               accentText="#1254b0"
               targetOrgId={orgId}
             />
+          )}
+        </div>
+      )}
+
+      {/* ── MEMBERS TAB ── */}
+      {mainTab === 'members' && (
+        <div className="space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-8">
+          {/* Section header */}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Team Members</h2>
+              <p className="text-sm text-slate-500">
+                Users with access to this client&apos;s dashboard.
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowInvite(true); setInviteError(null); setInviteEmail(''); setInviteRole('user') }}
+              className="flex shrink-0 items-center gap-2 rounded-xl bg-[#f0a500] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#d99600] active:scale-[0.98]"
+            >
+              <UserPlus className="h-4 w-4" />
+              Invite Member
+            </button>
+          </div>
+
+          {/* Error */}
+          {membersError && (
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-500">
+              <span>{membersError}</span>
+              <button
+                onClick={loadMembers}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-200"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Members list */}
+          {membersLoading ? (
+            <div className="glass-panel divide-y divide-white/40 overflow-hidden rounded-[1.75rem]">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-6 py-4">
+                  <div className="shimmer-cool h-9 w-9 rounded-xl" />
+                  <div className="space-y-2">
+                    <div className="shimmer-cool h-4 w-48 rounded" />
+                    <div className="shimmer-cool h-3 w-28 rounded" />
+                  </div>
+                  <div className="ml-auto shimmer-cool h-5 w-16 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : members.length === 0 ? (
+            <div className="glass-panel flex flex-col items-center justify-center gap-3 rounded-[2rem] py-20 text-slate-500">
+              <Users className="h-10 w-10 opacity-30" />
+              <p className="text-sm font-medium">No members yet</p>
+              <button
+                onClick={() => { setShowInvite(true); setInviteError(null) }}
+                className="flex items-center gap-1.5 text-sm text-[#f0a500] hover:underline"
+              >
+                <UserPlus className="h-4 w-4" />
+                Invite the first member
+              </button>
+            </div>
+          ) : (
+            <div className="glass-panel overflow-hidden rounded-[1.75rem]">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/50 bg-white/30">
+                    {['MEMBER', 'ROLE', 'ADDED', 'ACTIONS'].map(col => (
+                      <th key={col} className="px-6 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/40">
+                  {members.map(member => (
+                    <tr key={member.user_id} className="group transition hover:bg-white/40">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white text-slate-400">
+                            <Mail className="h-4 w-4" />
+                          </div>
+                          <span className="font-medium text-slate-800">{member.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {member.role === 'admin' ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                            <Shield className="h-3 w-3" />
+                            Admin
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                            <User className="h-3 w-3" />
+                            User
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500">
+                        {member.joined_at
+                          ? new Date(member.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => handleRemoveMember(member)}
+                          disabled={removingMember === member.user_id}
+                          title="Remove member"
+                          className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                        >
+                          {removingMember === member.user_id
+                            ? <RefreshCw className="h-4 w-4 animate-spin" />
+                            : <UserMinus className="h-4 w-4" />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Invite dialog */}
+          {showInvite && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm"
+              onClick={e => { if (e.target === e.currentTarget) setShowInvite(false) }}
+            >
+              <div className="w-full max-w-md rounded-[1.75rem] border border-white/60 bg-white p-5 sm:p-7 shadow-2xl">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-800">Invite Member</h2>
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      They&apos;ll receive an email to access{' '}
+                      <span className="font-medium text-slate-700">{org?.name}</span>.
+                    </p>
+                  </div>
+                  <button onClick={() => setShowInvite(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <form onSubmit={handleInvite} className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Email address</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      placeholder="client@example.com"
+                      autoFocus
+                      disabled={inviting}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none transition focus:border-[#f0a500] focus:ring-2 focus:ring-[#f0a500]/20 disabled:opacity-60"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Role</label>
+                    <div className="flex gap-2">
+                      {(['user', 'admin'] as const).map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setInviteRole(r)}
+                          className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-medium transition ${
+                            inviteRole === r
+                              ? 'border-[#f0a500] bg-[#fff9e5] text-[#a36200]'
+                              : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          {r === 'admin' ? <Shield className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
+                          {r === 'admin' ? 'Admin' : 'User'}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs text-slate-400">
+                      {inviteRole === 'admin'
+                        ? 'Admins can manage datasets and other members.'
+                        : 'Users can view dashboards and chat with the AI.'}
+                    </p>
+                  </div>
+                  {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowInvite(false)}
+                      className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={inviting || !inviteEmail.trim()}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#f0a500] py-2.5 text-sm font-semibold text-white transition hover:bg-[#d99600] disabled:opacity-60"
+                    >
+                      {inviting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                      {inviting ? 'Inviting…' : 'Send Invite'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       )}

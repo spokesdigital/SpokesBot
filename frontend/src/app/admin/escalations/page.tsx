@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import type { SupportMessage } from '@/types'
+import type { Organization, SupportMessage } from '@/types'
 import { AlertOctagon, CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 
@@ -28,18 +28,26 @@ const BADGE_COLORS: Record<SupportMessage['status'], string> = {
 export default function EscalationsPage() {
   const { session } = useAuth()
   const [messages, setMessages] = useState<SupportMessage[]>([])
+  const [orgs, setOrgs] = useState<Organization[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabFilter>('all')
   const [resolving, setResolving] = useState<string | null>(null)
 
+  const orgMap = Object.fromEntries(orgs.map(o => [o.id, o.name]))
+
   function load() {
     if (!session) return
     setLoading(true)
     setError(null)
-    api.support
-      .list(session.access_token)
-      .then(data => setMessages(data as SupportMessage[]))
+    Promise.all([
+      api.support.list(session.access_token),
+      api.organizations.list(session.access_token),
+    ])
+      .then(([msgs, os]) => {
+        setMessages(msgs as SupportMessage[])
+        setOrgs(os as Organization[])
+      })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load escalations.'))
       .finally(() => setLoading(false))
   }
@@ -168,7 +176,14 @@ export default function EscalationsPage() {
                       {msg.status === 'open' ? 'New' : 'Resolved'}
                     </span>
                   </div>
-                  <p className="text-xs text-[#d99600] font-medium mb-2">{msg.email}</p>
+                  {/* Org · email — matches prototype "AcmeCorp · email@..." format */}
+                  <p className="text-xs font-medium mb-2">
+                    <span className="text-slate-700 font-semibold">
+                      {orgMap[msg.organization_id] ?? 'Unknown Org'}
+                    </span>
+                    <span className="mx-1.5 text-slate-300">·</span>
+                    <span className="text-[#d99600]">{msg.email}</span>
+                  </p>
                   <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">
                     {msg.message}
                   </p>

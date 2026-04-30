@@ -32,7 +32,7 @@ interface ActivityEntry {
   status: StatusType
 }
 
-type FilterTab = 'all' | ActionType
+type FilterTab = 'all' | ActionType | 'client'
 
 const ACTION_CONFIG: Record<ActionType, { label: string; icon: React.ElementType; color: string; bg: string }> = {
   upload:  { label: 'Upload',           icon: Upload,        color: 'text-amber-700',   bg: 'bg-amber-50' },
@@ -142,7 +142,8 @@ export default function ActivityPage() {
 
   const filtered = useMemo(() => {
     let rows = allEntries
-    if (activeTab !== 'all') rows = rows.filter(r => r.actionType === activeTab)
+    if (activeTab === 'client') rows = rows.filter(r => !!r.clientOrgId)
+    else if (activeTab !== 'all') rows = rows.filter(r => r.actionType === activeTab)
     if (selectedOrg !== 'all') rows = rows.filter(r => r.clientOrgId === selectedOrg)
     if (dateFrom) {
       const from = new Date(dateFrom)
@@ -157,10 +158,11 @@ export default function ActivityPage() {
   }, [allEntries, activeTab, selectedOrg, dateFrom, dateTo])
 
   const tabs: { key: FilterTab; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'upload', label: 'Upload' },
-    { key: 'report', label: 'Report' },
-    { key: 'support', label: 'Support' },
+    { key: 'all',     label: 'All' },
+    { key: 'upload',  label: 'Upload' },
+    { key: 'report',  label: 'Report' },
+    { key: 'support', label: 'Login' },
+    { key: 'client',  label: 'Client' },
   ]
 
   return (

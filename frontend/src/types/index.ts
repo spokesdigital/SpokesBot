@@ -106,6 +106,13 @@ export interface HelpArticle {
   updated_at: string
 }
 
+export interface OrgMember {
+  user_id: string
+  email: string
+  role: 'admin' | 'user'
+  joined_at: string | null
+}
+
 export interface SupportMessage {
   id: string
   user_id: string

@@ -30,6 +30,9 @@ def send_support_message(
     )
 
 
+_VALID_STATUSES = {"open", "resolved"}
+
+
 @router.get("/", response_model=list[SupportMessageResponse])
 def list_support_messages(
     status_filter: str | None = Query(None, alias="status"),
@@ -37,6 +40,11 @@ def list_support_messages(
     _: None = Depends(require_admin),
 ):
     """Admin-only: list all support messages, optionally filtered by status."""
+    if status_filter is not None and status_filter not in _VALID_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid status '{status_filter}'. Must be one of: {sorted(_VALID_STATUSES)}",
+        )
     return support_service.list_messages(service_client, status_filter=status_filter)
 
 
