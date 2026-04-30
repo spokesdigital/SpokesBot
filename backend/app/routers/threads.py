@@ -136,7 +136,9 @@ def list_threads(
         if dataset_id:
             query = query.eq("dataset_id", str(dataset_id))
         if search and search.strip():
-            safe_search = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            safe_search = (
+                search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             query = query.ilike("title", f"%{safe_search}%")
         return query.execute().data
 

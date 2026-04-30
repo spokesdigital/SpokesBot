@@ -119,11 +119,15 @@ def list_org_members(
 ):
     """Admin-only: list all users who are members of a client organisation."""
     if role != ROLE_ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can list org members.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can list org members."
+        )
     return member_service.list_members(str(org_id), service_client)
 
 
-@router.post("/{org_id}/members", response_model=OrgMemberResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{org_id}/members", response_model=OrgMemberResponse, status_code=status.HTTP_201_CREATED
+)
 def invite_org_member(
     org_id: UUID,
     body: OrgMemberInvite,
@@ -136,9 +140,14 @@ def invite_org_member(
     otherwise Supabase sends them an invite email.
     """
     if role != ROLE_ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can invite members.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can invite members."
+        )
     if body.role not in ("admin", "user"):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Role must be 'admin' or 'user'.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Role must be 'admin' or 'user'.",
+        )
     try:
         return member_service.invite_member(str(org_id), body.email, body.role, service_client)
     except ValueError as exc:
@@ -154,7 +163,9 @@ def remove_org_member(
 ):
     """Admin-only: remove a user from a client organisation."""
     if role != ROLE_ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can remove members.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can remove members."
+        )
     try:
         member_service.remove_member(str(org_id), str(user_id), service_client)
     except ValueError as exc:

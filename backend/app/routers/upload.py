@@ -109,7 +109,9 @@ def _process_file(
             row_count = len(full_df)
         else:
             for chunk_df in pd.read_csv(file_path, chunksize=STREAM_CHUNK_ROWS):
-                chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns, date_columns)
+                chunk_df = analytics_service.normalize_chunk(
+                    chunk_df, coerced_columns, date_columns
+                )
                 table = pa.Table.from_pandas(chunk_df, preserve_index=False)
 
                 if pq_writer is None:

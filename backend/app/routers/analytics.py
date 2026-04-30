@@ -204,7 +204,11 @@ async def compute_analytics(
         try:
             df = await _run_pandas_work(
                 "filtering the selected date range",
-                analytics_service.apply_date_filter, df, body.date_column, start, end
+                analytics_service.apply_date_filter,
+                df,
+                body.date_column,
+                start,
+                end,
             )
         except ValueError as e:
             raise HTTPException(

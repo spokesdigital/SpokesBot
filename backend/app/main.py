@@ -110,7 +110,7 @@ _CORS_ORIGINS = list(
         settings.FRONTEND_URL,  # picks up any override set in Render dashboard
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:3001",   # local dev on alt port
+        "http://localhost:3001",  # local dev on alt port
         "http://127.0.0.1:3001",
     }
 )
