@@ -1,5 +1,6 @@
 import math
 import re
+import time as monotonic_time
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
@@ -32,6 +33,31 @@ _METRIC_MAPPING_ORDER = [
     "impressions",
     "clicks",
 ]
+
+DATA_CAST_TIMEOUT_SECONDS = 30.0
+_MISSING_NUMERIC_VALUES = {
+    "",
+    "-",
+    "--",
+    "n/a",
+    "na",
+    "nan",
+    "none",
+    "null",
+    "nil",
+}
+
+
+class DataCastingTimeoutError(TimeoutError):
+    """Raised when ingestion/analytics data casting exceeds the hard timeout."""
+
+
+def _check_cast_timeout(started_at: float, context: str) -> None:
+    elapsed = monotonic_time.monotonic() - started_at
+    if elapsed > DATA_CAST_TIMEOUT_SECONDS:
+        raise DataCastingTimeoutError(
+            f"Data casting exceeded {DATA_CAST_TIMEOUT_SECONDS:.0f}s while {context}."
+        )
 
 
 def _sanitize(obj: Any) -> Any:
@@ -68,6 +94,66 @@ def _looks_like_date_column_name(col: str) -> bool:
     )
 
 
+def _looks_like_metric_column_name(col: str) -> bool:
+    lowered = col.strip().lower()
+    if _looks_like_date_column_name(lowered):
+        return False
+
+    if any(
+        token in lowered
+        for patterns in METRIC_PATTERNS.values()
+        for token in patterns
+    ):
+        return True
+
+    return bool(
+        re.search(
+            r"\b("
+            r"impressions?|impr|views?|clicks?|cost|spend|spent|expense|"
+            r"revenue|sales|gmv|income|purchase[\s_-]*value|conversion[\s_-]*value|"
+            r"conversions?|transactions?|purchases?|orders?|leads?|"
+            r"ctr|cpc|cpa|cpm|roas|aov|rate|ratio|average"
+            r")\b",
+            lowered,
+        )
+    )
+
+
+def _clean_numeric_text(series: pd.Series) -> pd.Series:
+    text = series.astype("string").str.strip()
+    lowered = text.str.lower()
+    text = text.mask(lowered.isin(_MISSING_NUMERIC_VALUES), pd.NA)
+    return (
+        text.str.replace(",", "", regex=False)
+        .str.replace("$", "", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.replace("€", "", regex=False)
+        .str.replace("£", "", regex=False)
+        .str.replace(r"^\((.*)\)$", r"-\1", regex=True)
+    )
+
+
+def _coerce_metric_column(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(_clean_numeric_text(series), errors="coerce").fillna(0)
+
+
+def _strict_parse_date_column(df: pd.DataFrame, date_column: str) -> tuple[pd.DataFrame, int]:
+    if date_column not in df.columns:
+        return df, 0
+
+    parsed = pd.to_datetime(df[date_column], errors="coerce", utc=True)
+    valid_mask = parsed.notna()
+    dropped_rows = int((~valid_mask).sum())
+    if dropped_rows:
+        df = df.loc[valid_mask].copy()
+        parsed = parsed.loc[valid_mask]
+    else:
+        df = df.copy()
+
+    df[date_column] = parsed
+    return df, dropped_rows
+
+
 def _coerce_numeric_like_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """
     Convert object/string columns that mostly contain numeric-looking values
@@ -79,10 +165,20 @@ def _coerce_numeric_like_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[s
     """
     converted = df.copy()
     coerced_columns: list[str] = []
+    started_at = monotonic_time.monotonic()
 
     for col in converted.columns:
+        _check_cast_timeout(started_at, f"casting column '{col}'")
         series = converted[col]
-        if is_numeric_dtype(series) or _looks_like_date_column_name(col):
+        if _looks_like_date_column_name(col):
+            continue
+
+        if _looks_like_metric_column_name(col):
+            converted[col] = _coerce_metric_column(series)
+            coerced_columns.append(col)
+            continue
+
+        if is_numeric_dtype(series):
             continue
         if not pd.api.types.is_object_dtype(series) and not pd.api.types.is_string_dtype(series):
             continue
@@ -100,37 +196,23 @@ def _coerce_numeric_like_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, list[s
         if cleaned.empty:
             continue
 
-        normalized = (
-            cleaned.str.replace(",", "", regex=False)
-            .str.replace("$", "", regex=False)
-            .str.replace("%", "", regex=False)
-            .str.replace("€", "", regex=False)
-            .str.replace("£", "", regex=False)
-            .str.replace(r"^\((.*)\)$", r"-\1", regex=True)
-        )
+        normalized = _clean_numeric_text(cleaned)
 
         numeric = pd.to_numeric(normalized, errors="coerce")
         parse_ratio = numeric.notna().sum() / len(cleaned)
 
         if parse_ratio >= 0.8:
-            full_cleaned = (
-                series.astype(str)
-                .str.strip()
-                .replace({"": None, "nan": None, "None": None, "null": None})
-                .str.replace(",", "", regex=False)
-                .str.replace("$", "", regex=False)
-                .str.replace("%", "", regex=False)
-                .str.replace("€", "", regex=False)
-                .str.replace("£", "", regex=False)
-                .str.replace(r"^\((.*)\)$", r"-\1", regex=True)
-            )
-            converted[col] = pd.to_numeric(full_cleaned, errors="coerce")
+            converted[col] = pd.to_numeric(_clean_numeric_text(series), errors="coerce")
             coerced_columns.append(col)
 
     return converted, coerced_columns
 
 
-def normalize_chunk(chunk: pd.DataFrame, coerced_columns: list[str]) -> pd.DataFrame:
+def normalize_chunk(
+    chunk: pd.DataFrame,
+    coerced_columns: list[str],
+    date_columns: list[str] | None = None,
+) -> pd.DataFrame:
     """
     Apply the numeric coercions determined during profile inference to a single
     DataFrame chunk. Mirrors the transformations in _coerce_numeric_like_columns
@@ -139,25 +221,30 @@ def normalize_chunk(chunk: pd.DataFrame, coerced_columns: list[str]) -> pd.DataF
     Used by _process_csv to convert CSVs to Parquet in a streaming fashion
     without loading the entire file into RAM at once.
     """
-    if not coerced_columns:
-        return chunk
     result = chunk.copy()
+    started_at = monotonic_time.monotonic()
+    metric_columns = [
+        col for col in dict.fromkeys([*coerced_columns, *result.columns.tolist()])
+        if col in result.columns and _looks_like_metric_column_name(col)
+    ]
+
+    for col in metric_columns:
+        _check_cast_timeout(started_at, f"normalizing column '{col}'")
+        result[col] = _coerce_metric_column(result[col])
+
     for col in coerced_columns:
+        _check_cast_timeout(started_at, f"normalizing inferred numeric column '{col}'")
         if col not in result.columns:
             continue
-        cleaned = (
-            result[col]
-            .astype(str)
-            .str.strip()
-            .replace({"": None, "nan": None, "None": None, "null": None})
-            .str.replace(",", "", regex=False)
-            .str.replace("$", "", regex=False)
-            .str.replace("%", "", regex=False)
-            .str.replace("€", "", regex=False)
-            .str.replace("£", "", regex=False)
-            .str.replace(r"^\((.*)\)$", r"-\1", regex=True)
-        )
-        result[col] = pd.to_numeric(cleaned, errors="coerce")
+        if col in metric_columns:
+            continue
+        result[col] = pd.to_numeric(_clean_numeric_text(result[col]), errors="coerce")
+
+    if date_columns:
+        for date_col in date_columns[:1]:
+            _check_cast_timeout(started_at, f"parsing date column '{date_col}'")
+            result, _ = _strict_parse_date_column(result, date_col)
+
     return result
 
 
@@ -329,12 +416,23 @@ def infer_metric_mappings(df: pd.DataFrame) -> dict[str, str | None]:
 def build_dataset_profile(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     normalized_df, coerced_columns = _coerce_numeric_like_columns(df)
     date_columns = _detect_date_columns(normalized_df)
+    dropped_invalid_date_rows = 0
+    if date_columns:
+        normalized_df, dropped_invalid_date_rows = _strict_parse_date_column(
+            normalized_df,
+            date_columns[0],
+        )
     numeric_columns = normalized_df.select_dtypes(include="number").columns.tolist()
     metric_mappings = infer_metric_mappings(normalized_df)
     warnings: list[str] = []
 
     if not date_columns:
         warnings.append("No date column was detected during ingestion.")
+    elif dropped_invalid_date_rows:
+        warnings.append(
+            f"Dropped {dropped_invalid_date_rows} rows with invalid dates in "
+            f"'{date_columns[0]}' during ingestion."
+        )
     if not metric_mappings.get("revenue"):
         warnings.append("No revenue metric was detected during ingestion.")
     if not metric_mappings.get("cost"):
@@ -350,6 +448,7 @@ def build_dataset_profile(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any
                 "numeric_columns": numeric_columns,
                 "date_columns": date_columns,
                 "coerced_numeric_columns": coerced_columns,
+                "dropped_invalid_date_rows": dropped_invalid_date_rows,
                 "dtypes": {col: str(dtype) for col, dtype in normalized_df.dtypes.items()},
             }
         ),
@@ -455,6 +554,45 @@ def _safe_ratio(numerator: Any, denominator: Any) -> float | None:
     return float(numerator) / denominator_float
 
 
+def _round_number(value: Any, decimals: int = 2) -> Any:
+    if not _is_finite_number(value):
+        return _sanitize(value)
+    rounded = round(float(value), decimals)
+    if decimals == 0 and rounded.is_integer():
+        return int(rounded)
+    return rounded
+
+
+def _round_metric_output(metric_key: str, value: Any) -> Any:
+    if not _is_finite_number(value):
+        return _sanitize(value)
+
+    key = metric_key.lower()
+    if key in {"impressions", "clicks", "conversions"}:
+        return _round_number(value, 0)
+    if key in {"cost", "revenue", "avg_cpc", "cpc", "cpa", "aov"}:
+        return _round_number(value, 2)
+    # Ratios are stored as base ratios. Four decimals renders as exactly two
+    # percentage decimals on the frontend without changing the formula.
+    if key in {"ctr", "roas", "conversion_rate"}:
+        return _round_number(value, 4)
+
+    return _round_number(value, 2)
+
+
+def _round_column_output(column: str, value: Any) -> Any:
+    lowered = column.lower()
+    if any(token in lowered for token in ("impression", "click", "conversion", "transaction", "purchase", "order", "lead")) and not any(
+        token in lowered for token in ("rate", "cpc", "cpa", "cost per", "value", "revenue")
+    ):
+        return _round_number(value, 0)
+    if any(token in lowered for token in ("cost", "spend", "spent", "revenue", "sales", "gmv", "value", "cpc", "cpa", "cpm", "aov", "avg", "average")):
+        return _round_number(value, 2)
+    if any(token in lowered for token in ("ctr", "roas", "rate", "ratio")):
+        return _round_number(value, 4)
+    return _round_number(value, 2)
+
+
 def _period_label(start: datetime, end: datetime) -> str:
     def fmt(dt: datetime) -> str:
         return f"{dt.strftime('%b')} {dt.day}"
@@ -488,19 +626,23 @@ def _build_period_kpi_data(result: dict[str, Any] | None) -> dict[str, float | N
     revenue = _mapped_total(result, "revenue")
     conversions = _mapped_total(result, "conversions")
 
+    data = {
+        "impressions": impressions,
+        "clicks": clicks,
+        "cost": cost,
+        "revenue": revenue,
+        "conversions": conversions,
+        "ctr": _safe_ratio(clicks, impressions),
+        "avg_cpc": _safe_ratio(cost, clicks),
+        "roas": _safe_ratio(revenue, cost),
+        "cpa": _safe_ratio(cost, conversions),
+        "conversion_rate": _safe_ratio(conversions, clicks),
+        "aov": _safe_ratio(revenue, conversions),
+    }
     return _sanitize(
         {
-            "impressions": impressions,
-            "clicks": clicks,
-            "cost": cost,
-            "revenue": revenue,
-            "conversions": conversions,
-            "ctr": _safe_ratio(clicks, impressions),
-            "avg_cpc": _safe_ratio(cost, clicks),
-            "roas": _safe_ratio(revenue, cost),
-            "cpa": _safe_ratio(cost, conversions),
-            "conversion_rate": _safe_ratio(conversions, clicks),
-            "aov": _safe_ratio(revenue, conversions),
+            key: _round_metric_output(key, value)
+            for key, value in data.items()
         }
     )
 
@@ -568,9 +710,9 @@ def build_auto_comparison(
 
         comparison[col] = {
             "basis": basis,
-            "current": _sanitize(current_value),
-            "previous": _sanitize(previous_value),
-            "delta_pct": _sanitize(_safe_pct_change(current_value, previous_value)),
+            "current": _sanitize(_round_column_output(col, current_value)),
+            "previous": _sanitize(_round_column_output(col, previous_value)),
+            "delta_pct": _sanitize(_round_number(_safe_pct_change(current_value, previous_value), 2)),
         }
 
     return comparison
@@ -592,7 +734,10 @@ def build_period_comparison_payload(
         "previous_period_label": previous_label,
     }
     for key, current_value in current_data.items():
-        comparisons[f"{key}_pct_change"] = _safe_pct_change(current_value, previous_data.get(key))
+        comparisons[f"{key}_pct_change"] = _round_number(
+            _safe_pct_change(current_value, previous_data.get(key)),
+            2,
+        )
 
     return _sanitize(
         {
@@ -820,11 +965,23 @@ def _auto_analyze(
     selected_metric_columns = _pick_metric_columns(df)
 
     # Summary stats for numeric columns → KPI cards
-    numeric_summary = _sanitize(df.describe(include="number").to_dict())
+    raw_numeric_summary = df.describe(include="number").to_dict()
+    numeric_summary = _sanitize(
+        {
+            col: {stat: _round_column_output(col, value) for stat, value in stats.items()}
+            for col, stats in raw_numeric_summary.items()
+        }
+    )
     # Rate/ratio metrics (CTR, ROAS, CPC, etc.) must be averaged, not summed.
     # Summing them produces nonsense KPI values (e.g. CTR of 12.3 instead of 0.08).
     numeric_totals = _sanitize(
-        {col: df[col].mean() if _uses_average_basis(col) else df[col].sum() for col in numeric_cols}
+        {
+            col: _round_column_output(
+                col,
+                df[col].mean() if _uses_average_basis(col) else df[col].sum(),
+            )
+            for col in numeric_cols
+        }
     )
 
     # Detect date columns
@@ -913,7 +1070,7 @@ def _auto_analyze(
             if metric_col:
                 agg = get_aggregated_series(metric_col)
                 raw_series = [
-                    {"date": str(k.date()), "value": _sanitize(v)}
+                    {"date": str(k.date()), "value": _sanitize(_round_column_output(metric_col, v))}
                     for k, v in agg.items()
                     if pd.notna(k)
                 ]
@@ -927,7 +1084,7 @@ def _auto_analyze(
             for m_col in selected_metric_columns:
                 agg = get_aggregated_series(m_col)
                 raw_series = [
-                    {"date": str(k.date()), "value": _sanitize(v)}
+                    {"date": str(k.date()), "value": _sanitize(_round_column_output(m_col, v))}
                     for k, v in agg.items()
                     if pd.notna(k)
                 ]
@@ -978,7 +1135,12 @@ def _auto_analyze(
                 if not is_campaign_col:
                     grouped = grouped.head(8)
                 if not grouped.empty:
-                    metric_breakdowns[metric_col][col] = _sanitize(grouped.to_dict())
+                    metric_breakdowns[metric_col][col] = _sanitize(
+                        {
+                            key: _round_column_output(metric_col, value)
+                            for key, value in grouped.to_dict().items()
+                        }
+                    )
 
     # Column dtype map
     dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}

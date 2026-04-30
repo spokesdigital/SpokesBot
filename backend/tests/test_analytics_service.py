@@ -1,5 +1,4 @@
 import unittest
-
 from datetime import UTC, datetime
 
 import pandas as pd
@@ -10,6 +9,7 @@ from app.services.analytics_service import (
     build_dataset_profile,
     build_period_comparison_payload,
     compute,
+    normalize_chunk,
 )
 
 
@@ -208,6 +208,50 @@ class AnalyticsServiceAutoTest(unittest.TestCase):
         self.assertAlmostEqual(result["numeric_totals"]["Cost"], 100.0)
         self.assertAlmostEqual(result["numeric_totals"]["Revenue"], 225.0)
         self.assertEqual(result["date_columns"], ["Day"])
+
+    def test_ingestion_sanitizes_dirty_metric_columns_and_drops_invalid_dates(self):
+        df = pd.DataFrame(
+            {
+                "Day": ["2026-04-01", "not-a-date", "2026-04-03"],
+                "Impressions": ["10,000", "bad", ""],
+                "Clicks": ["1,200", "N/A", ""],
+                "Cost": ["$1,000.50", "N/A", ""],
+                "Revenue": ["€2,500.25", "£100.00", "N/A"],
+            }
+        )
+
+        normalized_df, profile = build_dataset_profile(df)
+        date_columns = profile["schema_profile"]["date_columns"]
+        coerced_columns = profile["schema_profile"]["coerced_numeric_columns"]
+        normalized_chunk = compute(
+            normalize_chunk(df, coerced_columns, date_columns),
+            operation="auto",
+        )
+
+        self.assertEqual(len(normalized_df), 2)
+        self.assertEqual(profile["schema_profile"]["dropped_invalid_date_rows"], 1)
+        self.assertTrue(pd.api.types.is_datetime64_any_dtype(normalized_df["Day"]))
+        self.assertAlmostEqual(normalized_df["Cost"].iloc[0], 1000.50)
+        self.assertAlmostEqual(normalized_df["Cost"].iloc[1], 0.0)
+        self.assertAlmostEqual(normalized_df["Revenue"].iloc[1], 0.0)
+        self.assertAlmostEqual(normalized_chunk["numeric_totals"]["Cost"], 1000.50)
+        self.assertAlmostEqual(normalized_chunk["numeric_totals"]["Revenue"], 2500.25)
+
+    def test_auto_analyze_rounds_currency_output_artifacts(self):
+        df = pd.DataFrame(
+            {
+                "Day": ["2026-04-01", "2026-04-02"],
+                "Cost": [14.9999999998, 0],
+                "Revenue": [29.9999999997, 0],
+                "Clicks": [3, 0],
+                "Impressions": [10, 0],
+            }
+        )
+
+        result = compute(df, operation="auto")
+
+        self.assertEqual(result["numeric_totals"]["Cost"], 15.0)
+        self.assertEqual(result["numeric_totals"]["Revenue"], 30.0)
 
     def test_build_dataset_profile_detects_canonical_metrics(self):
         df = pd.DataFrame(

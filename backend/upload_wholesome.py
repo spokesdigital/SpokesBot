@@ -75,6 +75,7 @@ def main():
         _, profile = analytics_service.build_dataset_profile(sample_df)
         column_headers = list(sample_df.columns)
         coerced_columns = profile["schema_profile"].get("coerced_numeric_columns", [])
+        date_columns = profile["schema_profile"].get("date_columns", [])
         
         buf = io.BytesIO()
         pq_writer = None
@@ -82,7 +83,7 @@ def main():
         row_count = 0
         
         for chunk_df in pd.read_csv(file_path, chunksize=50000):
-            chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns)
+            chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns, date_columns)
             table = pa.Table.from_pandas(chunk_df, preserve_index=False)
             
             if pq_writer is None:

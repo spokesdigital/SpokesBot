@@ -88,6 +88,7 @@ def _process_file(
         _, profile = analytics_service.build_dataset_profile(sample_df)
         column_headers = list(sample_df.columns)
         coerced_columns: list[str] = profile["schema_profile"].get("coerced_numeric_columns", [])
+        date_columns: list[str] = profile["schema_profile"].get("date_columns", [])
 
         # ── Phase 2: Convert full file → Parquet ────────────────────────────
         buf = io.BytesIO()
@@ -100,7 +101,7 @@ def _process_file(
             # Excel files are binary (compressed) so a 100 MB .xlsx typically
             # expands to 2–5× in memory; acceptable for our 100 MB file limit.
             full_df = pd.read_excel(file_path, engine="openpyxl")
-            full_df = analytics_service.normalize_chunk(full_df, coerced_columns)
+            full_df = analytics_service.normalize_chunk(full_df, coerced_columns, date_columns)
             table = pa.Table.from_pandas(full_df, preserve_index=False)
             arrow_schema = table.schema
             pq_writer = pq.ParquetWriter(buf, arrow_schema)
@@ -108,7 +109,7 @@ def _process_file(
             row_count = len(full_df)
         else:
             for chunk_df in pd.read_csv(file_path, chunksize=STREAM_CHUNK_ROWS):
-                chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns)
+                chunk_df = analytics_service.normalize_chunk(chunk_df, coerced_columns, date_columns)
                 table = pa.Table.from_pandas(chunk_df, preserve_index=False)
 
                 if pq_writer is None:
