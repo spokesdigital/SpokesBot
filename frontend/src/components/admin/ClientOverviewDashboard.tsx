@@ -37,8 +37,8 @@ type ChannelTotals = Record<string, { current: number | null; previous: number |
 
 type TrendPoint = {
   date: string
-  total_revenue?: number
-  total_cost?: number
+  total_revenue?: number | null
+  total_cost?: number | null
 }
 
 // ── Metric definitions ────────────────────────────────────────────────────────
@@ -414,8 +414,14 @@ function buildTrend(
   }
 
   return datesArray.map(date => {
-    const tr = (gRev.get(date) ?? 0) + (mRev.get(date) ?? 0)
-    const tc = (gCost.get(date) ?? 0) + (mCost.get(date) ?? 0)
+    const r1 = gRev.get(date)
+    const m1 = mRev.get(date)
+    const tr = (r1 == null && m1 == null) ? null : (r1 ?? 0) + (m1 ?? 0)
+
+    const c1 = gCost.get(date)
+    const cm1 = mCost.get(date)
+    const tc = (c1 == null && cm1 == null) ? null : (c1 ?? 0) + (cm1 ?? 0)
+
     return { date, total_revenue: tr, total_cost: tc }
   })
 }
@@ -870,7 +876,6 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
         <div className="rounded-xl border border-border bg-card p-6 card-shadow">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Revenue vs Cost Trend</h3>
-            <span className="text-[11px] text-slate-400">{trendData.length} data points</span>
           </div>
           {loadingAnalytics ? (
             <div className="shimmer-warm h-[280px] rounded-xl" />

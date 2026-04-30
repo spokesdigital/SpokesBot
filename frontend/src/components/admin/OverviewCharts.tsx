@@ -16,8 +16,8 @@ import {
 
 type TrendPoint = {
   date: string
-  total_revenue?: number
-  total_cost?: number
+  total_revenue?: number | null
+  total_cost?: number | null
 }
 
 function fmtDateShort(v: string, granularity?: 'daily' | 'monthly') {
@@ -55,11 +55,11 @@ export function OverviewAreaChart({
               <stop offset="100%" stopColor="#f0a500" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="ov_cost" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.18} />
-              <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.01} />
+              <stop offset="0%" stopColor="#f97316" stopOpacity={0.18} />
+              <stop offset="100%" stopColor="#f97316" stopOpacity={0.01} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#f1f5f9" strokeDasharray="4 4" vertical={false} />
+          <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="date"
             tick={{ fill: '#94a3b8', fontSize: 11 }}
@@ -74,7 +74,7 @@ export function OverviewAreaChart({
             tickLine={false}
             axisLine={false}
             width={56}
-            tickFormatter={(v: number) => `$${Math.round(v).toLocaleString('en-US')}`}
+            tickFormatter={(v: number) => `${Math.round(v).toLocaleString('en-US')}`}
           />
           <Tooltip
             contentStyle={{
@@ -83,8 +83,8 @@ export function OverviewAreaChart({
               borderRadius: 12,
               boxShadow: '0 4px 16px rgba(15,23,42,0.08)',
             }}
-            formatter={(v: number) =>
-              `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            formatter={(v: any) =>
+              v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
             }
             labelFormatter={(v) => fmtDateLong(String(v), granularity)}
           />
@@ -104,7 +104,7 @@ export function OverviewAreaChart({
             connectNulls
             dataKey="total_cost"
             name="Cost"
-            stroke="#94a3b8"
+            stroke="#f97316"
             fill="url(#ov_cost)"
             strokeWidth={2}
             dot={false}
