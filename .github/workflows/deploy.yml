@@ -147,10 +147,6 @@ jobs:
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
 
-    defaults:
-      run:
-        working-directory: frontend
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -165,10 +161,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       # Pull Vercel project config (.vercel/project.json) so the CLI knows
       # which project to deploy to without interactive prompts.
+      # Run from repo root so Vercel's rootDirectory:frontend setting resolves correctly.
       - name: Pull Vercel environment
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
