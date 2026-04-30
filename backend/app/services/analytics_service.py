@@ -1149,6 +1149,109 @@ def _auto_analyze(
     # Sample rows
     sample = _sanitize(df.head(5).to_dict(orient="records"))
 
+    # ── Campaign Breakdown (as requested) ───────────────────────────────────
+    campaign_performance: list[dict[str, Any]] = []
+    daily_performance: list[dict[str, Any]] = []
+
+    # Identify the campaign dimension dynamically using the existing regex
+    campaign_dim = next((c for c in df.columns if _CAMPAIGN_COL_RE.search(c)), None)
+    
+    # Use pre-computed metric_mappings
+    m_impr = metric_mappings.get("impressions")
+    m_clicks = metric_mappings.get("clicks")
+    m_cost = metric_mappings.get("cost")
+    m_rev = metric_mappings.get("revenue")
+    m_conv = metric_mappings.get("conversions")
+
+    # Only include the metrics that actually exist in this dataset
+    base_metrics = {
+        "impressions": m_impr,
+        "clicks": m_clicks,
+        "cost": m_cost,
+        "revenue": m_rev,
+        "conversions": m_conv,
+    }
+    present_metrics = {k: v for k, v in base_metrics.items() if v in df.columns}
+
+    if campaign_dim and present_metrics:
+        agg_dict = {v: "sum" for v in present_metrics.values()}
+        df_campaigns = df.groupby(campaign_dim, dropna=True).agg(agg_dict).reset_index()
+
+        campaigns_list = []
+        for _, row in df_campaigns.iterrows():
+            impr = row[m_impr] if "impressions" in present_metrics else None
+            clicks = row[m_clicks] if "clicks" in present_metrics else None
+            cost = row[m_cost] if "cost" in present_metrics else None
+            rev = row[m_rev] if "revenue" in present_metrics else None
+            conv = row[m_conv] if "conversions" in present_metrics else None
+
+            ctr = _safe_ratio(clicks, impr)
+            cpc = _safe_ratio(cost, clicks)
+            roas = _safe_ratio(rev, cost)
+            atv = _safe_ratio(rev, conv)
+
+            campaigns_list.append({
+                "name": row[campaign_dim],
+                "impressions": impr,
+                "clicks": clicks,
+                "cost": cost,
+                "revenue": rev,
+                "conversions": conv,
+                "ctr": ctr,
+                "cpc": cpc,
+                "roas": roas,
+                "atv": atv,
+            })
+        campaigns_list.sort(key=lambda x: x["cost"] or 0, reverse=True)
+        campaign_performance = _sanitize(campaigns_list)
+
+    # ── Daily Performance (as requested) ────────────────────────────────────
+    if date_columns and present_metrics and full_date_index is not None:
+        date_dim = date_columns[0]
+        parsed_date_series = pd.to_datetime(df[date_dim], errors="coerce", utc=True).dt.date
+        
+        agg_dict = {v: "sum" for v in present_metrics.values()}
+        df_daily = df.groupby(parsed_date_series).agg(agg_dict)
+        
+        # Reindex to force padding across the exact date range selector bounds
+        df_daily = df_daily.reindex(full_date_index.date)
+        
+        # Fill missing with 0 for base metrics
+        df_daily = df_daily.fillna(0).reset_index()
+        df_daily.rename(columns={"index": "date"}, inplace=True)
+
+        daily_list = []
+        for _, row in df_daily.iterrows():
+            d_val = row["date"]
+            if pd.isna(d_val):
+                continue
+            
+            impr = row[m_impr] if "impressions" in present_metrics else 0
+            clicks = row[m_clicks] if "clicks" in present_metrics else 0
+            cost = row[m_cost] if "cost" in present_metrics else 0
+            rev = row[m_rev] if "revenue" in present_metrics else 0
+            conv = row[m_conv] if "conversions" in present_metrics else 0
+
+            ctr = _safe_ratio(clicks, impr)
+            cpc = _safe_ratio(cost, clicks)
+            roas = _safe_ratio(rev, cost)
+            atv = _safe_ratio(rev, conv)
+
+            daily_list.append({
+                "date": str(d_val),
+                "impressions": impr,
+                "clicks": clicks,
+                "cost": cost,
+                "revenue": rev,
+                "conversions": conv,
+                "ctr": ctr,
+                "cpc": cpc,
+                "roas": roas,
+                "atv": atv,
+            })
+        daily_list.sort(key=lambda x: x["date"], reverse=True)
+        daily_performance = _sanitize(daily_list)
+
     result = {
         "shape": shape,
         "numeric_summary": numeric_summary,
@@ -1157,6 +1260,8 @@ def _auto_analyze(
         "time_series": parsed_dates,
         "metric_time_series": metric_time_series,
         "metric_breakdowns": metric_breakdowns,
+        "campaign_performance": campaign_performance,
+        "daily_performance": daily_performance,
         "selected_metric_columns": selected_metric_columns,
         "metric_mappings": _sanitize(metric_mappings),
         "date_columns": date_columns,

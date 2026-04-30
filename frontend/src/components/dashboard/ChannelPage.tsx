@@ -327,20 +327,20 @@ function formatMetricValue(kind: MetricCardDefinition['kind'], value: number | n
 // ─── Table cell formatters ────────────────────────────────────────────────────
 
 function fmtN(v: number | null) {
-  if (v == null) return '—'
+  if (v == null || v === 0) return '—'
   return _intlN.format(v)
 }
 function fmtCur(v: number | null) {
-  if (v == null) return '—'
+  if (v == null || v === 0) return '—'
   return _intlCur.format(v)
 }
 // Table CTR values are stored as ratios (0–1). Always multiply by 100.
 function fmtPct(v: number | null) {
-  if (v == null) return '—'
+  if (v == null || v === 0) return '—'
   return `${(v * 100).toFixed(2)}%`
 }
 function fmtRoasPercent(v: number | null) {
-  if (v == null) return '—'
+  if (v == null || v === 0) return '—'
   return `${(v * 100).toFixed(1)}%`
 }
 
@@ -866,121 +866,10 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     })()
 
     // ── Campaign Breakdown ───────────────────────────────────────────────────
-    const campaignRows: CampaignRow[] = (() => {
-      // Collect all unique campaign-like dimension columns, sorted by priority
-      // (Campaign > Ad Group > Ad Set > Ad Name). Deduplicate since each metric
-      // repeats the same dimension keys.
-      const seenDims = new Set<string>()
-      for (const byCat of Object.values(metricBreakdowns)) {
-        for (const col of Object.keys(byCat)) {
-          if (CAMPAIGN_PATTERNS.some((p) => p.test(col))) seenDims.add(col)
-        }
-      }
-
-      // Pick the active dimension: user selection takes priority, then the
-      // highest-priority auto-detected one (lowest score = broadest level).
-      const sortedDims = Array.from(seenDims).sort(
-        (a, b) => scoreCampaignDimension(a) - scoreCampaignDimension(b),
-      )
-      const campaignDimension = (selectedCampaignDimension && seenDims.has(selectedCampaignDimension))
-        ? selectedCampaignDimension
-        : sortedDims[0] ?? null
-
-      if (!campaignDimension) return []
-
-      const getBreakdown = (metricKey: string): Record<string, number> => {
-        const col = metricColumns[metricKey]
-        if (!col) return {}
-        return metricBreakdowns[col]?.[campaignDimension] ?? {}
-      }
-
-      const impBreakdown = getBreakdown('impressions')
-      const clkBreakdown = getBreakdown('clicks')
-      const costBreakdown = getBreakdown('cost')
-      const revBreakdown = getBreakdown('revenue')
-      const convBreakdown = conversionsColumn ? (metricBreakdowns[conversionsColumn]?.[campaignDimension] ?? {}) : {}
-
-      const campaigns = Array.from(new Set([
-        ...Object.keys(impBreakdown),
-        ...Object.keys(clkBreakdown),
-        ...Object.keys(costBreakdown),
-        ...Object.keys(revBreakdown),
-        ...Object.keys(convBreakdown),
-      ]))
-
-      return campaigns
-        .map((name) => {
-          const impr = impBreakdown[name] ?? null
-          const clicks = clkBreakdown[name] ?? null
-          const cost = costBreakdown[name] ?? null
-          const revenue = revBreakdown[name] ?? null
-          const conversions = convBreakdown[name] ?? null
-          return {
-            name,
-            impressions: impr,
-            clicks,
-            cost,
-            revenue,
-            conversions,
-            // Store as ratio (0–1); fmtPct multiplies by 100 for display.
-            ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
-            cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
-            roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
-            atv: revenue != null && conversions != null && conversions > 0 ? revenue / conversions : null,
-          }
-        })
-        .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))
-    })()
+    const campaignRows = (result.campaign_performance ?? []) as CampaignRow[]
 
     // ── Daily Performance (all date periods within the selected range) ──────
-    const dailyRows: DailyRow[] = (() => {
-      if (!firstDateKey) return []
-      const seriesGroup = metricTimeSeries[firstDateKey]
-      if (!seriesGroup) return []
-
-      const getMap = (col: string | null) =>
-        col && seriesGroup[col]
-          ? new Map(seriesGroup[col].map((p) => [p.date, p.value]))
-          : new Map<string, number>()
-
-      const impressMap = getMap(metricColumns.impressions)
-      const clicksMap = getMap(metricColumns.clicks)
-      const costMap = getMap(metricColumns.cost)
-      const revMap = getMap(metricColumns.revenue)
-      const convMap = getMap(conversionsColumn)
-
-      const dates = Array.from(
-        new Set([...impressMap.keys(), ...clicksMap.keys(), ...costMap.keys(), ...revMap.keys(), ...convMap.keys()]),
-      )
-        .filter((date) => {
-          if (chartBounds.startDate && date < chartBounds.startDate) return false
-          if (chartBounds.endDate && date > chartBounds.endDate) return false
-          return true
-        })
-        .sort()
-        .reverse()
-
-      return dates.map((date) => {
-        const impr = impressMap.get(date) ?? null
-        const clicks = clicksMap.get(date) ?? null
-        const cost = costMap.get(date) ?? null
-        const revenue = revMap.get(date) ?? null
-        const conversions = convMap.get(date) ?? null
-        return {
-          date,
-          impressions: impr,
-          clicks,
-          cost,
-          revenue,
-          conversions,
-          // Store as ratio (0–1); fmtPct multiplies by 100 for display.
-          ctr: clicks != null && impr != null && impr > 0 ? clicks / impr : null,
-          cpc: cost != null && clicks != null && clicks > 0 ? cost / clicks : null,
-          roas: revenue != null && cost != null && cost > 0 ? revenue / cost : null,
-          atv: revenue != null && conversions != null && conversions > 0 ? revenue / conversions : null,
-        }
-      })
-    })()
+    const dailyRows = (result.daily_performance ?? []) as DailyRow[]
 
     // Collect all available campaign dimensions for the picker dropdown.
     const availableCampaignDimensions: string[] = (() => {
@@ -1485,7 +1374,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
-                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
+                            row.roas == null || row.roas === 0 ? 'text-muted-foreground' : 'text-foreground'
                           }`}>
                             {fmtRoasPercent(row.roas)}
                           </td>
@@ -1592,7 +1481,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.revenue)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{fmtCur(row.atv)}</td>
                           <td className={`px-4 py-3 text-right font-semibold ${
-                            row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
+                            row.roas == null || row.roas === 0 ? 'text-muted-foreground' : 'text-foreground'
                           }`}>
                             {fmtRoasPercent(row.roas)}
                           </td>
