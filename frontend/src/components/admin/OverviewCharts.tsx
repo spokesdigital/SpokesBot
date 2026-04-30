@@ -83,9 +83,12 @@ export function OverviewAreaChart({
               borderRadius: 12,
               boxShadow: '0 4px 16px rgba(15,23,42,0.08)',
             }}
-            formatter={(v: any) =>
-              v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-            }
+            formatter={(v: unknown) => {
+              const value = typeof v === 'number' ? v : Number(v)
+              return Number.isFinite(value)
+                ? `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                : '—'
+            }}
             labelFormatter={(v) => fmtDateLong(String(v), granularity)}
           />
           <Area

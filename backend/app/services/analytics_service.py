@@ -119,11 +119,7 @@ def _looks_like_metric_column_name(col: str) -> bool:
     if _looks_like_date_column_name(lowered):
         return False
 
-    if any(
-        token in lowered
-        for patterns in METRIC_PATTERNS.values()
-        for token in patterns
-    ):
+    if any(token in lowered for patterns in METRIC_PATTERNS.values() for token in patterns):
         return True
 
     return bool(
@@ -244,7 +240,8 @@ def normalize_chunk(
     result = chunk.copy()
     started_at = monotonic_time.monotonic()
     metric_columns = [
-        col for col in dict.fromkeys([*coerced_columns, *result.columns.tolist()])
+        col
+        for col in dict.fromkeys([*coerced_columns, *result.columns.tolist()])
         if col in result.columns and _looks_like_metric_column_name(col)
     ]
 
@@ -620,11 +617,39 @@ def _round_metric_output(metric_key: str, value: Any) -> Any:
 
 def _round_column_output(column: str, value: Any) -> Any:
     lowered = column.lower()
-    if any(token in lowered for token in ("impression", "click", "conversion", "transaction", "purchase", "order", "lead")) and not any(
+    if any(
+        token in lowered
+        for token in (
+            "impression",
+            "click",
+            "conversion",
+            "transaction",
+            "purchase",
+            "order",
+            "lead",
+        )
+    ) and not any(
         token in lowered for token in ("rate", "cpc", "cpa", "cost per", "value", "revenue")
     ):
         return _round_number(value, 0)
-    if any(token in lowered for token in ("cost", "spend", "spent", "revenue", "sales", "gmv", "value", "cpc", "cpa", "cpm", "aov", "avg", "average")):
+    if any(
+        token in lowered
+        for token in (
+            "cost",
+            "spend",
+            "spent",
+            "revenue",
+            "sales",
+            "gmv",
+            "value",
+            "cpc",
+            "cpa",
+            "cpm",
+            "aov",
+            "avg",
+            "average",
+        )
+    ):
         return _round_number(value, 2)
     if any(token in lowered for token in ("ctr", "roas", "rate", "ratio")):
         return _round_number(value, 4)
@@ -677,12 +702,7 @@ def _build_period_kpi_data(result: dict[str, Any] | None) -> dict[str, float | N
         "conversion_rate": _safe_ratio(conversions, clicks),
         "aov": _safe_ratio(revenue, conversions),
     }
-    return _sanitize(
-        {
-            key: _round_metric_output(key, value)
-            for key, value in data.items()
-        }
-    )
+    return _sanitize({key: _round_metric_output(key, value) for key, value in data.items()})
 
 
 def _derived_comparison_value(col: str, result: dict[str, Any]) -> tuple[str, float | None] | None:
@@ -750,7 +770,9 @@ def build_auto_comparison(
             "basis": basis,
             "current": _sanitize(_round_column_output(col, current_value)),
             "previous": _sanitize(_round_column_output(col, previous_value)),
-            "delta_pct": _sanitize(_round_number(_safe_pct_change(current_value, previous_value), 2)),
+            "delta_pct": _sanitize(
+                _round_number(_safe_pct_change(current_value, previous_value), 2)
+            ),
         }
 
     return comparison
@@ -1247,18 +1269,20 @@ def _auto_analyze(
             roas = _safe_ratio(rev, cost)
             atv = _safe_ratio(rev, conv)
 
-            campaigns_list.append({
-                "name": row[campaign_dim],
-                "impressions": impr,
-                "clicks": clicks,
-                "cost": cost,
-                "revenue": rev,
-                "conversions": conv,
-                "ctr": ctr,
-                "cpc": cpc,
-                "roas": roas,
-                "atv": atv,
-            })
+            campaigns_list.append(
+                {
+                    "name": row[campaign_dim],
+                    "impressions": impr,
+                    "clicks": clicks,
+                    "cost": cost,
+                    "revenue": rev,
+                    "conversions": conv,
+                    "ctr": ctr,
+                    "cpc": cpc,
+                    "roas": roas,
+                    "atv": atv,
+                }
+            )
         campaigns_list.sort(key=lambda x: x["cost"] or 0, reverse=True)
         campaign_performance = _sanitize(campaigns_list)
 
@@ -1303,18 +1327,20 @@ def _auto_analyze(
             roas = _safe_ratio(rev, cost)
             atv = _safe_ratio(rev, conv)
 
-            daily_list.append({
-                "date": str(d_val),
-                "impressions": impr,
-                "clicks": clicks,
-                "cost": cost,
-                "revenue": rev,
-                "conversions": conv,
-                "ctr": ctr,
-                "cpc": cpc,
-                "roas": roas,
-                "atv": atv,
-            })
+            daily_list.append(
+                {
+                    "date": str(d_val),
+                    "impressions": impr,
+                    "clicks": clicks,
+                    "cost": cost,
+                    "revenue": rev,
+                    "conversions": conv,
+                    "ctr": ctr,
+                    "cpc": cpc,
+                    "roas": roas,
+                    "atv": atv,
+                }
+            )
         daily_list.sort(key=lambda x: x["date"], reverse=True)
         daily_performance = _sanitize(daily_list)
 

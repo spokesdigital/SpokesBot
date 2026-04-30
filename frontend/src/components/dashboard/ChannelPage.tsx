@@ -906,7 +906,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       availableCampaignDimensions,
       granularity,
     }
-  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset, selectedCampaignDimension])
+  }, [analyticsResultRecord, activeDataset, chartEndDateValue, chartStartDateValue, datePreset])
 
   const sectionInsights = useMemo(() => splitInsightsBySection(insights), [insights])
 
