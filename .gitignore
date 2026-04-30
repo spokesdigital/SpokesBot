@@ -33,3 +33,4 @@ frontend/build/
 backend/test.db
 backend/test.db-journal
 
+.prototype_temp/
