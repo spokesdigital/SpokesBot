@@ -35,6 +35,25 @@ _METRIC_MAPPING_ORDER = [
     "clicks",
 ]
 
+# Patterns that indicate a column is a ratio or rate.
+# These are excluded when mapping additive metrics (clicks, impressions, etc.)
+# to prevent "Click-Through Rate" from being claimed as "Clicks".
+_RATIO_EXCLUSION_PATTERNS = (
+    r"\brate\b",
+    r"\bratio\b",
+    r"\bctr\b",
+    r"\bcpc\b",
+    r"\bcpm\b",
+    r"\broas\b",
+    r"\bpercent\b",
+    r"%",
+    r"\bavg\b",
+    r"\baverage\b",
+    r"cost[\s_-]*per",
+    r"revenue[\s_-]*per",
+    r"value[\s_-]*per",
+)
+
 DATA_CAST_TIMEOUT_SECONDS = 30.0
 _MISSING_NUMERIC_VALUES = {
     "",
@@ -276,9 +295,18 @@ def _detect_date_columns(df: pd.DataFrame) -> list[str]:
     return date_columns
 
 
-def _pick_metric_mapping(columns: list[str], patterns: tuple[str, ...]) -> str | None:
+def _pick_metric_mapping(
+    columns: list[str],
+    patterns: tuple[str, ...],
+    exclude_ratios: bool = False,
+) -> str | None:
     def score_match(column: str, token: str) -> tuple[int, str] | None:
         lowered = column.strip().lower()
+
+        if exclude_ratios:
+            if any(re.search(p, lowered) for p in _RATIO_EXCLUSION_PATTERNS):
+                return None
+
         normalized_token = token.strip().lower()
 
         if lowered == normalized_token:
@@ -381,26 +409,35 @@ def infer_metric_mappings(df: pd.DataFrame) -> dict[str, str | None]:
     metric_mappings: dict[str, str | None] = {}
     claimed: set[str] = set()
 
-    # Map metrics in priority order, excluding already-claimed columns so that
-    # an ambiguous column (e.g. "CPC (cost per link click)") is only assigned
-    # to the most-specific metric and never double-counted.
+    # Map metrics in priority order, excluding already-claimed columns.
+    # Additive metrics (clicks, cost, etc.) exclude ratio patterns to prevent
+    # mis-mapping (e.g. mapping "Click-Through Rate" to "Clicks").
+    additive_metrics = {"impressions", "clicks", "cost", "revenue"}
+
     for metric_key in _METRIC_MAPPING_ORDER:
         patterns = METRIC_PATTERNS.get(metric_key)
         if patterns is None:
             continue
         available = [c for c in numeric_columns if c not in claimed]
-        col = _pick_metric_mapping(available, patterns)
+        col = _pick_metric_mapping(
+            available,
+            patterns,
+            exclude_ratios=(metric_key in additive_metrics),
+        )
         metric_mappings[metric_key] = col
         if col:
             claimed.add(col)
 
     # Map any remaining metrics not covered by the ordered pass.
-    # Skip "conversions" — it is handled below with a stricter heuristic.
     for metric_key, patterns in METRIC_PATTERNS.items():
         if metric_key in metric_mappings or metric_key == "conversions":
             continue
         available = [c for c in numeric_columns if c not in claimed]
-        col = _pick_metric_mapping(available, patterns)
+        col = _pick_metric_mapping(
+            available,
+            patterns,
+            exclude_ratios=(metric_key in additive_metrics),
+        )
         metric_mappings[metric_key] = col
         if col:
             claimed.add(col)
@@ -769,6 +806,7 @@ def resolve_date_range(
       today        → 00:00:00 … 23:59:59.999999 UTC today
       last_7_days  → 00:00:00 six days ago … now
       last_30_days → 00:00:00 twenty-nine days ago … now
+      last_12_months → 00:00:00 364 days ago … now
       this_month   → 00:00:00 first of current month … now
       custom       → start_date 00:00:00 … end_date 23:59:59.999999 UTC
     """
@@ -793,6 +831,9 @@ def resolve_date_range(
         end = now
     elif preset == "last_180_days":
         start = datetime.combine(today - timedelta(days=179), time.min, tzinfo=UTC)
+        end = now
+    elif preset == "last_12_months":
+        start = datetime.combine(today - timedelta(days=364), time.min, tzinfo=UTC)
         end = now
     elif preset == "this_month":
         start = datetime.combine(today.replace(day=1), time.min, tzinfo=UTC)
@@ -1153,9 +1194,25 @@ def _auto_analyze(
     campaign_performance: list[dict[str, Any]] = []
     daily_performance: list[dict[str, Any]] = []
 
-    # Identify the campaign dimension dynamically using the existing regex
-    campaign_dim = next((c for c in df.columns if _CAMPAIGN_COL_RE.search(c)), None)
-    
+    # Identify the campaign dimension dynamically.
+    # We look for columns matching our campaign regex, preferring those with
+    # more unique values (to avoid picking a "Campaign ID" that has only 1 value).
+    campaign_cardinality = {
+        c: df[c].nunique()
+        for c in df.columns
+        if _CAMPAIGN_COL_RE.search(str(c)) and df[c].nunique() > 0
+    }
+    campaign_candidates = list(campaign_cardinality)
+    campaign_dim = None
+    if campaign_candidates:
+        # Sort by number of unique values, descending, but capped at a reasonable
+        # number to avoid picking high-cardinality ID columns by mistake.
+        campaign_dim = sorted(
+            campaign_candidates,
+            key=lambda c: campaign_cardinality[c] if campaign_cardinality[c] <= 100 else 0,
+            reverse=True,
+        )[0]
+
     # Use pre-computed metric_mappings
     m_impr = metric_mappings.get("impressions")
     m_clicks = metric_mappings.get("clicks")
@@ -1206,16 +1263,25 @@ def _auto_analyze(
         campaign_performance = _sanitize(campaigns_list)
 
     # ── Daily Performance (as requested) ────────────────────────────────────
-    if date_columns and present_metrics and full_date_index is not None:
+    if date_columns and present_metrics and date_range is not None:
         date_dim = date_columns[0]
         parsed_date_series = pd.to_datetime(df[date_dim], errors="coerce", utc=True).dt.date
-        
+
         agg_dict = {v: "sum" for v in present_metrics.values()}
         df_daily = df.groupby(parsed_date_series).agg(agg_dict)
-        
+
+        # Build a strictly DAILY index for the table, even if the charts are monthly.
+        # This ensures the "Daily Performance" table actually shows every day.
+        full_daily_index = pd.date_range(
+            start=date_range[0],
+            end=date_range[1],
+            freq="D",
+            tz=UTC,
+        ).date
+
         # Reindex to force padding across the exact date range selector bounds
-        df_daily = df_daily.reindex(full_date_index.date)
-        
+        df_daily = df_daily.reindex(full_daily_index)
+
         # Fill missing with 0 for base metrics
         df_daily.index.name = "date"
         df_daily = df_daily.fillna(0).reset_index()
@@ -1225,7 +1291,7 @@ def _auto_analyze(
             d_val = row["date"]
             if pd.isna(d_val):
                 continue
-            
+
             impr = row[m_impr] if "impressions" in present_metrics else 0
             clicks = row[m_clicks] if "clicks" in present_metrics else 0
             cost = row[m_cost] if "cost" in present_metrics else 0

@@ -289,7 +289,7 @@ function extractTotals(result: AnalyticsResult | null, dataset: Dataset | null):
 
   const numericTotals = (result.result.numeric_totals ?? {}) as Record<string, number>
   const comparison = (result.result.comparison ?? {}) as Record<string, { current?: number; previous?: number }>
-  const mappings = dataset.metric_mappings ?? {}
+  const mappings = ((result.result.metric_mappings ?? dataset.metric_mappings) ?? {}) as Record<string, string | null>
   const numericCols = Object.keys((result.result.numeric_summary ?? {}) as Record<string, unknown>)
 
   const get = (key: string) => {
@@ -322,7 +322,7 @@ function extractTimeSeries(
 ): Map<string, number> {
   if (!result || !dataset || !result.result) return new Map()
 
-  const mappings = dataset.metric_mappings ?? {}
+  const mappings = ((result.result.metric_mappings ?? dataset.metric_mappings) ?? {}) as Record<string, string | null>
   const numericCols = Object.keys((result.result.numeric_summary ?? {}) as Record<string, unknown>)
 
   let col = mappings[role]

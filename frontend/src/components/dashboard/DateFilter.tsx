@@ -41,7 +41,7 @@ const presets: Preset[] = [
   {
     label: 'Last 12 Months',
     key: 'last_12_months',
-    getValue: () => ({ start: startOfDay(subDays(new Date(), 365)), end: endOfDay(new Date()) }),
+    getValue: () => ({ start: startOfDay(subDays(new Date(), 364)), end: endOfDay(new Date()) }),
   },
 ]
 

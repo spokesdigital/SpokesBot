@@ -13,6 +13,7 @@ class DatePreset(StrEnum):
     last_30_days = "last_30_days"
     last_90_days = "last_90_days"
     last_180_days = "last_180_days"
+    last_12_months = "last_12_months"
     this_month = "this_month"
     ytd = "ytd"
     custom = "custom"

@@ -49,6 +49,40 @@ export class ApiError extends Error {
   }
 }
 
+function formatApiErrorDetail(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, unknown>
+          const location = Array.isArray(record.loc)
+            ? record.loc.filter((part) => part !== 'body').join('.')
+            : ''
+          const message = typeof record.msg === 'string' ? record.msg : JSON.stringify(record)
+          const input = record.input != null ? ` Received: ${String(record.input)}.` : ''
+          return location ? `${location}: ${message}.${input}` : `${message}.${input}`
+        }
+        return String(item)
+      })
+      .filter(Boolean)
+    return messages.join(' ')
+  }
+  if (detail && typeof detail === 'object') {
+    const record = detail as Record<string, unknown>
+    if (typeof record.message === 'string') return record.message
+    if (typeof record.msg === 'string') return record.msg
+    if (typeof record.error === 'string') return record.error
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return 'Request failed'
+    }
+  }
+  return 'Request failed'
+}
+
 async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string; timeoutMs?: number; cacheMs?: number } = {},
@@ -112,7 +146,7 @@ async function apiFetch<T>(
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({ detail: res.statusText }))
-      throw new ApiError(res.status, body.detail ?? 'Request failed')
+      throw new ApiError(res.status, formatApiErrorDetail(body.detail ?? body))
     }
 
     // 204 No Content

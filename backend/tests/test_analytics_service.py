@@ -10,6 +10,7 @@ from app.services.analytics_service import (
     build_period_comparison_payload,
     compute,
     normalize_chunk,
+    resolve_date_range,
 )
 
 
@@ -252,6 +253,13 @@ class AnalyticsServiceAutoTest(unittest.TestCase):
 
         self.assertEqual(result["numeric_totals"]["Cost"], 15.0)
         self.assertEqual(result["numeric_totals"]["Revenue"], 30.0)
+
+    def test_resolve_date_range_accepts_last_12_months(self):
+        start, end = resolve_date_range("last_12_months")
+
+        self.assertEqual((end.date() - start.date()).days + 1, 365)
+        self.assertEqual(start.tzinfo, UTC)
+        self.assertEqual(end.tzinfo, UTC)
 
     def test_build_dataset_profile_detects_canonical_metrics(self):
         df = pd.DataFrame(

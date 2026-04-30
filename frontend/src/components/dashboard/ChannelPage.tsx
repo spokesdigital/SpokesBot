@@ -638,7 +638,14 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
           }
         }
       } finally {
-        if (!cancelled) setLoadingAnalytics(false)
+        if (!cancelled) {
+          setLoadingAnalytics(false)
+          // Reset pagination and sorting when the dataset or range changes
+          // to prevent showing a blank page if the new result is smaller.
+          setDailyPage(0)
+          setCampaignSort({ key: 'cost', dir: 'desc' })
+          setDailySort({ key: 'date', dir: 'desc' })
+        }
       }
     }
 
@@ -731,9 +738,9 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     const noDataLabel = buildNoDataLabel(comparisonAttempted, priorLabel)
 
     const numericColumns = Object.keys(numericSummary)
-    const storedMappings = activeDataset?.metric_mappings ?? {}
-    const metricColumns = getVerifiedMetricColumns(metricDefinitions, storedMappings, numericColumns)
-    const conversionsColumn = pickConversionsColumn(storedMappings, numericColumns)
+    const resultMappings = (result.metric_mappings ?? activeDataset?.metric_mappings ?? {}) as Record<string, string | null>
+    const metricColumns = getVerifiedMetricColumns(metricDefinitions, resultMappings, numericColumns)
+    const conversionsColumn = pickConversionsColumn(resultMappings, numericColumns)
 
     const getMetricValues = (key: string) => {
       const col = key === 'conversions' && !metricColumns[key] ? conversionsColumn : metricColumns[key]
@@ -1312,7 +1319,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                 )}
               </div>
               <div className="rounded-xl border border-border bg-card card-shadow overflow-x-auto">
-                {sortedCampaignRows.length === 0 ? (
+                {loadingAnalytics ? (
+                  <div className="p-4 space-y-3">
+                    <div className="shimmer-warm h-10 w-full rounded" />
+                    <div className="shimmer-warm h-24 w-full rounded" />
+                  </div>
+                ) : sortedCampaignRows.length === 0 ? (
                   <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No campaign dimension found. Add a &quot;Campaign&quot; or &quot;Ad Set&quot; column to enable this breakdown.
                   </div>
@@ -1397,7 +1409,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                 )}
               </div>
               <div className="rounded-xl border border-border bg-card card-shadow">
-                {sortedDailyRows.length === 0 ? (
+                {loadingAnalytics ? (
+                  <div className="p-4 space-y-3">
+                    <div className="shimmer-warm h-10 w-full rounded" />
+                    <div className="shimmer-warm h-24 w-full rounded" />
+                  </div>
+                ) : sortedDailyRows.length === 0 ? (
                   <div className="flex min-h-[120px] items-center justify-center text-sm text-muted-foreground">
                     No daily data available. Upload a dataset with a date column to enable this table.
                   </div>
