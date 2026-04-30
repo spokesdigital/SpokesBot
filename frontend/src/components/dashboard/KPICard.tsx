@@ -34,10 +34,11 @@ export const KPICard = React.memo(function KPICard({ title, value, trendValue, t
         ? 'positive'
         : 'negative')
 
+  const roundedTrend = trendValue != null && Math.abs(trendValue) < 0.05 ? 0 : trendValue
   const trendLabel =
-    trendValue == null
+    roundedTrend == null
       ? noDataLabel
-      : `${Math.abs(trendValue).toFixed(1)}% vs ${priorLabel}`
+      : `${roundedTrend > 0 ? '+' : roundedTrend < 0 ? '-' : ''}${Math.abs(roundedTrend).toFixed(1)}% vs ${priorLabel}`
 
   const colorClass =
     direction === 'positive'

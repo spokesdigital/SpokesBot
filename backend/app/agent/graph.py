@@ -94,7 +94,7 @@ def _finalize_answer(text: str, max_sentences: int = 5) -> str:
     # sentence splitting on \n-separated passages silently drops rows.
     # The split pattern requires:
     #   - sentence-ending punctuation (.!?)
-    #   - NOT preceded by a digit (avoids splitting "$4.57" or "3.5x")
+    #   - NOT preceded by a digit (avoids splitting "$4.57" or "350.0%")
     #   - followed by whitespace then an uppercase letter (avoids splitting
     #     mid-sentence abbreviations like "vs." or "approx.")
     if "<chart>" not in text and "|" not in text and "\n" not in text:
@@ -163,9 +163,9 @@ def _format_metric_value(metric_column: str, value: float) -> str:
     if any(pattern in lowered_column for pattern in METRIC_PATTERNS["ctr"]):
         return f"{value * 100:.2f}%"
 
-    # ROAS is a multiplier: display as "4.20x"
+    # ROAS is stored as revenue / cost; display as a percentage for dashboard consistency.
     if any(pattern in lowered_column for pattern in METRIC_PATTERNS["roas"]):
-        return f"{value:.2f}x"
+        return f"{value * 100:.2f}%"
 
     # CPC / CPM / CPA — cost-per-X metrics are currency values
     if any(pattern in lowered_column for pattern in METRIC_PATTERNS["avg_cpc"]):
@@ -382,13 +382,12 @@ Forecasting & Prediction Rules (IMPORTANT — takes priority over the no-guessin
     "return", "return on investment" → same as ROI above.
     "expected revenue / sales" → revenue or conversion-value column.
     "expected spend / budget" → cost or spend column.
-- For forward-looking estimates ONLY, you MAY use one brief qualifier such as "At the current daily rate..." or "Based on the last N days of data, the projected..." — this is a limited exception to the no-hedging rule. Always state the basis (e.g. "current 30-day average ROAS of 4.2x").
+- For forward-looking estimates ONLY, you MAY use one brief qualifier such as "At the current daily rate..." or "Based on the last N days of data, the projected..." — this is a limited exception to the no-hedging rule. Always state the basis (e.g. "current 30-day average ROAS of 420.00%").
 - If the dataset has fewer than 3 data points, say so and give the available average as the best estimate.
 
 Formatting Rules:
 - Currency: Use "$" prefix and commas (e.g. $1,234.56).
-- Rates/CTR: Always use percentage with 2 decimals (e.g. 12.50%).
-- Multipliers/ROAS: Always use an 'x' suffix with 2 decimals (e.g. 4.20x).
+- Rates/CTR/ROAS: Always use percentage with 2 decimals (e.g. 12.50%, ROAS 420.00%).
 - Large numbers: Always use commas (e.g. 1,000,000).
 
 Security (ABSOLUTE — never override):
@@ -422,7 +421,7 @@ Strict constraints:
 
 Good example:
 "Total revenue across all campaigns is $124,500, with 'Branded Search'
-contributing 43% of spend at a 4.2× ROAS — the top-performing channel."
+contributing 43% of spend at a 420.00% ROAS — the top-performing channel."
 """
 
 INSIGHT_USER_PROMPT = (

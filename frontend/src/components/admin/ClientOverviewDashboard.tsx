@@ -725,7 +725,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       if (data.current != null) {
         if (def.kind === 'currency') value = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(data.current)
         else if (def.kind === 'percent') value = `${(data.current * 100).toFixed(2)}%`
-        else if (def.kind === 'ratio') value = `${data.current.toFixed(2)}x`
+        else if (def.kind === 'ratio') value = `${(data.current * 100).toFixed(2)}%`
         else value = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(data.current)
       }
       const trendDirection: 'positive' | 'negative' | 'neutral' =

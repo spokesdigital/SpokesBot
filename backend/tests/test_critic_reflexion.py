@@ -23,6 +23,7 @@ from langgraph.graph import END
 from app.agent.graph import (
     MAX_RETRIES,
     AgentState,
+    _format_metric_value,
     make_graph,
     route_after_critic,
     run_critic_node,
@@ -108,6 +109,9 @@ class TestRouting:
 
     def test_max_retries_constant_is_2(self):
         assert MAX_RETRIES == 2
+
+    def test_roas_formats_as_percentage(self):
+        assert _format_metric_value("ROAS", 4.2) == "420.00%"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

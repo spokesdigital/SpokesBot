@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -32,6 +32,38 @@ from supabase import Client
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+PANDAS_TIMEOUT_SECONDS = 30
+
+
+async def _run_pandas_work(description: str, func, *args, **kwargs):
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args, **kwargs),
+            timeout=PANDAS_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as e:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                f"Analytics calculation exceeded {PANDAS_TIMEOUT_SECONDS}s while {description}. "
+                "Try a smaller date range or warm the dataset cache before retrying."
+            ),
+        ) from e
+
+
+def _preceding_period(start: datetime, end: datetime) -> tuple[datetime, datetime, int]:
+    current_start_date = start.date()
+    current_end_date = end.date()
+    delta_days = (current_end_date - current_start_date).days + 1
+    previous_end_date = current_start_date - timedelta(days=1)
+    previous_start_date = current_start_date - timedelta(days=delta_days)
+    tzinfo = start.tzinfo
+
+    return (
+        datetime.combine(previous_start_date, time.min, tzinfo=tzinfo),
+        datetime.combine(previous_end_date, time.max, tzinfo=tzinfo),
+        delta_days,
+    )
 
 
 @router.post("/warm")
@@ -170,7 +202,8 @@ async def compute_analytics(
             body.end_date,
         )
         try:
-            df = await asyncio.to_thread(
+            df = await _run_pandas_work(
+                "filtering the selected date range",
                 analytics_service.apply_date_filter, df, body.date_column, start, end
             )
         except ValueError as e:
@@ -179,27 +212,79 @@ async def compute_analytics(
                 detail=str(e),
             ) from e
         if df.empty:
+            empty_result = {
+                "status": "empty",
+                "message": f"No rows found in the selected date range ({body.date_preset.value}).",
+                "shape": {"rows": 0, "cols": len(df.columns)},
+                "numeric_totals": {},
+                "numeric_summary": {},
+                "categorical_charts": {},
+                "time_series": {},
+                "metric_time_series": {},
+                "metric_breakdowns": {},
+                "metric_mappings": analytics_service.infer_metric_mappings(full_df),
+            }
+            if body.operation == "auto" and start and end:
+                prior_start, prior_end, delta_days = _preceding_period(start, end)
+                try:
+                    previous_df = await _run_pandas_work(
+                        "filtering the preceding comparison period",
+                        analytics_service.apply_date_filter,
+                        full_df,
+                        body.date_column,
+                        prior_start,
+                        prior_end,
+                    )
+                except ValueError:
+                    previous_df = full_df.iloc[0:0]
+
+                previous_result = None
+                if not previous_df.empty:
+                    previous_result = await _run_pandas_work(
+                        "aggregating the preceding comparison period",
+                        analytics_service.compute,
+                        previous_df,
+                        operation="auto",
+                        date_range=(prior_start, prior_end),
+                    )
+
+                empty_result["comparison"] = analytics_service.build_auto_comparison(
+                    empty_result,
+                    previous_result,
+                )
+                empty_result.update(
+                    analytics_service.build_period_comparison_payload(
+                        empty_result,
+                        previous_result,
+                        start,
+                        end,
+                        prior_start,
+                        prior_end,
+                    )
+                )
+                empty_result["comparison_window"] = {
+                    "current_start": start.isoformat(),
+                    "current_end": end.isoformat(),
+                    "previous_start": prior_start.isoformat(),
+                    "previous_end": prior_end.isoformat(),
+                    "delta_days": delta_days,
+                    "previous_period_label": empty_result.get("comparisons", {}).get(
+                        "previous_period_label"
+                    ),
+                }
+
             return ORJSONResponse(
                 content={
                     "dataset_id": str(body.dataset_id),
                     "operation": str(body.operation),
-                    "result": {
-                        "status": "empty",
-                        "message": f"No rows found in the selected date range ({body.date_preset.value}).",
-                        "shape": {"rows": 0, "cols": len(df.columns)},
-                        "numeric_totals": {},
-                        "numeric_summary": {},
-                        "categorical_charts": {},
-                        "time_series": {},
-                        "metric_time_series": {},
-                        "metric_breakdowns": {},
-                    },
+                    "result": empty_result,
                 }
             )
 
     # ── 5. Compute analytics (offloaded — groupbys + aggregations) ──────────
     try:
-        result = await asyncio.to_thread(
+        result = await _run_pandas_work(
+            "aggregating the selected period",
             analytics_service.compute,
             df,
             operation=body.operation,
@@ -212,11 +297,10 @@ async def compute_analytics(
 
     # ── 6. Prior-period comparison (offloaded per period) ───────────────────
     if body.operation == "auto" and body.date_preset is not None and start and end:
-        range_duration = end - start
-        prior_end = start - timedelta(seconds=1)
-        prior_start = prior_end - range_duration
+        prior_start, prior_end, delta_days = _preceding_period(start, end)
         try:
-            previous_df = await asyncio.to_thread(
+            previous_df = await _run_pandas_work(
+                "filtering the preceding comparison period",
                 analytics_service.apply_date_filter,
                 full_df,
                 body.date_column,
@@ -228,19 +312,33 @@ async def compute_analytics(
 
         previous_result = None
         if not previous_df.empty:
-            previous_result = await asyncio.to_thread(
+            previous_result = await _run_pandas_work(
+                "aggregating the preceding comparison period",
                 analytics_service.compute,
                 previous_df,
                 operation="auto",
+                date_range=(prior_start, prior_end),
             )
 
         # build_auto_comparison is pure dict manipulation — no pandas, stays sync
         result["comparison"] = analytics_service.build_auto_comparison(result, previous_result)
+        result.update(
+            analytics_service.build_period_comparison_payload(
+                result,
+                previous_result,
+                start,
+                end,
+                prior_start,
+                prior_end,
+            )
+        )
         result["comparison_window"] = {
             "current_start": start.isoformat(),
             "current_end": end.isoformat(),
             "previous_start": prior_start.isoformat(),
             "previous_end": prior_end.isoformat(),
+            "delta_days": delta_days,
+            "previous_period_label": result.get("comparisons", {}).get("previous_period_label"),
         }
 
     # ── 7. Serialize with orjson (faster, handles numpy/NaN natively) ───────

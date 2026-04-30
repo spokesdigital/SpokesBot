@@ -1,7 +1,6 @@
 import {
   differenceInCalendarDays,
   format,
-  parseISO,
 } from 'date-fns'
 
 type MetricMappings = Record<string, string | null>
@@ -396,18 +395,24 @@ export function hasConversionRateData(data: ConversionRatePoint[]) {
 export type ComparisonWindow = {
   previous_start: string
   previous_end: string
+  previous_period_label?: string
 }
 
 export function buildPriorLabel(comparisonWindow: ComparisonWindow | null): string {
   if (!comparisonWindow) return 'prior period'
+  if (comparisonWindow.previous_period_label) {
+    return comparisonWindow.previous_period_label.replace(/^vs\s+/i, '')
+  }
   try {
-    const fmt = (iso: string) => format(parseISO(iso), 'MMM d')
-    return `${fmt(comparisonWindow.previous_start)} – ${fmt(comparisonWindow.previous_end)}`
+    const fmt = (iso: string) => format(parseDateKey(iso.slice(0, 10)), 'MMM d')
+    const start = fmt(comparisonWindow.previous_start)
+    const end = fmt(comparisonWindow.previous_end)
+    return start === end ? start : `${start} – ${end}`
   } catch {
     return 'prior period'
   }
 }
 
 export function buildNoDataLabel(comparisonAttempted: boolean, priorLabel: string): string {
-  return comparisonAttempted ? `No data: ${priorLabel}` : 'Select a date range to compare'
+  return comparisonAttempted ? `Previous data missing: ${priorLabel}` : 'Select a date range to compare'
 }

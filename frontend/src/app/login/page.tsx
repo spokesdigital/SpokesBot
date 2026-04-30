@@ -66,7 +66,7 @@ export default function LoginPage() {
 
             <div className="mt-12 grid w-full max-w-lg grid-cols-3 gap-4 text-center">
               <div>
-                <p className="text-[1.45rem] font-semibold tracking-[-0.04em] text-[#f6b900]">7×</p>
+                <p className="text-[1.45rem] font-semibold tracking-[-0.04em] text-[#f6b900]">700%</p>
                 <p className="mt-1 text-sm text-[#929eb6]">Avg ROAS</p>
               </div>
               <div>

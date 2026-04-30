@@ -1,8 +1,16 @@
 import unittest
 
+from datetime import UTC, datetime
+
 import pandas as pd
 
-from app.services.analytics_service import build_auto_comparison, build_dataset_profile, compute
+from app.services.analytics_service import (
+    _safe_pct_change,
+    build_auto_comparison,
+    build_dataset_profile,
+    build_period_comparison_payload,
+    compute,
+)
 
 
 class AnalyticsServiceAutoTest(unittest.TestCase):
@@ -81,6 +89,106 @@ class AnalyticsServiceAutoTest(unittest.TestCase):
         self.assertAlmostEqual(comparison["revenue"]["delta_pct"], 20.0)
         self.assertEqual(comparison["ctr"]["basis"], "mean")
         self.assertAlmostEqual(comparison["ctr"]["delta_pct"], 20.0)
+
+    def test_safe_pct_change_returns_none_for_zero_or_nan_previous(self):
+        self.assertIsNone(_safe_pct_change(100, 0))
+        self.assertIsNone(_safe_pct_change(100, float("nan")))
+        self.assertAlmostEqual(_safe_pct_change(120, 100), 20.0)
+
+    def test_build_auto_comparison_recalculates_ratio_metrics_from_base_sums(self):
+        current = {
+            "metric_mappings": {
+                "impressions": "Impressions",
+                "clicks": "Clicks",
+                "cost": "Cost",
+                "revenue": "Revenue",
+                "ctr": "CTR",
+                "avg_cpc": "Avg CPC",
+                "roas": "ROAS",
+            },
+            "numeric_totals": {
+                "Impressions": 1000,
+                "Clicks": 100,
+                "Cost": 200,
+                "Revenue": 600,
+                "CTR": 0.30,
+                "Avg CPC": 9.0,
+                "ROAS": 12.0,
+            },
+            "numeric_summary": {
+                "CTR": {"mean": 0.30},
+                "Avg CPC": {"mean": 9.0},
+                "ROAS": {"mean": 12.0},
+            },
+        }
+        previous = {
+            "metric_mappings": current["metric_mappings"],
+            "numeric_totals": {
+                "Impressions": 1000,
+                "Clicks": 50,
+                "Cost": 100,
+                "Revenue": 200,
+                "CTR": 0.10,
+                "Avg CPC": 8.0,
+                "ROAS": 7.0,
+            },
+            "numeric_summary": {
+                "CTR": {"mean": 0.10},
+                "Avg CPC": {"mean": 8.0},
+                "ROAS": {"mean": 7.0},
+            },
+        }
+
+        comparison = build_auto_comparison(current, previous)
+
+        self.assertEqual(comparison["CTR"]["basis"], "derived_ratio")
+        self.assertAlmostEqual(comparison["CTR"]["current"], 0.10)
+        self.assertAlmostEqual(comparison["CTR"]["previous"], 0.05)
+        self.assertAlmostEqual(comparison["CTR"]["delta_pct"], 100.0)
+        self.assertAlmostEqual(comparison["Avg CPC"]["current"], 2.0)
+        self.assertAlmostEqual(comparison["ROAS"]["current"], 3.0)
+
+    def test_build_period_comparison_payload_exposes_canonical_kpis(self):
+        current = {
+            "metric_mappings": {
+                "impressions": "Impressions",
+                "clicks": "Clicks",
+                "cost": "Cost",
+                "revenue": "Revenue",
+            },
+            "numeric_totals": {
+                "Impressions": 1000,
+                "Clicks": 100,
+                "Cost": 200,
+                "Revenue": 600,
+            },
+        }
+        previous = {
+            "metric_mappings": current["metric_mappings"],
+            "numeric_totals": {
+                "Impressions": 500,
+                "Clicks": 50,
+                "Cost": 0,
+                "Revenue": 300,
+            },
+        }
+
+        payload = build_period_comparison_payload(
+            current,
+            previous,
+            datetime(2026, 4, 1, tzinfo=UTC),
+            datetime(2026, 4, 7, 23, 59, 59, tzinfo=UTC),
+            datetime(2026, 3, 25, tzinfo=UTC),
+            datetime(2026, 3, 31, 23, 59, 59, tzinfo=UTC),
+        )
+
+        self.assertEqual(payload["current_period"]["start"], "2026-04-01")
+        self.assertEqual(payload["previous_period"]["end"], "2026-03-31")
+        self.assertAlmostEqual(payload["current_period"]["data"]["roas"], 3.0)
+        self.assertIsNone(payload["previous_period"]["data"]["roas"])
+        self.assertAlmostEqual(payload["comparisons"]["impressions_pct_change"], 100.0)
+        self.assertIsNone(payload["comparisons"]["roas_pct_change"])
+        self.assertEqual(payload["comparisons"]["previous_period_label"], "vs Mar 25 - Mar 31")
 
     def test_auto_analyze_coerces_numeric_like_text_columns(self):
         df = pd.DataFrame(

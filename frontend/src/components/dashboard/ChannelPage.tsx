@@ -339,7 +339,7 @@ function fmtPct(v: number | null) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(2)}%`
 }
-function fmtX(v: number | null) {
+function fmtRoasPercent(v: number | null) {
   if (v == null) return '—'
   return `${(v * 100).toFixed(1)}%`
 }
@@ -784,7 +784,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
         if (currNum != null && currDen != null && currDen > 0) {
           // CTR: store as ratio (0–1); formatPercent multiplies by 100.
-          // avg_cpc / roas are plain ratios displayed as currency / x.
+          // ROAS is stored as revenue / cost and displayed as a percentage.
           value = currNum / currDen
         }
         if (prevNum != null && prevDen != null && prevDen > 0 && value != null) {
@@ -1487,7 +1487,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className={`px-4 py-3 text-right font-semibold ${
                             row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
-                            {fmtX(row.roas)}
+                            {fmtRoasPercent(row.roas)}
                           </td>
                         </tr>
                       ))}
@@ -1594,7 +1594,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           <td className={`px-4 py-3 text-right font-semibold ${
                             row.roas == null ? 'text-muted-foreground' : row.roas >= 2 ? 'text-emerald-600' : row.roas < 1 ? 'text-red-500' : 'text-amber-500'
                           }`}>
-                            {fmtX(row.roas)}
+                            {fmtRoasPercent(row.roas)}
                           </td>
                         </tr>
                       ))}

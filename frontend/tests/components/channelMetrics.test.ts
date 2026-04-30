@@ -1,6 +1,8 @@
 import {
   buildClicksCtrData,
   buildConversionRateData,
+  buildNoDataLabel,
+  buildPriorLabel,
   buildRevenueCostTrendData,
   buildTransactionsCpaData,
   hasConversionRateData,
@@ -175,6 +177,28 @@ describe("channelMetrics", () => {
     expect(resolveChartBucket("last_7_days", { startDate: "2026-03-01", endDate: "2026-03-07" })).toBe("day");
     expect(resolveChartBucket("custom", { startDate: "2026-03-01", endDate: "2026-05-15" })).toBe("week");
     expect(resolveChartBucket("custom", { startDate: "2026-01-01", endDate: "2026-12-31" })).toBe("month");
+  });
+
+  it("formats prior labels from backend comparison windows", () => {
+    expect(
+      buildPriorLabel({
+        previous_start: "2026-06-01T00:00:00+00:00",
+        previous_end: "2026-06-07T23:59:59+00:00",
+      }),
+    ).toBe("Jun 1 – Jun 7");
+
+    expect(
+      buildPriorLabel({
+        previous_start: "2026-04-29T00:00:00+00:00",
+        previous_end: "2026-04-29T23:59:59+00:00",
+        previous_period_label: "vs Apr 29",
+      }),
+    ).toBe("Apr 29");
+  });
+
+  it("uses a clear missing previous data label", () => {
+    expect(buildNoDataLabel(true, "Jun 1 – Jun 7")).toBe("Previous data missing: Jun 1 – Jun 7");
+    expect(buildNoDataLabel(false, "prior period")).toBe("Select a date range to compare");
   });
 
   it("reports chart emptiness from actual plotted values instead of raw row count", () => {

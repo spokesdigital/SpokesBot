@@ -417,6 +417,115 @@ def _uses_average_basis(col: str) -> bool:
     )
 
 
+def _is_finite_number(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(numeric)
+
+
+def _safe_pct_change(current: Any, previous: Any) -> float | None:
+    """
+    Return percentage change without ever dividing by zero/NaN.
+
+    A missing or zero previous value makes the comparison undefined in ad
+    dashboards, so the API returns null and lets the UI show a missing-prior
+    state instead of inventing growth from a zero baseline.
+    """
+    if not _is_finite_number(current) or not _is_finite_number(previous):
+        return None
+
+    current_float = float(current)
+    previous_float = float(previous)
+    if previous_float == 0:
+        return None
+
+    return ((current_float - previous_float) / abs(previous_float)) * 100
+
+
+def _safe_ratio(numerator: Any, denominator: Any) -> float | None:
+    if not _is_finite_number(numerator) or not _is_finite_number(denominator):
+        return None
+    denominator_float = float(denominator)
+    if denominator_float == 0:
+        return None
+    return float(numerator) / denominator_float
+
+
+def _period_label(start: datetime, end: datetime) -> str:
+    def fmt(dt: datetime) -> str:
+        return f"{dt.strftime('%b')} {dt.day}"
+
+    if start.date() == end.date():
+        return f"vs {fmt(start)}"
+    return f"vs {fmt(start)} - {fmt(end)}"
+
+
+def _period_numeric_totals(result: dict[str, Any] | None) -> dict[str, Any]:
+    return (result or {}).get("numeric_totals", {}) or {}
+
+
+def _period_metric_mappings(result: dict[str, Any] | None) -> dict[str, str | None]:
+    return (result or {}).get("metric_mappings", {}) or {}
+
+
+def _mapped_total(result: dict[str, Any] | None, metric_key: str) -> float | None:
+    mappings = _period_metric_mappings(result)
+    totals = _period_numeric_totals(result)
+    col = mappings.get(metric_key)
+    if not col or col not in totals or not _is_finite_number(totals[col]):
+        return None
+    return float(totals[col])
+
+
+def _build_period_kpi_data(result: dict[str, Any] | None) -> dict[str, float | None]:
+    impressions = _mapped_total(result, "impressions")
+    clicks = _mapped_total(result, "clicks")
+    cost = _mapped_total(result, "cost")
+    revenue = _mapped_total(result, "revenue")
+    conversions = _mapped_total(result, "conversions")
+
+    return _sanitize(
+        {
+            "impressions": impressions,
+            "clicks": clicks,
+            "cost": cost,
+            "revenue": revenue,
+            "conversions": conversions,
+            "ctr": _safe_ratio(clicks, impressions),
+            "avg_cpc": _safe_ratio(cost, clicks),
+            "roas": _safe_ratio(revenue, cost),
+            "cpa": _safe_ratio(cost, conversions),
+            "conversion_rate": _safe_ratio(conversions, clicks),
+            "aov": _safe_ratio(revenue, conversions),
+        }
+    )
+
+
+def _derived_comparison_value(col: str, result: dict[str, Any]) -> tuple[str, float | None] | None:
+    mappings = _period_metric_mappings(result)
+    lower = col.lower()
+    period_data = _build_period_kpi_data(result)
+
+    if col == mappings.get("ctr"):
+        return "derived_ratio", period_data["ctr"]
+    if col == mappings.get("avg_cpc"):
+        return "derived_ratio", period_data["avg_cpc"]
+    if col == mappings.get("roas"):
+        return "derived_ratio", period_data["roas"]
+    if "cpa" in lower or "cost per conversion" in lower or "cost per action" in lower:
+        return "derived_ratio", period_data["cpa"]
+    if "conversion" in lower and ("rate" in lower or "cvr" in lower):
+        return "derived_ratio", period_data["conversion_rate"]
+    if "aov" in lower or "average order value" in lower:
+        return "derived_ratio", period_data["aov"]
+
+    return None
+
+
 def build_auto_comparison(
     current_result: dict[str, Any],
     previous_result: dict[str, Any] | None,
@@ -438,33 +547,68 @@ def build_auto_comparison(
     )
 
     for col in all_columns:
-        basis = "mean" if _uses_average_basis(col) else "total"
-        if basis == "mean":
+        derived_current = _derived_comparison_value(col, current_result)
+        derived_previous = _derived_comparison_value(col, previous_result)
+
+        if derived_current is not None and derived_previous is not None:
+            basis = derived_current[0]
+            current_value = derived_current[1]
+            previous_value = derived_previous[1]
+        elif _uses_average_basis(col):
+            basis = "mean"
             current_value = (current_summary.get(col) or {}).get("mean")
             previous_value = (previous_summary.get(col) or {}).get("mean")
         else:
+            basis = "total"
             current_value = current_totals.get(col)
             previous_value = previous_totals.get(col)
 
         if current_value is None:
             continue
 
-        delta_pct = None
-        if previous_value not in (None, 0):
-            delta_pct = ((current_value - previous_value) / abs(previous_value)) * 100
-        elif previous_value == 0 and current_value > 0:
-            delta_pct = 100.0  # Treat 0 -> positive as 100% growth for UX
-        elif previous_value == 0 and current_value < 0:
-            delta_pct = -100.0
-
         comparison[col] = {
             "basis": basis,
             "current": _sanitize(current_value),
             "previous": _sanitize(previous_value),
-            "delta_pct": _sanitize(delta_pct),
+            "delta_pct": _sanitize(_safe_pct_change(current_value, previous_value)),
         }
 
     return comparison
+
+
+def build_period_comparison_payload(
+    current_result: dict[str, Any],
+    previous_result: dict[str, Any] | None,
+    current_start: datetime,
+    current_end: datetime,
+    previous_start: datetime,
+    previous_end: datetime,
+) -> dict[str, Any]:
+    current_data = _build_period_kpi_data(current_result)
+    previous_data = _build_period_kpi_data(previous_result)
+    previous_label = _period_label(previous_start, previous_end)
+
+    comparisons: dict[str, Any] = {
+        "previous_period_label": previous_label,
+    }
+    for key, current_value in current_data.items():
+        comparisons[f"{key}_pct_change"] = _safe_pct_change(current_value, previous_data.get(key))
+
+    return _sanitize(
+        {
+            "current_period": {
+                "start": current_start.date().isoformat(),
+                "end": current_end.date().isoformat(),
+                "data": current_data,
+            },
+            "previous_period": {
+                "start": previous_start.date().isoformat(),
+                "end": previous_end.date().isoformat(),
+                "data": previous_data,
+            },
+            "comparisons": comparisons,
+        }
+    )
 
 
 def resolve_date_range(
@@ -851,6 +995,7 @@ def _auto_analyze(
         "metric_time_series": metric_time_series,
         "metric_breakdowns": metric_breakdowns,
         "selected_metric_columns": selected_metric_columns,
+        "metric_mappings": _sanitize(metric_mappings),
         "date_columns": date_columns,
         "dtypes": dtypes,
         "sample": sample,

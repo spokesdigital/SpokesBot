@@ -435,7 +435,7 @@ const HELP_ARTICLES: HelpArticle[] = [
     id: 'roas',
     question: 'What is ROAS and why does it matter?',
     answer:
-      'ROAS stands for return on ad spend. It shows how much revenue you generate for every dollar spent on advertising, which makes it one of the clearest ways to judge whether campaigns are profitable.',
+      'ROAS stands for return on ad spend. It is calculated as revenue divided by ad spend and shown as a percentage, which makes it one of the clearest ways to judge whether campaigns are profitable.',
   },
   {
     id: 'effective-transactions',

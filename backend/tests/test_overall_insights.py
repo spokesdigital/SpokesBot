@@ -22,7 +22,7 @@ from app.main import app
 
 STRUCTURED_RESPONSE = """
 [
-  {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 4.2x."},
+  {"type": "success", "text": "Revenue reached $124,500 with ROAS holding at 420.00%."},
   {"type": "trend", "text": "Clicks climbed 18% week over week while CPC stayed flat at $1.24."},
   {"type": "success", "text": "Conversion rate is holding steady at 3.2% across all campaigns."},
   {"type": "trend", "text": "Top channel accounts for 62% of total impressions this period."}
@@ -108,7 +108,7 @@ class TestOverallInsightsEndpoint:
                     return_value=[
                         {
                             "type": "success",
-                            "text": "Revenue reached $124,500 with ROAS holding at 4.2x.",
+                            "text": "Revenue reached $124,500 with ROAS holding at 420.00%.",
                         },
                         {
                             "type": "trend",
