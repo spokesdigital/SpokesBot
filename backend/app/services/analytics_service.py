@@ -1,3 +1,4 @@
+import gc
 import math
 import re
 import time as monotonic_time
@@ -1148,7 +1149,7 @@ def _auto_analyze(
     # Sample rows
     sample = _sanitize(df.head(5).to_dict(orient="records"))
 
-    return {
+    result = {
         "shape": shape,
         "numeric_summary": numeric_summary,
         "numeric_totals": numeric_totals,
@@ -1163,3 +1164,12 @@ def _auto_analyze(
         "sample": sample,
         "granularity": granularity,
     }
+
+    # Free the working DataFrames now that the result dict is fully assembled.
+    # CPython's reference counter usually cleans these up on its own, but an
+    # explicit delete + gc.collect() releases memory immediately — important
+    # for large 30/90-day datasets that can hold tens of MBs in RAM.
+    del df
+    gc.collect()
+
+    return result

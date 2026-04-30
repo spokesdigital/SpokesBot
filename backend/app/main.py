@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from slowapi import Limiter
@@ -95,6 +96,12 @@ app.add_exception_handler(
 # 1. Correlation ID + timing (outermost — captures full request lifecycle)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(SlowAPIMiddleware)
+
+# 3. GZIP compression — must be added AFTER CORS so that the
+# Content-Encoding header is set before the CORS layer reads the response.
+# minimum_size=1000 skips compression for tiny payloads (health checks, etc.)
+# where the compression overhead would exceed the benefit.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # 2. Stricter CORS — explicit methods, no wildcard headers
 _CORS_ORIGINS = list(
