@@ -166,16 +166,17 @@ jobs:
 
       # Pull Vercel project config (.vercel/project.json) so the CLI knows
       # which project to deploy to without interactive prompts.
-      # Run from repo root so Vercel's rootDirectory:frontend setting resolves correctly.
       - name: Pull Vercel environment
-        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: frontend
+        run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }} --cwd .
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
 
       # Build with Vercel's own build system (respects vercel.json overrides).
       - name: Build for Vercel
-        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: frontend
+        run: npx vercel build --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd .
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
@@ -183,14 +184,16 @@ jobs:
       # Deploy the pre-built output — no second build, fast deploy.
       - name: Deploy to Vercel (production)
         id: deploy
+        working-directory: frontend
         run: |
-          URL=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          URL=$(npx vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --cwd .)
           echo "deployment_url=$URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || vars.VERCEL_PROJECT_ID }}
 
       - name: Print deployment URL
+        working-directory: frontend
         run: echo "Deployed to ${{ steps.deploy.outputs.deployment_url }}"
 
   # ───────────────────────────────────────────────────────────────────────────
