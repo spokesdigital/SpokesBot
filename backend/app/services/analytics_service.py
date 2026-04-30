@@ -1217,8 +1217,8 @@ def _auto_analyze(
         df_daily = df_daily.reindex(full_date_index.date)
         
         # Fill missing with 0 for base metrics
+        df_daily.index.name = "date"
         df_daily = df_daily.fillna(0).reset_index()
-        df_daily.rename(columns={"index": "date"}, inplace=True)
 
         daily_list = []
         for _, row in df_daily.iterrows():

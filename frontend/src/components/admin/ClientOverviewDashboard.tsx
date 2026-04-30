@@ -27,7 +27,7 @@ const OverviewPieChart = dynamic(
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PresetFilter = 'last_30_days' | 'last_90_days' | 'last_180_days' | 'all_time' | 'custom'
+type PresetFilter = 'last_30_days' | 'last_90_days' | 'last_180_days' | 'last_12_months' | 'all_time' | 'custom'
 
 type DateSelection =
   | { preset: Exclude<PresetFilter, 'custom'> }
@@ -135,6 +135,7 @@ const PRESET_LABELS: Record<Exclude<PresetFilter, 'custom'>, string> = {
   last_30_days: 'Last 30 Days',
   last_90_days: 'Last 90 Days',
   last_180_days: 'Last 180 Days',
+  last_12_months: 'Last 12 Months',
   all_time: 'All Time',
 }
 
@@ -387,7 +388,7 @@ function buildTrend(
       endStr = dateSelection.endDate
     } else {
       const today = new Date()
-      const days = dateSelection.preset === 'last_90_days' ? 90 : dateSelection.preset === 'last_180_days' ? 180 : 30
+      const days = dateSelection.preset === 'last_90_days' ? 90 : dateSelection.preset === 'last_180_days' ? 180 : dateSelection.preset === 'last_12_months' ? 365 : 30
       const start = new Date(today)
       start.setDate(today.getDate() - days + 1) // +1 because e.g. 30 days includes today
       startStr = start.toISOString().split('T')[0]
@@ -458,7 +459,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     }))
   )
 
-  const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_30_days' })
+  const [dateSelection, setDateSelection] = useState<DateSelection>({ preset: 'last_12_months' })
   const datasets = useMemo(
     () => (datasetsOrgId === orgId && globalDatasetsLoaded ? globalDatasets : []),
     [datasetsOrgId, orgId, globalDatasetsLoaded, globalDatasets],

@@ -38,9 +38,14 @@ const presets: Preset[] = [
     key: 'ytd',
     getValue: () => ({ start: startOfYear(new Date()), end: endOfDay(new Date()) }),
   },
+  {
+    label: 'Last 12 Months',
+    key: 'last_12_months',
+    getValue: () => ({ start: startOfDay(subDays(new Date(), 365)), end: endOfDay(new Date()) }),
+  },
 ]
 
-const DEFAULT_PRESET_KEY = 'last_30_days'
+const DEFAULT_PRESET_KEY = 'last_12_months'
 
 export function DateFilter() {
   const { datePreset, dateRange, setDateRange, clearDateRange } = useDashboardStore(
