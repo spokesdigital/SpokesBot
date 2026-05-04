@@ -11,8 +11,10 @@ from app.services.analytics_service import infer_conversion_metric_mapping
 from supabase import Client
 
 BUCKET = "datasets"
-_DATAFRAME_CACHE_TTL_SECONDS = 300
-_DATAFRAME_CACHE_MAX_ITEMS = 20
+# Keep loaded DataFrames hot for 30 minutes — datasets only change on upload,
+# which explicitly calls clear_dataframe_cache(), so stale reads cannot occur.
+_DATAFRAME_CACHE_TTL_SECONDS = 1800
+_DATAFRAME_CACHE_MAX_ITEMS = 30
 _dataframe_cache: OrderedDict[str, tuple[float, pd.DataFrame]] = OrderedDict()
 _dataframe_cache_lock = Lock()
 

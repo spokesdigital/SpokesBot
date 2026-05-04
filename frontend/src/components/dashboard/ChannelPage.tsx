@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 // (date-fns format used for start/end date value computation)
 import { AlertCircle, ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -929,6 +929,24 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     [sortedDailyRows, dailyPage],
   )
 
+  // ── Stable event handler references ────────────────────────────────────────
+  // useCallback prevents child table rows / header cells from re-rendering
+  // when unrelated state (loading flags, insights) causes ChannelPage to re-render.
+  const handleCampaignSort = useCallback(
+    (key: string) => setCampaignSort((s) => toggleSort(s, key)),
+    [],
+  )
+  const handleDailySort = useCallback(
+    (key: string) => { setDailySort((s) => toggleSort(s, key)); setDailyPage(0) },
+    [],
+  )
+  const handlePrevPage = useCallback(() => setDailyPage((p) => p - 1), [])
+  const handleNextPage = useCallback(() => setDailyPage((p) => p + 1), [])
+  const handleDimensionChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCampaignDimension(e.target.value),
+    [],
+  )
+
   // ── Stable series arrays for memoized chart props ────────────────────────
   const clicksCtrSeries = useMemo(
     () => [
@@ -1307,7 +1325,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                     <span className="text-muted-foreground">Group by</span>
                     <select
                       value={selectedCampaignDimension ?? viewModel.availableCampaignDimensions[0]}
-                      onChange={(e) => setSelectedCampaignDimension(e.target.value)}
+                      onChange={handleDimensionChange}
                       className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-sm outline-none focus:ring-2 focus:ring-primary/20"
                     >
                       {viewModel.availableCampaignDimensions.map((dim) => (
@@ -1351,7 +1369,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           return (
                             <th
                               key={key}
-                              onClick={() => setCampaignSort((s) => toggleSort(s, key))}
+                              onClick={() => handleCampaignSort(key)}
                               className="cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
                             >
                               <span className="inline-flex items-center justify-end gap-0.5">
@@ -1428,7 +1446,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       <tr className="border-b border-border">
                         {/* Date column — sortable */}
                         <th
-                          onClick={() => { setCampaignSort((s) => s); setDailySort((s) => toggleSort(s, 'date')); setDailyPage(0) }}
+                          onClick={() => handleDailySort('date')}
                           className="sticky top-0 z-10 bg-[hsl(var(--card))] cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
                         >
                           <span className="inline-flex items-center gap-0.5">
@@ -1457,7 +1475,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                           return (
                             <th
                               key={key}
-                              onClick={() => { setDailySort((s) => toggleSort(s, key)); setDailyPage(0) }}
+                              onClick={() => handleDailySort(key)}
                               className="sticky top-0 z-10 bg-[hsl(var(--card))] cursor-pointer select-none px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase hover:text-foreground transition-colors"
                             >
                               <span className="inline-flex items-center justify-end gap-0.5">
@@ -1517,7 +1535,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       <div className="flex items-center gap-2">
                         <button
                           disabled={dailyPage === 0}
-                          onClick={() => setDailyPage((p) => p - 1)}
+                          onClick={handlePrevPage}
                           className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                         >
                           <ChevronLeft className="h-4 w-4" />
@@ -1527,7 +1545,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                         </span>
                         <button
                           disabled={dailyPage >= dailyPageCount - 1}
-                          onClick={() => setDailyPage((p) => p + 1)}
+                          onClick={handleNextPage}
                           className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
                         >
                           <ChevronRight className="h-4 w-4" />

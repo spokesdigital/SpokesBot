@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.cache import invalidate_org
 from app.dependencies import (
     ROLE_ADMIN,
     get_current_org_id,
@@ -11,6 +12,7 @@ from app.dependencies import (
 )
 from app.schemas.dataset import DatasetListResponse, DatasetResponse
 from app.services import dataset_service
+from app.services.dataset_service import clear_dataframe_cache
 from supabase import Client
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -119,6 +121,7 @@ def delete_dataset(
     dataset_id: str,
     supabase: Client = Depends(get_supabase_client),
     service_client: Client = Depends(get_service_client),
+    caller_org_id: str = Depends(get_current_org_id),
     role: str = Depends(get_current_role),
 ):
     """
@@ -130,3 +133,7 @@ def delete_dataset(
         service_client if role == ROLE_ADMIN else supabase,
         service_client,
     )
+    # Evict the response cache and the DataFrame cache so subsequent
+    # analytics requests don't serve data from a deleted dataset.
+    clear_dataframe_cache()
+    invalidate_org(caller_org_id)
