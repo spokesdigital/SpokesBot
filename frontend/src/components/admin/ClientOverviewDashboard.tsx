@@ -6,7 +6,6 @@ import { AlertCircle, Calendar, Check, ChevronDown } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
 import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api'
-import { cancelIdleTask, scheduleIdleTask } from '@/lib/idle'
 import type { AnalyticsResult, Dataset } from '@/types'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
@@ -163,7 +162,6 @@ function buildOverviewAnalyticsKey(dataset: Dataset, orgId: string, dateSelectio
   return [
     orgId,
     dataset.id,
-    dataset.updated_at,
     dataset.detected_date_column ?? 'no-date-column',
     serializeDateSelection(dateSelection),
   ].join('::')
@@ -628,12 +626,8 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     [insightsDataset, orgId, dateSelection],
   )
   useEffect(() => {
-    if (!session || !insightsDataset) { 
+    if (!session || !insightsDataset) {
       setInsights([])
-      setLoadingInsights(false)
-      return 
-    }
-    if (loadingGoogle || loadingMeta) {
       setLoadingInsights(false)
       return
     }
@@ -677,12 +671,9 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
 
     setInsightsError(null)
     setLoadingInsights(true)
-    const idleHandle = scheduleIdleTask(() => { void load() }, 1200)
-    return () => {
-      cancelled = true
-      cancelIdleTask(idleHandle)
-    }
-  }, [session, insightsDataset, dateSelection, orgId, loadingGoogle, loadingMeta, insightsCacheKey])
+    void load()
+    return () => { cancelled = true }
+  }, [session, insightsDataset, dateSelection, orgId, insightsCacheKey])
 
   // Derived combined metrics
   const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])

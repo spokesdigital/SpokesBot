@@ -129,7 +129,7 @@
       radial-gradient(circle at top right, rgba(45, 212, 191, 0.2), transparent 24%),
       radial-gradient(circle at bottom center, rgba(253, 224, 71, 0.18), transparent 34%),
       linear-gradient(180deg, #f8fbff 0%, #eef7ff 42%, #fef6ec 100%);
-    background-attachment: fixed;
+    background-attachment: scroll;
   }
   html {
     @apply font-sans;

@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useDashboardStore } from '@/store/dashboard'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/lib/api'
-import { cancelIdleTask, scheduleIdleTask } from '@/lib/idle'
 import { DateFilter } from '@/components/dashboard/DateFilter'
 import { OverallInsights } from '@/components/dashboard/OverallInsights'
 import { KPICard } from '@/components/dashboard/KPICard'
@@ -732,8 +731,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
 
     setInsightsError(null)
     setLoadingInsights(true)
-    const idleHandle = scheduleIdleTask(() => { void load() }, 1200)
-    return () => { cancelled = true; cancelIdleTask(idleHandle) }
+    void load()
+    return () => { cancelled = true }
   }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role, analyticsDataQualityWarnings, insightsRetryTick])
 
   const retryInsights = useCallback(() => {
