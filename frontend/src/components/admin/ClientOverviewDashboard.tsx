@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react'
 import dynamic from 'next/dynamic'
 import { AlertCircle, Calendar, Check, ChevronDown } from 'lucide-react'
 import { EmptyDashboardState } from '@/components/dashboard/EmptyDashboardState'
@@ -676,19 +676,23 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   }, [session, insightsDataset, dateSelection, orgId, insightsCacheKey])
 
   // Derived combined metrics
-  const googleTotals = useMemo(() => extractTotals(googleAnalytics, googleDataset), [googleAnalytics, googleDataset])
-  const metaTotals = useMemo(() => extractTotals(metaAnalytics, metaDataset), [metaAnalytics, metaDataset])
+  const deferredGoogleAnalytics = useDeferredValue(googleAnalytics)
+  const deferredMetaAnalytics = useDeferredValue(metaAnalytics)
+  const deferredInsights = useDeferredValue(insights)
+
+  const googleTotals = useMemo(() => extractTotals(deferredGoogleAnalytics, googleDataset), [deferredGoogleAnalytics, googleDataset])
+  const metaTotals = useMemo(() => extractTotals(deferredMetaAnalytics, metaDataset), [deferredMetaAnalytics, metaDataset])
 
   const comparisonWindow = useMemo(
-    () => (googleAnalytics?.result?.comparison_window ?? metaAnalytics?.result?.comparison_window ?? null) as ComparisonWindow | null,
-    [googleAnalytics, metaAnalytics],
+    () => (deferredGoogleAnalytics?.result?.comparison_window ?? deferredMetaAnalytics?.result?.comparison_window ?? null) as ComparisonWindow | null,
+    [deferredGoogleAnalytics, deferredMetaAnalytics],
   )
   const priorLabel = buildPriorLabel(comparisonWindow)
   const noDataLabel = buildNoDataLabel(comparisonWindow !== null, priorLabel)
 
   const granularity = useMemo(
-    () => (googleAnalytics?.result?.granularity ?? metaAnalytics?.result?.granularity ?? 'daily') as 'daily' | 'monthly',
-    [googleAnalytics, metaAnalytics]
+    () => (deferredGoogleAnalytics?.result?.granularity ?? deferredMetaAnalytics?.result?.granularity ?? 'daily') as 'daily' | 'monthly',
+    [deferredGoogleAnalytics, deferredMetaAnalytics]
   )
 
   const combined = useMemo(() => {
@@ -738,17 +742,17 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
   )
 
   const trendData = useMemo(() => {
-    const gRev = extractTimeSeries(googleAnalytics, googleDataset, 'revenue')
-    const gCost = extractTimeSeries(googleAnalytics, googleDataset, 'cost')
-    const mRev = extractTimeSeries(metaAnalytics, metaDataset, 'revenue')
-    const mCost = extractTimeSeries(metaAnalytics, metaDataset, 'cost')
+    const gRev = extractTimeSeries(deferredGoogleAnalytics, googleDataset, 'revenue')
+    const gCost = extractTimeSeries(deferredGoogleAnalytics, googleDataset, 'cost')
+    const mRev = extractTimeSeries(deferredMetaAnalytics, metaDataset, 'revenue')
+    const mCost = extractTimeSeries(deferredMetaAnalytics, metaDataset, 'cost')
     return buildTrend(gRev, gCost, mRev, mCost, dateSelection)
-  }, [googleAnalytics, googleDataset, metaAnalytics, metaDataset, dateSelection])
+  }, [deferredGoogleAnalytics, googleDataset, deferredMetaAnalytics, metaDataset, dateSelection])
 
   // Revenue/status split — prefer order-status data, then revenue, then cost
   const { splitData, splitLabel, splitIsStatus } = useMemo(() => {
     // 1. Try to find delivery/inventory status data from categorical_charts
-    const statusRows = extractStatusData([googleAnalytics, metaAnalytics])
+    const statusRows = extractStatusData([deferredGoogleAnalytics, deferredMetaAnalytics])
     if (statusRows && statusRows.length > 0) {
       return { splitData: statusRows, splitLabel: 'Order Status', splitIsStatus: true }
     }
@@ -768,8 +772,8 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
     return { splitData: costRows, splitLabel: 'Spend Split', splitIsStatus: false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    googleAnalytics, 
-    metaAnalytics, 
+    deferredGoogleAnalytics, 
+    deferredMetaAnalytics, 
     googleTotals.revenue.current, 
     metaTotals.revenue.current, 
     googleTotals.cost.current, 
@@ -902,7 +906,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       <OverallInsights
         title="Overall AI Insights"
         subtitle={insightsDataset ? `Based on ${insightsDataset.report_type === 'google_ads' ? 'Google Ads' : 'Meta Ads'} data` : undefined}
-        insights={insights}
+        insights={deferredInsights}
         loading={loadingInsights}
         error={insightsError}
         emptyMessage="Insights will appear once your channel data is ready for AI analysis."
