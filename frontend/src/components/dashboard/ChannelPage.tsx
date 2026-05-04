@@ -421,6 +421,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [insights, setInsights] = useState<AIInsight[]>([])
   const [loadingInsights, setLoadingInsights] = useState(false)
   const [insightsError, setInsightsError] = useState<string | null>(null)
+  const [insightsRetryTick, setInsightsRetryTick] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [isTimeoutError, setIsTimeoutError] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -720,7 +721,12 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     setLoadingInsights(true)
     const idleHandle = scheduleIdleTask(() => { void load() }, 1200)
     return () => { cancelled = true; cancelIdleTask(idleHandle) }
-  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role, analyticsDataQualityWarnings])
+  }, [session, activeDatasetId, insightsRequestKey, loadingAnalytics, datePreset, dateRange.start, dateRange.end, startDateValue, endDateValue, activeDateColumn, organizationId, targetOrgId, user?.role, analyticsDataQualityWarnings, insightsRetryTick])
+
+  const retryInsights = useCallback(() => {
+    if (insightsRequestKey) insightsCache.delete(insightsRequestKey)
+    setInsightsRetryTick((t) => t + 1)
+  }, [insightsRequestKey])
 
   // ── ViewModel ─────────────────────────────────────────────────────────────
 
@@ -1125,6 +1131,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               insights={sectionInsights.traffic}
               loading={loadingInsights}
               error={insightsError}
+              onRetry={retryInsights}
               title="Traffic Insights"
               emptyMessage="No traffic insights available for this dataset."
             />
@@ -1209,6 +1216,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               insights={sectionInsights.conversion}
               loading={loadingInsights}
               error={insightsError}
+              onRetry={retryInsights}
               title="Conversion Insights"
               emptyMessage="No conversion insights available for this dataset."
             />
@@ -1290,6 +1298,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
               insights={sectionInsights.revenue}
               loading={loadingInsights}
               error={insightsError}
+              onRetry={retryInsights}
               title="Revenue Insights"
               emptyMessage="No revenue insights available for this dataset."
             />
@@ -1309,6 +1318,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   insights={sectionInsights.distribution}
                   loading={loadingInsights}
                   error={insightsError}
+                  onRetry={retryInsights}
                   title="Distribution Insights"
                   emptyMessage="No distribution insights available for this dataset."
                 />
