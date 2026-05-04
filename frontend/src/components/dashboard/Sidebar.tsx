@@ -77,7 +77,7 @@ export function Sidebar() {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-white/8 bg-[#1d2129] text-white transition-all duration-300 ease-out md:static ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        } ${sidebarCollapsed ? 'md:w-[88px]' : 'md:w-64'} w-[280px]`}
+        } ${sidebarCollapsed ? 'md:w-[88px]' : 'md:w-64'} w-[min(280px,78vw)]`}
       >
         <div
           className={`flex border-b border-white/8 px-5 py-5 ${

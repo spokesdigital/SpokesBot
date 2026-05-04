@@ -57,7 +57,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed right-4 top-4 z-[200] flex flex-col items-end gap-2"
+        className="pointer-events-none fixed right-4 top-4 left-4 sm:left-auto z-[200] flex flex-col items-end gap-2"
       >
         {toasts.map((t) => (
           <ToastBubble key={t.id} toast={t} onDismiss={remove} />
@@ -110,7 +110,7 @@ function ToastBubble({
     <div
       role="status"
       className={[
-        'pointer-events-auto flex min-w-[260px] max-w-[360px] items-start gap-3 rounded-[1rem] border px-4 py-3',
+        'pointer-events-auto flex min-w-[min(260px,calc(100vw-2rem))] max-w-[min(360px,calc(100vw-2rem))] items-start gap-3 rounded-[1rem] border px-4 py-3',
         'shadow-[0_8px_28px_rgba(15,23,42,0.13)] backdrop-blur-sm',
         'transition-all duration-300',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-[-6px] opacity-0',
