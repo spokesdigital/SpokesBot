@@ -138,4 +138,81 @@ def make_tools(df: pd.DataFrame):
         }
         return json.dumps(result, indent=2, default=str)
 
-    return [get_dataset_schema, get_sample_rows, run_analysis, filter_and_describe]
+    @tool
+    def compare_timeframes(metric_column: str, current_preset: str, previous_preset: str) -> str:
+        """
+        Compare a specific metric between two different time periods.
+        Args:
+            metric_column: The metric to compare (e.g., 'Revenue', 'ROAS', 'Cost').
+            current_preset: The primary timeframe to analyze (e.g., 'last_7_days', 'this_month', 'last_30_days', 'today', 'yesterday').
+            previous_preset: The secondary timeframe to compare against (e.g., 'previous_7_days', 'last_month', 'previous_30_days').
+        """
+        from datetime import UTC, datetime, time, timedelta
+        from app.services.analytics_service import apply_date_filter, resolve_date_range, _detect_date_columns, _uses_average_basis
+        
+        date_columns = _detect_date_columns(df)
+        if not date_columns:
+            return "Error: No date column found in dataset."
+        date_column = date_columns[0]
+        
+        resolved_metric = _resolve_column(df, metric_column)
+        if resolved_metric not in df.columns:
+            return f"Error: Metric column '{metric_column}' not found."
+            
+        def get_range(preset):
+            if preset == "previous_7_days":
+                now = datetime.now(UTC)
+                today = now.date()
+                end = datetime.combine(today - timedelta(days=7), time.max, tzinfo=UTC)
+                start = datetime.combine(today - timedelta(days=13), time.min, tzinfo=UTC)
+                return start, end
+            if preset == "previous_30_days":
+                now = datetime.now(UTC)
+                today = now.date()
+                end = datetime.combine(today - timedelta(days=30), time.max, tzinfo=UTC)
+                start = datetime.combine(today - timedelta(days=59), time.min, tzinfo=UTC)
+                return start, end
+            if preset == "last_month":
+                now = datetime.now(UTC)
+                today = now.date()
+                first_of_this_month = today.replace(day=1)
+                last_day_of_last_month = first_of_this_month - timedelta(days=1)
+                first_of_last_month = last_day_of_last_month.replace(day=1)
+                start = datetime.combine(first_of_last_month, time.min, tzinfo=UTC)
+                end = datetime.combine(last_day_of_last_month, time.max, tzinfo=UTC)
+                return start, end
+            return resolve_date_range(preset)
+
+        try:
+            cur_start, cur_end = get_range(current_preset)
+            prev_start, prev_end = get_range(previous_preset)
+            
+            cur_df = apply_date_filter(df, date_column, cur_start, cur_end)
+            prev_df = apply_date_filter(df, date_column, prev_start, prev_end)
+        except Exception as e:
+            return f"Error resolving date ranges: {str(e)}"
+            
+        def get_val(subset):
+            series = subset[resolved_metric].dropna()
+            if series.empty: return 0.0
+            return float(series.mean()) if _uses_average_basis(resolved_metric) else float(series.sum())
+
+        cur_val = get_val(cur_df)
+        prev_val = get_val(prev_df)
+        
+        diff = cur_val - prev_val
+        pct = (diff / prev_val * 100) if prev_val != 0 else 0
+        
+        result = {
+            "metric": resolved_metric,
+            "current_period": current_preset,
+            "current_value": cur_val,
+            "previous_period": previous_preset,
+            "previous_value": prev_val,
+            "difference": diff,
+            "percentage_change": pct
+        }
+        return json.dumps(result, indent=2, default=str)
+
+    return [get_dataset_schema, get_sample_rows, run_analysis, filter_and_describe, compare_timeframes]
+

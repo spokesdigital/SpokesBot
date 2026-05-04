@@ -358,101 +358,6 @@ def _try_build_period_metric_response(df: pd.DataFrame, question: str) -> str | 
     )
 
 
-def _try_build_timeframe_comparison_response(df: pd.DataFrame, question: str) -> str | None:
-    lowered_question = question.lower()
-    # Pattern for "compare [metric] [period1] vs [period2]" or "[metric] [period1] vs [period2]"
-    # e.g. "compare revenue last week vs previous week"
-    if not any(term in lowered_question for term in ("compare", "vs", "versus")):
-        return None
-
-    metric_name = _detect_metric_from_question(question)
-    if not metric_name:
-        return None
-
-    # Detect if we have timeframe-like terms
-    if "last week" in lowered_question and ("previous week" in lowered_question or "prior week" in lowered_question):
-        p1_preset, p1_label = "last_7_days", "last week"
-        p2_preset, p2_label = "previous_7_days", "the previous week"
-    elif "this month" in lowered_question and ("last month" in lowered_question or "previous month" in lowered_question):
-        p1_preset, p1_label = "this_month", "this month"
-        p2_preset, p2_label = "last_month", "last month"
-    elif "last 30 days" in lowered_question and ("previous 30 days" in lowered_question or "prior 30 days" in lowered_question):
-        p1_preset, p1_label = "last_30_days", "last 30 days"
-        p2_preset, p2_label = "previous_30_days", "the previous 30 days"
-    else:
-        return None
-
-    date_columns = _detect_date_columns(df)
-    if not date_columns:
-        return None
-    date_column = date_columns[0]
-
-    metric_mappings = infer_metric_mappings(df)
-    metric_column = metric_mappings.get(metric_name)
-    if not metric_column or metric_column not in df.columns:
-        return None
-
-    try:
-        # Resolve date ranges
-        # Note: we need to handle "previous_X_days" which might not be in resolve_date_range
-        def get_range(preset):
-            if preset == "previous_7_days":
-                now = datetime.now(UTC)
-                today = now.date()
-                end = datetime.combine(today - timedelta(days=7), time.max, tzinfo=UTC)
-                start = datetime.combine(today - timedelta(days=13), time.min, tzinfo=UTC)
-                return start, end
-            if preset == "previous_30_days":
-                now = datetime.now(UTC)
-                today = now.date()
-                end = datetime.combine(today - timedelta(days=30), time.max, tzinfo=UTC)
-                start = datetime.combine(today - timedelta(days=59), time.min, tzinfo=UTC)
-                return start, end
-            if preset == "last_month":
-                now = datetime.now(UTC)
-                today = now.date()
-                first_of_this_month = today.replace(day=1)
-                last_day_of_last_month = first_of_this_month - timedelta(days=1)
-                first_of_last_month = last_day_of_last_month.replace(day=1)
-                start = datetime.combine(first_of_last_month, time.min, tzinfo=UTC)
-                end = datetime.combine(last_day_of_last_month, time.max, tzinfo=UTC)
-                return start, end
-            return resolve_date_range(preset)
-
-        s1, e1 = get_range(p1_preset)
-        s2, e2 = get_range(p2_preset)
-        
-        df1 = apply_date_filter(df, date_column, s1, e1)
-        df2 = apply_date_filter(df, date_column, s2, e2)
-    except Exception:
-        return None
-
-    if df1.empty or df2.empty:
-        return f"I don't have enough data to compare {p1_label} and {p2_label}."
-
-    def get_val(subset):
-        series = subset[metric_column].dropna()
-        if series.empty: return 0.0
-        return float(series.mean()) if _uses_average_basis(metric_column) else float(series.sum())
-
-    v1 = get_val(df1)
-    v2 = get_val(df2)
-    
-    diff = v1 - v2
-    pct = (diff / v2 * 100) if v2 != 0 else 0
-    
-    f1 = _format_metric_value(metric_column, v1)
-    f2 = _format_metric_value(metric_column, v2)
-    direction = "up" if diff >= 0 else "down"
-    
-    metric_label = metric_column.replace("_", " ").title()
-    
-    return (
-        f"{metric_label} comparison: {p1_label} was {f1} versus {f2} in {p2_label}. "
-        f"This is a {abs(pct):.1f}% {direction} ({_format_metric_value(metric_column, abs(diff))})."
-    )
-
-
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
@@ -943,18 +848,6 @@ async def stream_agent(
     start_time = time.time()
     accumulated = ""
     tool_outputs: list[str] = []
-
-    # Phase 0: check heuristics for instant, low-latency answers
-    # These bypass the LLM and the Critic for high-confidence, standard queries.
-    for heuristic in [
-        _try_build_period_metric_response,
-        _try_build_timeframe_comparison_response,
-        _try_build_comparison_response,
-    ]:
-        answer = heuristic(df, new_message)
-        if answer:
-            yield answer
-            return
 
     # Phase 1: stream tokens live.
     # on_chat_model_stream fires for every LLM token — including tool-call
