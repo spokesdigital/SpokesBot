@@ -1251,7 +1251,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                         <div className="flex justify-center w-full mt-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                           <button
                             type="button"
-                            onClick={() => setShowSupportForm(true)}
+                            onClick={() => {
+                              setSupportSent(false)
+                              setSupportError(null)
+                              if (!supportEmail && user?.email) setSupportEmail(user.email)
+                              setShowSupportForm(true)
+                            }}
                             className="flex items-center gap-1.5 rounded-full border border-[#e0deda] bg-white px-3 py-1.5 text-xs font-medium text-[#7a7775] transition-all hover:border-[#f0a500] hover:text-[#f0a500]"
                           >
                             <Headphones className="h-3.5 w-3.5 flex-shrink-0" />
@@ -1296,6 +1301,12 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                             threadId={activeThread?.id ?? ''}
                             token={session?.access_token ?? ''}
                             fadeIn={!msg.metadata?.requires_escalation && msg.id === idleEscalationMessageId}
+                            onEscalated={() => {
+                              setSupportSent(false)
+                              setSupportError(null)
+                              if (!supportEmail && user?.email) setSupportEmail(user.email)
+                              setShowSupportForm(true)
+                            }}
                           />
                         </div>
                       )}

@@ -3,7 +3,12 @@ import json
 import pandas as pd
 from langchain_core.tools import tool
 
-from app.services.analytics_service import _sanitize, infer_metric_mappings
+from app.services.analytics_service import (
+    _detect_date_columns,
+    _sanitize,
+    _uses_average_basis,
+    infer_metric_mappings,
+)
 
 
 def _resolve_column(df: pd.DataFrame, name: str) -> str:
@@ -139,6 +144,95 @@ def make_tools(df: pd.DataFrame):
         return json.dumps(result, indent=2, default=str)
 
     @tool
+    def get_trend() -> str:
+        """
+        Verify whether key metrics are actually trending up, down, or staying stable
+        across the full dataset timespan.
+
+        Call this FIRST whenever the user's question contains a directional assumption
+        — e.g. "why is revenue down?", "why did CTR drop?", "why is performance
+        declining?", "why is my business not growing?", "how to improve X?" — so you
+        can confirm or correct the premise before explaining it.
+
+        Method: splits the dataset in two halves (chronological if a date column exists,
+        row-order otherwise) and computes earlier-half vs recent-half for each metric.
+        Additive metrics (revenue, cost, clicks, impressions) use sums; ratio metrics
+        (CTR, ROAS, CPC) use means.
+
+        Returns per-metric: direction ("up" | "down" | "stable"), pct_change (rounded %),
+        earlier_period value, recent_period value.
+        """
+        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+        if not numeric_cols:
+            return json.dumps({"error": "No numeric columns found in dataset."})
+
+        # Sort chronologically when a date column is available so "recent" is reliable.
+        date_cols = _detect_date_columns(df)
+        if date_cols:
+            try:
+                parsed = pd.to_datetime(df[date_cols[0]], errors="coerce", utc=True)
+                sorted_df = df.copy()
+                sorted_df["_sort_date"] = parsed
+                sorted_df = sorted_df.sort_values("_sort_date").drop(columns=["_sort_date"])
+            except Exception:
+                sorted_df = df
+        else:
+            sorted_df = df
+
+        if len(sorted_df) < 4:
+            return json.dumps({"error": "Not enough data for trend analysis — dataset has too few rows to split."})
+
+        midpoint = len(sorted_df) // 2
+        first_half = sorted_df.iloc[:midpoint]
+        second_half = sorted_df.iloc[midpoint:]
+
+        # Cap to 12 most relevant metrics so the response stays compact.
+        metric_mappings = infer_metric_mappings(df)
+        priority_cols = [c for c in metric_mappings.values() if c and c in numeric_cols]
+        remaining = [c for c in numeric_cols if c not in priority_cols]
+        cols_to_check = (priority_cols + remaining)[:12]
+
+        result: dict = {}
+        for col in cols_to_check:
+            try:
+                use_mean = _uses_average_basis(col)
+                earlier = float(
+                    first_half[col].mean() if use_mean else first_half[col].sum()
+                )
+                recent = float(
+                    second_half[col].mean() if use_mean else second_half[col].sum()
+                )
+                if earlier != 0:
+                    pct = round(((recent - earlier) / abs(earlier)) * 100, 1)
+                else:
+                    pct = None
+
+                if pct is None:
+                    direction = "stable"
+                elif pct > 3:
+                    direction = "up"
+                elif pct < -3:
+                    direction = "down"
+                else:
+                    direction = "stable"
+
+                result[col] = _sanitize(
+                    {
+                        "direction": direction,
+                        "pct_change": pct,
+                        "earlier_period": round(earlier, 2),
+                        "recent_period": round(recent, 2),
+                    }
+                )
+            except Exception:
+                continue
+
+        if not result:
+            return json.dumps({"error": "Could not compute trend — insufficient data."})
+
+        return json.dumps(result, indent=2, default=str)
+
+    @tool
     def compare_timeframes(metric_column: str, current_preset: str, previous_preset: str) -> str:
         """
         Compare a specific metric between two different time periods.
@@ -214,5 +308,5 @@ def make_tools(df: pd.DataFrame):
         }
         return json.dumps(result, indent=2, default=str)
 
-    return [get_dataset_schema, get_sample_rows, run_analysis, filter_and_describe, compare_timeframes]
+    return [get_dataset_schema, get_sample_rows, run_analysis, filter_and_describe, get_trend, compare_timeframes]
 

@@ -9,9 +9,11 @@ interface EscalationButtonProps {
   token: string
   /** When true the button fades in smoothly — used for the 45s idle-timer trigger. */
   fadeIn?: boolean
+  /** Called after a successful escalation so the parent can open the support form. */
+  onEscalated?: () => void
 }
 
-export function EscalationButton({ threadId, token, fadeIn = false }: EscalationButtonProps) {
+export function EscalationButton({ threadId, token, fadeIn = false, onEscalated }: EscalationButtonProps) {
   const [sent, setSent] = useState(false)
   const [sending, setSending] = useState(false)
 
@@ -21,6 +23,7 @@ export function EscalationButton({ threadId, token, fadeIn = false }: Escalation
     try {
       await api.threads.escalate(threadId, token)
       setSent(true)
+      onEscalated?.()
     } catch {
       // silently fail so the button stays enabled for a retry
     } finally {
