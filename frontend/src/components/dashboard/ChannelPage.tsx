@@ -315,7 +315,7 @@ const fmtConvRateTooltip = (v: number, n: string): [string, string] => [`${v.toF
 const fmtRevenueCostTooltip = (v: number, n: string): [string, string] => [formatCurrency(v), n]
 const fmtRevenueTick = (v: number) => `$${Math.round(v)}`
 const fmtRoasTick = (v: number) => `${(v * 100).toFixed(0)}%`
-const fmtRoasTooltip = (v: number) => `${(v * 100).toFixed(1)}%`
+const fmtRoasTooltip = (v: number, n: string): [string, string] => [`${(v * 100).toFixed(1)}%`, n]
 
 function formatMetricValue(kind: MetricCardDefinition['kind'], value: number | null) {
   if (value == null || Number.isNaN(value)) return '—'
