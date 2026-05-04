@@ -1449,7 +1449,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                   </span>
                 )}
               </div>
-              <div className="rounded-xl border border-border bg-card card-shadow">
+              <div className="rounded-xl border border-border bg-card card-shadow overflow-x-auto">
                 {loadingAnalytics ? (
                   <div className="p-4 space-y-3">
                     <div className="shimmer-warm h-10 w-full rounded" />

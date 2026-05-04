@@ -214,7 +214,7 @@ function DateFilterDropdown({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           {/* Preset options */}
           <div className="p-1.5">
             {(Object.entries(PRESET_LABELS) as [Exclude<PresetFilter, 'custom'>, string][]).map(([key, lbl]) => (
@@ -794,7 +794,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
           </div>
           <div className="shimmer-warm h-10 w-36 rounded-xl" />
         </div>
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4 md:grid-cols-4 xl:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4 sm:p-5 card-shadow">
               <div className="shimmer-warm h-3 w-20 rounded" />
@@ -848,7 +848,7 @@ export function ClientOverviewDashboard({ orgId, orgName }: { orgId: string; org
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4 md:grid-cols-4 xl:grid-cols-7">
         {loadingAnalytics
           ? Array.from({ length: 7 }).map((_, i) => <KPICard key={i} title="" value="" loading={true} />)
           : cards.map(card => (

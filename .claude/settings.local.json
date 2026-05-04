@@ -55,7 +55,8 @@
       "Bash(lsof -iTCP -sTCP:LISTEN -P)",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(gh run *)"
     ]
   }
 }

@@ -74,7 +74,7 @@ export const KPICard = React.memo(function KPICard({ title, value, trendValue, t
                 <TooltipPrimitive.Content
                   side="top"
                   sideOffset={4}
-                  className="z-[200] max-w-[200px] rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
+                  className="z-[200] max-w-[min(200px,calc(100vw-2rem))] rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
                 >
                   {tooltip}
                 </TooltipPrimitive.Content>
