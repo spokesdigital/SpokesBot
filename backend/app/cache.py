@@ -3,7 +3,10 @@ In-memory response cache for analytics endpoints.
 
 Design:
   - threading.Lock for cross-thread safety (async handlers + sync background tasks both touch this).
-  - Two data structures: _STORE for TTL-checked values, _ORG_INDEX for O(1) org-scoped eviction.
+  - Three data structures:
+      _STORE        → TTL-checked values keyed by cache-key hash
+      _ORG_INDEX    → O(1) org-scoped bulk eviction  (org_id → set of keys)
+      _DATASET_INDEX→ O(1) per-dataset eviction       (dataset_id → set of keys)
   - No external dependencies — plain dicts + time.monotonic() for TTL.
   - Cache keys are SHA-256 hashes of all request parameters that affect the result.
 """
@@ -19,8 +22,9 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
-_STORE: dict[str, tuple[Any, float]] = {}  # key → (value, expiry_monotonic)
+_STORE: dict[str, tuple[Any, float]] = {}           # key → (value, expiry_monotonic)
 _ORG_INDEX: dict[str, set[str]] = defaultdict(set)  # org_id → set of keys
+_DATASET_INDEX: dict[str, set[str]] = defaultdict(set)  # dataset_id → set of keys
 
 ANALYTICS_TTL = 3600  # 1 hour
 INSIGHTS_TTL = 3600
@@ -88,11 +92,19 @@ def cache_get(key: str) -> Any | None:
         return value
 
 
-def cache_set(org_id: str, key: str, value: Any, ttl: int = ANALYTICS_TTL) -> None:
-    """Store value under key and index it by org_id for bulk eviction."""
+def cache_set(
+    org_id: str,
+    key: str,
+    value: Any,
+    ttl: int = ANALYTICS_TTL,
+    dataset_id: str | None = None,
+) -> None:
+    """Store value under key, indexed by org_id (and optionally dataset_id) for eviction."""
     with _LOCK:
         _STORE[key] = (value, time.monotonic() + ttl)
         _ORG_INDEX[org_id].add(key)
+        if dataset_id:
+            _DATASET_INDEX[str(dataset_id)].add(key)
 
 
 def invalidate_org(org_id: str) -> int:
@@ -100,6 +112,27 @@ def invalidate_org(org_id: str) -> int:
     with _LOCK:
         keys = _ORG_INDEX.pop(org_id, set())
         count = sum(1 for k in keys if _STORE.pop(k, None) is not None)
+        # Clean up any dataset-level index entries that pointed to these keys.
+        for ds_keys in _DATASET_INDEX.values():
+            ds_keys.difference_update(keys)
     if count:
         logger.info("cache_invalidate org_id=%s evicted=%d", org_id, count)
+    return count
+
+
+def invalidate_dataset(dataset_id: str) -> int:
+    """Evict only the cached entries for a specific dataset.
+
+    Use this instead of invalidate_org() when one dataset in an org is updated
+    or deleted — other datasets' cached results remain intact.
+    Returns the number of entries removed.
+    """
+    with _LOCK:
+        keys = _DATASET_INDEX.pop(str(dataset_id), set())
+        count = sum(1 for k in keys if _STORE.pop(k, None) is not None)
+        # Clean up org-level index entries that pointed to these keys.
+        for org_keys in _ORG_INDEX.values():
+            org_keys.difference_update(keys)
+    if count:
+        logger.info("cache_invalidate_dataset dataset_id=%s evicted=%d", dataset_id, count)
     return count

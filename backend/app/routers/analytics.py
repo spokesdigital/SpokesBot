@@ -353,7 +353,7 @@ async def compute_analytics(
         "operation": str(body.operation),
         "result": result,
     }
-    cache_set(target_org_id, _cache_key, _content, ttl=ANALYTICS_TTL)
+    cache_set(target_org_id, _cache_key, _content, ttl=ANALYTICS_TTL, dataset_id=str(body.dataset_id))
     return ORJSONResponse(content=_content, headers={"X-Cache": "MISS"})
 
 
@@ -486,5 +486,5 @@ async def get_overall_insights(
         "dataset_id": str(body.dataset_id),
         "insights": insights,
     }
-    cache_set(target_org_id, _cache_key, _content, ttl=INSIGHTS_TTL)
+    cache_set(target_org_id, _cache_key, _content, ttl=INSIGHTS_TTL, dataset_id=str(body.dataset_id))
     return ORJSONResponse(content=_content, headers={"X-Cache": "MISS"})
