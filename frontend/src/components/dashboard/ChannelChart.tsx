@@ -5,7 +5,6 @@ import { format, parseISO } from 'date-fns'
 import { ZoomIn, ZoomOut } from 'lucide-react'
 import {
   Area,
-  AreaChart,
   Bar,
   CartesianGrid,
   ComposedChart,
@@ -450,7 +449,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
       >
         <div style={{ width: `max(${chartMinPx}px, 100%)`, height: '100%' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={visibleData} margin={{ top: 8, right: 4, left: -20, bottom: 4 }}>
+            <ComposedChart data={visibleData} margin={{ top: 8, right: 4, left: -20, bottom: 4 }}>
               <defs>
                 {series.map((s) => (
                   <linearGradient key={s.gradientId} id={s.gradientId} x1="0" x2="0" y1="0" y2="1">
@@ -505,7 +504,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                   activeDot={{ r: 4 }}
                 />
               ))}
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
