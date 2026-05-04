@@ -432,6 +432,8 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
   const [dailyPage, setDailyPage] = useState(0)
 
   const orgLoadRef = useRef<string | null>(null)
+  // Prevent duplicate in-flight dataset-list requests on rapid tab/org switches.
+  const fetchingDatasetsRef = useRef(false)
 
   // Only poll while the cache is cold or uploads are still processing.
   useEffect(() => {
@@ -523,11 +525,16 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
     async function load() {
       const token = session?.access_token
       if (!token) return
-      
+
+      // If a fetch is already in-flight, skip — the result from that request
+      // will still drive the state update when it completes.
+      if (shouldRefreshDatasets && fetchingDatasetsRef.current) return
+
       if (shouldRefreshDatasets) {
+        fetchingDatasetsRef.current = true
         setLoadingDatasets(true)
       }
-      
+
       setError(null)
       try {
         const data = shouldRefreshDatasets
@@ -559,6 +566,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load datasets')
       } finally {
+        fetchingDatasetsRef.current = false
         if (!cancelled) setLoadingDatasets(false)
       }
     }
