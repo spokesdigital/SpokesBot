@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -40,16 +40,16 @@ function useZoom(dataLength: number) {
 
   const visible = range[1] - range[0] + 1
 
-  const zoomIn = () => {
+  const zoomIn = useCallback(() => {
     if (visible <= 4) return
     const step = Math.max(1, Math.floor(visible * 0.25))
     setZoomState({
       dataLength,
       range: [Math.min(range[0] + step, range[1] - 3), Math.max(range[1] - step, range[0] + 3)],
     })
-  }
+  }, [visible, range, dataLength])
 
-  const zoomOut = () => {
+  const zoomOut = useCallback(() => {
     const step = Math.max(1, Math.floor(visible * 0.25))
     const nextRange: [number, number] = [Math.max(0, range[0] - step), Math.min(dataLength - 1, range[1] + step)]
     const isFullRange = nextRange[0] === fullRange[0] && nextRange[1] === fullRange[1]
@@ -57,7 +57,7 @@ function useZoom(dataLength: number) {
       dataLength,
       range: isFullRange ? null : nextRange,
     })
-  }
+  }, [visible, range, dataLength, fullRange])
 
   return {
     range,

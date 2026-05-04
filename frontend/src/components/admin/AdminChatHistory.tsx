@@ -5,18 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import { format, parseISO } from 'date-fns'
 import {
   Bot,
@@ -37,15 +26,7 @@ import type { Dataset, Message, Thread } from '@/types'
 
 // ── Chart rendering (read-only mirror of ChatWidget's inline chart) ────────────
 
-type ChartSeries = { key: string; label?: string; color?: string }
-type ChartDataPoint = Record<string, string | number | null>
-type ChatChartPayload = {
-  type: 'bar' | 'line'
-  title?: string
-  xKey?: string
-  data: ChartDataPoint[]
-  series?: ChartSeries[]
-}
+import type { ChartSeries, ChartDataPoint, ChatChartPayload } from './InlineChart'
 type AssistantSegment =
   | { type: 'markdown'; content: string }
   | { type: 'chart'; chart: ChatChartPayload }
@@ -123,45 +104,18 @@ function stripChartTags(content: string): string {
   return content.replace(/<chart>[\s\S]*?<\/chart>/gi, '[chart]').trim()
 }
 
-function InlineChart({ chart }: { chart: ChatChartPayload }) {
-  const xKey = chart.xKey ?? 'label'
-  return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-[#e4ddd2] bg-white/80 px-3 py-3">
-      {chart.title && (
-        <p className="mb-3 text-[0.82rem] font-semibold tracking-[0.02em] text-[#57524a]">
-          {chart.title}
-        </p>
-      )}
-      <div className="h-[200px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {chart.type === 'bar' ? (
-            <BarChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid stroke="#e8e1d7" strokeDasharray="4 4" vertical={false} />
-              <XAxis dataKey={xKey} tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} width={52} />
-              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e8e1d7', borderRadius: 14 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {chart.series?.map((s) => (
-                <Bar key={s.key} dataKey={s.key} name={s.label ?? s.key} fill={s.color ?? DEFAULT_CHART_COLORS[0]} radius={[8, 8, 0, 0]} />
-              ))}
-            </BarChart>
-          ) : (
-            <LineChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-              <CartesianGrid stroke="#e8e1d7" strokeDasharray="4 4" vertical={false} />
-              <XAxis dataKey={xKey} tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} width={52} />
-              <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e8e1d7', borderRadius: 14 }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              {chart.series?.map((s) => (
-                <Line key={s.key} type="monotone" dataKey={s.key} name={s.label ?? s.key} stroke={s.color ?? DEFAULT_CHART_COLORS[0]} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-              ))}
-            </LineChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
+// Recharts (~500 KB) is split into a separate chunk and only fetched when a
+// thread containing a <chart> tag is selected — not on initial page load.
+const InlineChart = dynamic(
+  () => import('./InlineChart').then(m => ({ default: m.InlineChart })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="mt-3 h-[200px] animate-pulse rounded-2xl border border-[#e4ddd2] bg-[#faf7f3]" />
+    ),
+  },
+)
+
 
 function MarkdownBlock({ content }: { content: string }) {
   return (
