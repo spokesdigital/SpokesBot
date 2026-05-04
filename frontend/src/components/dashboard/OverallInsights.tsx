@@ -29,12 +29,12 @@ function friendlyInsightError(error: string): string {
   return 'AI insights could not be generated right now. Please try again.'
 }
 
-const insightConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
-  success: { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
-  trend:   { icon: TrendingUp,  color: 'text-blue-500',    bg: 'bg-blue-500/10'    },
+const insightConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
+  success: { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-500/10', label: 'Positive' },
+  trend:   { icon: TrendingUp,  color: 'text-blue-500',    bg: 'bg-blue-500/10',    label: 'Trend'    },
 }
 
-const fallbackInsightConfig = { icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-500/10' }
+const fallbackInsightConfig = { icon: Lightbulb, color: 'text-amber-500', bg: 'bg-amber-500/10', label: 'Insight' }
 
 export function OverallInsights({
   insights,
@@ -58,22 +58,6 @@ export function OverallInsights({
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-full shrink-0">
           AI-Powered
-        </span>
-      </div>
-
-      {/* Color legend */}
-      <div className="flex items-center gap-4 mb-4 px-1">
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="w-4 h-4 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
-            <CheckCircle className="w-2.5 h-2.5 text-emerald-600" />
-          </span>
-          Positive result
-        </span>
-        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="w-4 h-4 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-2.5 h-2.5 text-blue-500" />
-          </span>
-          Notable trend
         </span>
       </div>
 
@@ -101,11 +85,14 @@ export function OverallInsights({
           </div>
         ) : insights.length > 0 ? (
           insights.slice(0, 4).map((insight, i) => {
-            const { icon: Icon, color, bg } = insightConfig[insight.type] ?? fallbackInsightConfig
+            const { icon: Icon, color, bg, label } = insightConfig[insight.type] ?? fallbackInsightConfig
             return (
               <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-background/60 border border-border/50">
-                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 mt-0.5 ${bg}`}>
-                  <Icon className={`w-3.5 h-3.5 ${color}`} />
+                <div className="flex flex-col items-center gap-1 shrink-0 mt-0.5">
+                  <div className={`w-7 h-7 rounded-md flex items-center justify-center ${bg}`}>
+                    <Icon className={`w-3.5 h-3.5 ${color}`} />
+                  </div>
+                  <span className={`text-[9px] font-semibold uppercase tracking-wide ${color}`}>{label}</span>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">{insight.text}</p>
               </div>
