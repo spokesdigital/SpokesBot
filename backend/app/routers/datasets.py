@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.cache import invalidate_dataset, invalidate_org
+from app.cache import invalidate_dataset
 from app.dependencies import (
     ROLE_ADMIN,
     get_current_org_id,
@@ -133,10 +133,7 @@ def delete_dataset(
         service_client if role == ROLE_ADMIN else supabase,
         service_client,
     )
-    # Evict only this dataset's cached analytics/insights entries — leaving
-    # other datasets in the same org with their warm cache results intact.
+    # Evict only this dataset's cached entries — other datasets' warm results stay intact.
+    # cache_set() always indexes by dataset_id so invalidate_dataset() is sufficient.
     clear_dataframe_cache()
     invalidate_dataset(dataset_id)
-    # Also do an org-level sweep in case any entries were cached before the
-    # dataset index was populated (e.g. on old server instances).
-    invalidate_org(caller_org_id)

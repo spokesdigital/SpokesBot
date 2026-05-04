@@ -378,7 +378,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
       </div>
       {data.length > 0 && (
         <div className="absolute right-2 top-2 z-20">
-          <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
+          <div className="bg-card border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>
         </div>
@@ -480,6 +480,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
+                cursor={{ stroke: '#d9dee7', strokeWidth: 1 }}
                 labelFormatter={(label) =>
                   tooltipLabelMap.get(String(label))
                   ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label), granularity))
@@ -524,7 +525,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
       </div>
       {data.length > 0 && (
         <div className="absolute right-2 top-2 z-20">
-          <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
+          <div className="bg-card border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>
         </div>

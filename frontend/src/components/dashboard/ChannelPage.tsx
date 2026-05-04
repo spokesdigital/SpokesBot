@@ -313,7 +313,12 @@ const fmtCpaTooltip = (v: number, n: string): [string, string] =>
 const fmtConvRateTick = (v: number) => `${v.toFixed(0)}%`
 const fmtConvRateTooltip = (v: number, n: string): [string, string] => [`${v.toFixed(2)}%`, n]
 const fmtRevenueCostTooltip = (v: number, n: string): [string, string] => [formatCurrency(v), n]
-const fmtRevenueTick = (v: number) => `$${Math.round(v)}`
+const fmtRevenueTick = (v: number) => {
+  const abs = Math.abs(v)
+  if (abs >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `$${(v / 1_000).toFixed(0)}K`
+  return `$${Math.round(v)}`
+}
 const fmtRoasTick = (v: number) => `${(v * 100).toFixed(0)}%`
 const fmtRoasTooltip = (v: number, n: string): [string, string] => [`${(v * 100).toFixed(1)}%`, n]
 
