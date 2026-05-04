@@ -458,7 +458,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid stroke="#d9dee7" strokeDasharray="4 4" vertical={false} />
+              <CartesianGrid stroke="rgba(0,0,0,0.10)" strokeDasharray="4 4" vertical={false} />
               <XAxis
                 dataKey={xAxisKey}
                 interval={tickInterval}
@@ -479,7 +479,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
-                cursor={{ stroke: '#d9dee7', strokeWidth: 1 }}
+                cursor={{ stroke: 'rgba(0,0,0,0.15)', strokeWidth: 1 }}
                 labelFormatter={(label) =>
                   tooltipLabelMap.get(String(label))
                   ?? (xAxisKey === 'label' ? String(label) : formatXLabel(String(label), granularity))
