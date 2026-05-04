@@ -297,11 +297,11 @@ function MarkdownBlock({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="leading-7 [&:not(:first-child)]:mt-3">{children}</p>,
+        p: ({ children }) => <p className="leading-7 break-words [&:not(:first-child)]:mt-3">{children}</p>,
         strong: ({ children }) => <strong className="font-semibold text-[#1f1a17]">{children}</strong>,
         ul: ({ children }) => <ul className="mt-3 list-disc space-y-2 pl-5">{children}</ul>,
         ol: ({ children }) => <ol className="mt-3 list-decimal space-y-2 pl-5">{children}</ol>,
-        li: ({ children }) => <li className="pl-1">{children}</li>,
+        li: ({ children }) => <li className="pl-1 break-words">{children}</li>,
         table: ({ children }) => (
           <div className="my-3 overflow-x-auto rounded-2xl border border-[#e4ddd2] bg-white/80">
             <table className="min-w-full border-collapse text-left text-[0.82rem]">{children}</table>
@@ -1162,7 +1162,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                 <div
                   ref={messagesContainerRef}
                   data-testid="chat-messages-container"
-                  className="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-[#fffdf8] relative"
+                  className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4 bg-[#fffdf8] relative"
                 >
 
                   {/* ── Support form overlay ── */}
@@ -1295,7 +1295,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                             </span>
                           )}
                           <div
-                            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed break-words ${
                               msg.role === 'user'
                                 ? 'rounded-tr-sm whitespace-pre-wrap bg-[#f0a500] text-white'
                                 : 'rounded-tl-sm bg-[#f2f2f0] text-[#1a1a1a]'
@@ -1330,7 +1330,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                   {/* Thinking / streaming bubble */}
                   {streaming && (
                     <div className="flex justify-start">
-                      <div className={`max-w-[82%] rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-[#1a1a1a] transition-colors duration-300 ${
+                      <div className={`max-w-[82%] break-words rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-[#1a1a1a] transition-colors duration-300 ${
                         isThinking ? 'bg-[#fdf8ee] border border-[#f0a500]/20' : 'bg-[#f2f2f0]'
                       }`}>
                         {streamingContent ? (

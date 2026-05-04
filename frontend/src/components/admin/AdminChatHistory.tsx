@@ -128,7 +128,7 @@ function MarkdownBlock({ content }: { content: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        p: ({ children }) => <p className="leading-7 [&:not(:first-child)]:mt-3">{children}</p>,
+        p: ({ children }) => <p className="leading-7 break-words [&:not(:first-child)]:mt-3">{children}</p>,
         strong: ({ children }) => <strong className="font-semibold text-[#1f1a17]">{children}</strong>,
         ul: ({ children }) => <ul className="mt-3 list-disc space-y-2 pl-5">{children}</ul>,
         ol: ({ children }) => <ol className="mt-3 list-decimal space-y-2 pl-5">{children}</ol>,
@@ -455,7 +455,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
       return (
         <div className="flex justify-end">
           <div className="max-w-[75%]">
-            <div className="rounded-2xl rounded-tr-sm bg-[#f5b800] px-4 py-2.5 text-sm text-[#1a1208] shadow-sm">
+            <div className="rounded-2xl rounded-tr-sm bg-[#f5b800] px-4 py-2.5 text-sm text-[#1a1208] shadow-sm break-words">
               {message.content}
             </div>
             <p className="mt-1 pr-1 text-right text-[10px] text-slate-400">{timeLabel}</p>
@@ -470,7 +470,7 @@ export function AdminChatHistory({ orgId, orgName, datasets }: AdminChatHistoryP
           <Bot className="h-3.5 w-3.5 text-white" />
         </div>
         <div className="max-w-[80%]">
-          <div className="rounded-2xl rounded-tl-sm border border-[#e8e0d4] bg-white/90 px-4 py-3 text-sm text-[#2d2924] shadow-sm">
+          <div className="rounded-2xl rounded-tl-sm border border-[#e8e0d4] bg-white/90 px-4 py-3 text-sm text-[#2d2924] shadow-sm break-words">
             {renderMessageContent(message.content)}
           </div>
           <p className="mt-1 pl-1 text-[10px] text-slate-400">{timeLabel}</p>
