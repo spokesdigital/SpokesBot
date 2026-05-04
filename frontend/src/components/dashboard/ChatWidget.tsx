@@ -169,8 +169,22 @@ function stripIncompleteChartTag(content: string) {
   return content
 }
 
+/**
+ * When the Reflexion critic rejects the first streamed answer it emits an
+ * invisible sentinel (\x00RECHECK\x00) followed by the corrected text.
+ * We discard everything up to (and including) the sentinel so the user only
+ * ever sees the final validated answer — no double response, no seam.
+ */
+const RECHECK_SENTINEL = '\x00RECHECK\x00'
+function stripRecheckSentinel(content: string): string {
+  const idx = content.indexOf(RECHECK_SENTINEL)
+  return idx === -1 ? content : content.slice(idx + RECHECK_SENTINEL.length)
+}
+
 function parseAssistantContent(content: string, streaming = false): AssistantSegment[] {
-  const normalized = streaming ? stripIncompleteChartTag(content) : content
+  // Strip the critic-correction sentinel first so we only render the final answer.
+  const recheckStripped = stripRecheckSentinel(content)
+  const normalized = streaming ? stripIncompleteChartTag(recheckStripped) : recheckStripped
   const segments: AssistantSegment[] = []
   let lastIndex = 0
 

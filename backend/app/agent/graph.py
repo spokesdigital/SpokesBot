@@ -999,7 +999,11 @@ async def stream_agent(
     state["validation_feedback"] = verdict
     correction_state = run_inject_feedback_node(state)
 
-    yield "\n\n---\nRechecking...\n\n"
+    # Signal the frontend to discard the first (critic-rejected) answer and
+    # show only the corrected text. We use an invisible sentinel rather than
+    # the old visible "Rechecking..." banner so the user never sees the seam.
+    yield "\x00RECHECK\x00"
+
 
     async for event in react.astream_events(
         {"messages": correction_state["messages"]}, version="v2"

@@ -80,13 +80,19 @@ function normalizeChartPayload(raw: unknown): ChatChartPayload | null {
   return { type, title: typeof p.title === 'string' ? p.title : undefined, xKey, data, series }
 }
 
+const RECHECK_SENTINEL = '\x00RECHECK\x00'
+
 function parseAssistantContent(content: string): AssistantSegment[] {
+  // Strip critic-correction sentinel — show only the final validated answer.
+  const clean = content.includes(RECHECK_SENTINEL)
+    ? content.slice(content.indexOf(RECHECK_SENTINEL) + RECHECK_SENTINEL.length)
+    : content
   const segments: AssistantSegment[] = []
   let lastIndex = 0
-  for (const match of content.matchAll(CHART_TAG_REGEX)) {
+  for (const match of clean.matchAll(CHART_TAG_REGEX)) {
     const start = match.index ?? 0
     if (start > lastIndex) {
-      const md = content.slice(lastIndex, start).trim()
+      const md = clean.slice(lastIndex, start).trim()
       if (md) segments.push({ type: 'markdown', content: md })
     }
     try {
@@ -95,7 +101,7 @@ function parseAssistantContent(content: string): AssistantSegment[] {
     } catch { /* skip malformed */ }
     lastIndex = start + match[0].length
   }
-  const tail = content.slice(lastIndex).trim()
+  const tail = clean.slice(lastIndex).trim()
   if (tail) segments.push({ type: 'markdown', content: tail })
   return segments
 }
