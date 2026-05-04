@@ -377,7 +377,7 @@ export const DualAxisComboChart = React.memo(function DualAxisComboChart({
         ))}
       </div>
       {data.length > 0 && (
-        <div className="flex justify-center pb-1 z-20">
+        <div className="absolute right-2 top-2 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>
@@ -406,7 +406,7 @@ interface AreaTrendChartProps {
   data: Record<string, unknown>[]
   series: AreaSeries[]
   tickFormatter?: (value: number) => string
-  tooltipFormatter?: (value: number) => string
+  tooltipFormatter?: (value: number, name: string) => [string, string]
   connectNulls?: boolean
   curveType?: 'basis' | 'basisClosed' | 'basisOpen' | 'bumpX' | 'bumpY' | 'bump' | 'linear' | 'linearClosed' | 'natural' | 'monotoneX' | 'monotoneY' | 'monotone' | 'step' | 'stepBefore' | 'stepAfter'
   height?: number
@@ -486,7 +486,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
                 }
                 formatter={
                   tooltipFormatter
-                    ? (v: number | string) => [tooltipFormatter(Number(v))]
+                    ? (v: number | string, n: string) => tooltipFormatter(Number(v), n)
                     : undefined
                 }
               />
@@ -523,7 +523,7 @@ export const AreaTrendChart = React.memo(function AreaTrendChart({
         ))}
       </div>
       {data.length > 0 && (
-        <div className="flex justify-center pb-1 z-20">
+        <div className="absolute right-2 top-2 z-20">
           <div className="bg-card/80 backdrop-blur-sm border border-border rounded-full px-2 py-0.5 shadow-sm">
             <ZoomButtons onZoomIn={zoomIn} onZoomOut={zoomOut} canZoomIn={canZoomIn} canZoomOut={canZoomOut} />
           </div>

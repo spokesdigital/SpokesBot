@@ -280,6 +280,7 @@ async def chat(
     # ── 5. Stream generator ───────────────────────────────────────────────────
     async def event_stream():
         accumulated = ""
+        saved = False
         try:
             async for token in stream_agent(
                 df, history, body.message, page_context=body.page_context
@@ -300,32 +301,37 @@ async def chat(
                 if _needs_escalation(accumulated):
                     done_payload["requires_escalation"] = True
                     metadata["requires_escalation"] = True
-                thread_service.save_message(
-                    thread_id,
-                    "assistant",
-                    accumulated,
-                    service_client,
-                    metadata=metadata if metadata else None,
-                )
+                
+                if not saved:
+                    thread_service.save_message(
+                        thread_id,
+                        "assistant",
+                        accumulated,
+                        service_client,
+                        metadata=metadata if metadata else None,
+                    )
+                    saved = True
                 yield f"data: {json.dumps(done_payload)}\n\n"
             else:
                 # Agent produced no answer — save a fallback so the thread isn't
                 # left without a response, stream it to the client, then signal
                 # the client to offer escalation so the button anchors to this message.
                 fallback_text = "I wasn't able to find a clear answer based on your data."
-                thread_service.save_message(
-                    thread_id,
-                    "assistant",
-                    fallback_text,
-                    service_client,
-                    metadata={"requires_escalation": True},
-                )
+                if not saved:
+                    thread_service.save_message(
+                        thread_id,
+                        "assistant",
+                        fallback_text,
+                        service_client,
+                        metadata={"requires_escalation": True},
+                    )
+                    saved = True
                 yield f"data: {json.dumps({'token': fallback_text})}\n\n"
                 yield f"data: {json.dumps({'done': True, 'requires_escalation': True})}\n\n"
 
         except asyncio.CancelledError:
             # Client disconnected mid-stream — save whatever accumulated
-            if accumulated:
+            if accumulated and not saved:
                 metadata = {}
                 if _needs_escalation(accumulated):
                     metadata["requires_escalation"] = True
@@ -336,6 +342,7 @@ async def chat(
                     service_client,
                     metadata=metadata if metadata else None,
                 )
+                saved = True
 
         except Exception as exc:
             # C5: Never expose raw exception details to the client over SSE
@@ -348,7 +355,7 @@ async def chat(
             )
             # Save whatever we have — partial answer is better than nothing.
             # If we have nothing, save a placeholder so the thread isn't broken.
-            if accumulated:
+            if accumulated and not saved:
                 metadata = {}
                 if _needs_escalation(accumulated):
                     metadata["requires_escalation"] = True
@@ -359,13 +366,15 @@ async def chat(
                     service_client,
                     metadata=metadata if metadata else None,
                 )
-            else:
+                saved = True
+            elif not saved:
                 thread_service.save_message(
                     thread_id,
                     "assistant",
                     "I encountered an error while processing your request. Please try again.",
                     service_client,
                 )
+                saved = True
             yield f"data: {json.dumps({'error': 'The AI agent encountered an error. Please try again.'})}\n\n"
 
     return StreamingResponse(

@@ -311,7 +311,8 @@ const fmtCpaRight = (v: number) => `$${v.toFixed(0)}`
 const fmtCpaTooltip = (v: number, n: string): [string, string] =>
   n === 'CPA $' ? [formatCurrency(v), n] : [formatCompactNumber(v), n]
 const fmtConvRateTick = (v: number) => `${v.toFixed(0)}%`
-const fmtConvRateTooltip = (v: number) => `${v.toFixed(2)}%`
+const fmtConvRateTooltip = (v: number, n: string): [string, string] => [`${v.toFixed(2)}%`, n]
+const fmtRevenueCostTooltip = (v: number, n: string): [string, string] => [formatCurrency(v), n]
 const fmtRevenueTick = (v: number) => `$${Math.round(v)}`
 const fmtRoasTick = (v: number) => `${(v * 100).toFixed(0)}%`
 const fmtRoasTooltip = (v: number) => `${(v * 100).toFixed(1)}%`
@@ -1243,7 +1244,7 @@ export function ChannelPage({ reportType, channelName, accentColor, accentLight:
                       data={viewModel.trendData as Record<string, unknown>[]}
                       series={revenueCostSeries}
                       tickFormatter={fmtRevenueTick}
-                      tooltipFormatter={formatCurrency}
+                      tooltipFormatter={fmtRevenueCostTooltip}
                       granularity={viewModel.granularity}
                     />
                   </ChartCard>

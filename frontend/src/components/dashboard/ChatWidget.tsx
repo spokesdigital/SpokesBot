@@ -221,7 +221,7 @@ function InlineChart({ chart }: { chart: ChatChartPayload }) {
       <div className="h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           {chart.type === 'bar' ? (
-            <BarChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+            <BarChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 24 }}>
               <CartesianGrid stroke="#e8e1d7" strokeDasharray="4 4" vertical={false} />
               <XAxis dataKey={xAxisKey} tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} width={52} />
@@ -245,7 +245,7 @@ function InlineChart({ chart }: { chart: ChatChartPayload }) {
               ))}
             </BarChart>
           ) : (
-            <LineChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+            <LineChart data={chart.data} margin={{ top: 8, right: 8, left: -12, bottom: 24 }}>
               <CartesianGrid stroke="#e8e1d7" strokeDasharray="4 4" vertical={false} />
               <XAxis dataKey={xAxisKey} tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: '#7a7775', fontSize: 11 }} tickLine={false} axisLine={false} width={52} />
@@ -642,6 +642,11 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
   // Synchronous guard for submitMessage — flips before any await so rapid
   // double-clicks can't both pass the React-state `streaming` check.
   const submittingRef = useRef(false)
+  // Set to true when the user sends a message so the messages.length effect
+  // knows to force-scroll (show the new user bubble + incoming response).
+  // Reset immediately after the force-scroll fires so assistant commits do NOT
+  // drag the user back to the bottom when they've scrolled up to read history.
+  const userJustSentRef = useRef(false)
 
 
   // Abort any in-flight stream on unmount
@@ -711,17 +716,6 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
   }, [open, messages.length, streaming])
 
-  // Pre-fill the support email when the form opens, but only if the user
-  // hasn't already typed something. Binding the field value directly to
-  // `user?.email` means clearing the field snaps it back immediately because
-  // the empty string falls through the `||` and restores the default.
-  // Using state as the sole source of truth avoids that.
-  useEffect(() => {
-    if (showSupportForm && !supportEmail && user?.email) {
-      setSupportEmail(user.email)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showSupportForm])
 
   // Re-hydrate the last active thread after a page refresh.
   // Fetches the single thread by ID rather than listing all threads.
@@ -774,9 +768,15 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     void loadDatasets()
   }, [session, open, loadDatasets])
 
-  function scrollToBottom(behavior: ScrollBehavior = 'auto') {
+  function scrollToBottom(behavior: ScrollBehavior = 'auto', force = false) {
     const container = messagesContainerRef.current
     if (!container) return
+    
+    if (!force) {
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
+      if (!isAtBottom) return
+    }
+    
     container.scrollTo({ top: container.scrollHeight, behavior })
   }
 
@@ -809,12 +809,21 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
   /* ── Scroll to bottom ── */
   useEffect(() => {
-    scrollToBottom('smooth')
+    if (userJustSentRef.current) {
+      // User just sent a message — force-scroll so their bubble and the incoming
+      // response are visible regardless of prior scroll position.
+      userJustSentRef.current = false
+      scrollToBottom('smooth', true)
+    } else {
+      // Assistant message committed (streaming ended) — respect the user's
+      // scroll position so reading history is never interrupted.
+      scrollToBottom('smooth', false)
+    }
   }, [messages.length])
 
   useEffect(() => {
     if (!streaming && !streamingContent) return
-    const frame = window.requestAnimationFrame(() => scrollToBottom('auto'))
+    const frame = window.requestAnimationFrame(() => scrollToBottom('auto', false))
     return () => window.cancelAnimationFrame(frame)
   }, [streaming, streamingContent])
 
@@ -865,6 +874,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
     }
     setIdleEscalationMessageId(null)
     setShowWelcomeEscalation(false)
+    userJustSentRef.current = true
     setMessages((prev) => [...prev, optimistic])
 
     let thread = activeThread
@@ -1143,7 +1153,7 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
 
                   {/* ── Support form overlay ── */}
                   {showSupportForm && (
-                    <div className="absolute inset-0 z-20 flex items-start justify-center bg-[#fffdf8]/95 backdrop-blur-sm px-4 pt-6">
+                    <div className="absolute inset-0 z-20 flex items-start justify-center bg-[#fffdf8]/95 px-4 pt-6">
                       <div className="w-full max-w-sm">
                         {supportSent ? (
                           <div className="flex flex-col items-center gap-3 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.08)] border border-[#e8e1d7]">
@@ -1340,7 +1350,13 @@ export function ChatWidget({ open, onClose }: ChatWidgetProps) {
                     <button
                       type="button"
                       aria-label="Support"
-                      onClick={() => { setShowSupportForm((v) => !v); setSupportSent(false); setSupportError(null) }}
+                      onClick={() => {
+                        const opening = !showSupportForm
+                        setShowSupportForm(opening)
+                        setSupportSent(false)
+                        setSupportError(null)
+                        if (opening && !supportEmail && user?.email) setSupportEmail(user.email)
+                      }}
                       className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border transition ${
                         showSupportForm
                           ? 'border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500]'
