@@ -1,6 +1,6 @@
 # Core framework
-fastapi==0.135.2
-uvicorn==0.42.0
+fastapi==0.136.1
+uvicorn==0.46.0
 python-multipart==0.0.22
 
 # Database & auth
