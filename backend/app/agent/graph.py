@@ -960,9 +960,9 @@ async def stream_agent(
     correction_state = run_inject_feedback_node(state)
 
     # Signal the frontend to discard the first (critic-rejected) answer and
-    # show only the corrected text. We use an invisible sentinel rather than
-    # the old visible "Rechecking..." banner so the user never sees the seam.
-    yield "\x00RECHECK\x00"
+    # show only the corrected text. We use a sentinel token that the frontend
+    # strips. NOTE: We avoid null bytes (\x00) as Postgres/Supabase rejects them.
+    yield "\n\n[SYSTEM_REVISE]\n\n"
 
 
     async for event in react.astream_events(
