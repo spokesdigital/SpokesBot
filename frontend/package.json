@@ -24,7 +24,7 @@
     "jspdf": "^4.2.1",
     "katex": "^0.16.45",
     "lru-cache": "^11.3.5",
-    "lucide-react": "^1.7.0",
+    "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "react": "19.2.5",
     "react-dom": "19.2.5",
